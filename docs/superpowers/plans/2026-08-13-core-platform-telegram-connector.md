@@ -17,7 +17,7 @@
 - Single user role, no client-facing access (spec §7).
 - Social platform tokens (`account_credentials.encrypted_token`) must be stored AES-encrypted, key from env var, never in code (spec §7).
 - Sync jobs run through the BullMQ queue, never synchronously in an HTTP request handler (spec §5).
-- All monetary/metric numeric columns use the field names given in spec §4 (`followers_count`, `avg_er`, `er`, etc.) — later tasks and the frontend depend on these exact names.
+- All entity/DTO/JSON field names use the camelCase TypeORM/TS equivalents of the snake_case names given in spec §4 (`followers_count` → `followersCount`, `avg_er` → `avgEr`, etc. — same fields, TS-idiomatic casing). This is the naming convention actually used by every task's code in this plan — later tasks and the frontend depend on these exact camelCase names.
 
 ---
 
@@ -284,7 +284,9 @@ PORT=3000
 
 - [ ] **Step 4: Verify the stack builds and starts**
 
-Run: `docker compose up -d --build && docker compose ps`
+`docker-compose.yml` references `env_file: .env` for the `backend` service; create it from the example first (it is git-ignored, never commit it).
+
+Run: `cp .env.example .env && docker compose up -d --build && docker compose ps`
 Expected: all four services show state `running`/`Up`.
 
 - [ ] **Step 5: Tear down and commit**
@@ -511,9 +513,12 @@ export class DbModule {}
 
 - [ ] **Step 4: Generate the initial migration**
 
+The DB must be reachable for TypeORM to introspect the current (empty) schema and diff it against the entities.
+
 ```bash
+docker compose up -d postgres
 cd backend
-npx typeorm-ts-node-commonjs migration:generate src/db/migrations/InitialSchema -d src/db/data-source.ts
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/smm_dashboard npx typeorm-ts-node-commonjs migration:generate src/db/migrations/InitialSchema -d src/db/data-source.ts
 ```
 
 - [ ] **Step 5: Write the round-trip integration test**

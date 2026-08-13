@@ -13,7 +13,7 @@ describe('SyncProcessor', () => {
     isActive: true,
   };
 
-  function buildProcessor(overrides: Partial<{ getAccountStats: any; getPosts: any }> = {}) {
+  function buildProcessor(overrides: Partial<{ getAccountStats: any; getPosts: any; syncJobsUpdate: any }> = {}) {
     const connector = {
       platform: AccountPlatform.TELEGRAM,
       getAccountInfo: jest.fn(),
@@ -24,7 +24,7 @@ describe('SyncProcessor', () => {
     const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(account) } as any;
     const snapshotsRepo = { upsert: jest.fn() } as any;
     const postsRepo = { upsert: jest.fn() } as any;
-    const syncJobsRepo = { update: jest.fn() } as any;
+    const syncJobsRepo = { update: overrides.syncJobsUpdate ?? jest.fn() } as any;
     const processor = new SyncProcessor(registry, accountsRepo, snapshotsRepo, postsRepo, syncJobsRepo);
     return { processor, syncJobsRepo, snapshotsRepo, postsRepo };
   }
@@ -67,5 +67,37 @@ describe('SyncProcessor', () => {
       'job-1',
       expect.objectContaining({ status: SyncStatus.FAILED, errorMessage: 'Forbidden: bot is not a member' }),
     );
+  });
+
+  it('does not throw when the initial RUNNING status write fails, and still records the job as failed', async () => {
+    const syncJobsUpdate = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('connection pool exhausted'))
+      .mockResolvedValueOnce(undefined);
+    const { processor, syncJobsRepo } = buildProcessor({ syncJobsUpdate });
+
+    await expect(
+      processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any),
+    ).resolves.toBeUndefined();
+
+    expect(syncJobsRepo.update).toHaveBeenNthCalledWith(
+      1,
+      'job-1',
+      expect.objectContaining({ status: SyncStatus.RUNNING }),
+    );
+    expect(syncJobsRepo.update).toHaveBeenNthCalledWith(
+      2,
+      'job-1',
+      expect.objectContaining({ status: SyncStatus.FAILED, errorMessage: 'connection pool exhausted' }),
+    );
+  });
+
+  it('does not throw even when the FAILED status write also fails', async () => {
+    const syncJobsUpdate = jest.fn().mockRejectedValue(new Error('db is still down'));
+    const { processor } = buildProcessor({ syncJobsUpdate });
+
+    await expect(
+      processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any),
+    ).resolves.toBeUndefined();
   });
 });

@@ -1,4 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
@@ -16,6 +17,8 @@ interface SyncJobData {
 
 @Processor('sync')
 export class SyncProcessor extends WorkerHost {
+  private readonly logger = new Logger(SyncProcessor.name);
+
   constructor(
     private registry: ConnectorRegistry,
     @InjectRepository(Account) private accountsRepo: Repository<Account>,
@@ -28,9 +31,10 @@ export class SyncProcessor extends WorkerHost {
 
   async process(job: Job<SyncJobData>): Promise<void> {
     const { syncJobId, accountId } = job.data;
-    await this.syncJobsRepo.update(syncJobId, { status: SyncStatus.RUNNING, startedAt: new Date() });
 
     try {
+      await this.syncJobsRepo.update(syncJobId, { status: SyncStatus.RUNNING, startedAt: new Date() });
+
       const account = await this.accountsRepo.findOneBy({ id: accountId });
       if (!account) throw new Error(`Account ${accountId} not found`);
 
@@ -71,11 +75,20 @@ export class SyncProcessor extends WorkerHost {
 
       await this.syncJobsRepo.update(syncJobId, { status: SyncStatus.SUCCESS, finishedAt: new Date() });
     } catch (error) {
-      await this.syncJobsRepo.update(syncJobId, {
-        status: SyncStatus.FAILED,
-        errorMessage: (error as Error).message,
-        finishedAt: new Date(),
-      });
+      try {
+        await this.syncJobsRepo.update(syncJobId, {
+          status: SyncStatus.FAILED,
+          errorMessage: (error as Error).message,
+          finishedAt: new Date(),
+        });
+      } catch (updateError) {
+        this.logger.error(
+          `Failed to record FAILED status for sync job ${syncJobId} after original error: ${
+            (error as Error).message
+          }`,
+          (updateError as Error).stack,
+        );
+      }
     }
   }
 }

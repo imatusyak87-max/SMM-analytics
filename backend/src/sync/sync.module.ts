@@ -7,6 +7,7 @@ import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post } from '../db/entities/post.entity';
 import { SyncJobService } from './sync-job.service';
 import { SyncProcessor } from './sync.processor';
+import { SyncScheduler } from './sync.scheduler';
 import { ConnectorsModule } from '../connectors/connectors.module';
 
 @Module({
@@ -15,7 +16,7 @@ import { ConnectorsModule } from '../connectors/connectors.module';
     TypeOrmModule.forFeature([Account, AccountSnapshot, Post, SyncJob]),
     ConnectorsModule,
   ],
-  providers: [SyncJobService, SyncProcessor],
+  providers: [SyncJobService, SyncProcessor, SyncScheduler],
   exports: [SyncJobService],
 })
 export class SyncModule {}

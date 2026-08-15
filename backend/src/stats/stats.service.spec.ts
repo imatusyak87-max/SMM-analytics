@@ -98,3 +98,47 @@ describe('StatsService date range upper bound (regression)', () => {
     expect(latePost.getTime()).toBeLessThanOrEqual(upper.getTime());
   });
 });
+
+describe('StatsService.getOverview', () => {
+  it('returns every active account paired with its latest snapshot', async () => {
+    const accounts = [{ id: 'acc-1' }, { id: 'acc-2' }];
+    const accountsRepo = { find: jest.fn().mockResolvedValue(accounts), findOneBy: jest.fn() } as any;
+    const snapshotsRepo = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce({ accountId: 'acc-1', date: '2026-08-13', followersCount: 100 })
+        .mockResolvedValueOnce(null),
+      find: jest.fn(),
+    } as any;
+    const postsRepo = { find: jest.fn() } as any;
+    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo);
+
+    const result = await service.getOverview();
+
+    expect(result).toEqual([
+      { account: accounts[0], latestSnapshot: { accountId: 'acc-1', date: '2026-08-13', followersCount: 100 } },
+      { account: accounts[1], latestSnapshot: null },
+    ]);
+  });
+});
+
+describe('StatsService.compare', () => {
+  it('returns each requested account with its trend for the period', async () => {
+    const accountsRepo = {
+      findOneBy: jest
+        .fn()
+        .mockResolvedValueOnce({ id: 'acc-1' })
+        .mockResolvedValueOnce({ id: 'acc-2' }),
+      find: jest.fn(),
+    } as any;
+    const snapshotsRepo = { find: jest.fn().mockResolvedValue([{ date: '2026-08-13', followersCount: 100 }]) } as any;
+    const postsRepo = { find: jest.fn() } as any;
+    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo);
+
+    const result = await service.compare(['acc-1', 'acc-2'], { from: '2026-08-01', to: '2026-08-13' });
+
+    expect(result).toHaveLength(2);
+    expect(result[0].account.id).toBe('acc-1');
+    expect(result[0].trend).toEqual([{ date: '2026-08-13', followersCount: 100 }]);
+  });
+});

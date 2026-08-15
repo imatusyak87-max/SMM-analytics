@@ -6,6 +6,9 @@ import { HealthController } from './health/health.controller';
 import { DbModule } from './db/db.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountsModule } from './accounts/accounts.module';
+import { StatsModule } from './stats/stats.module';
+import { SyncModule } from './sync/sync.module';
+import { ConnectorsModule } from './connectors/connectors.module';
 
 @Module({
   imports: [
@@ -13,6 +16,9 @@ import { AccountsModule } from './accounts/accounts.module';
     DbModule,
     AuthModule,
     AccountsModule,
+    StatsModule,
+    SyncModule,
+    ConnectorsModule,
     BullModule.forRoot({ connection: { url: process.env.REDIS_URL } }),
     ScheduleModule.forRoot(),
   ],

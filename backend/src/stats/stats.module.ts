@@ -4,10 +4,12 @@ import { Account } from '../db/entities/account.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post } from '../db/entities/post.entity';
 import { StatsService } from './stats.service';
+import { StatsController } from './stats.controller';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Account, AccountSnapshot, Post])],
   providers: [StatsService],
+  controllers: [StatsController],
   exports: [StatsService],
 })
 export class StatsModule {}

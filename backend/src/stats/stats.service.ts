@@ -10,6 +10,16 @@ interface Period {
   to: string;
 }
 
+/**
+ * Builds the inclusive upper bound for a date-only `to` string when querying a
+ * timestamptz column (e.g. `publishedAt`). `new Date('2026-08-13')` parses to
+ * midnight UTC, which would exclude every post published later that day —
+ * this returns the last instant of that day instead.
+ */
+function endOfDayUtc(dateOnly: string): Date {
+  return new Date(`${dateOnly}T23:59:59.999Z`);
+}
+
 @Injectable()
 export class StatsService {
   constructor(
@@ -25,7 +35,7 @@ export class StatsService {
       order: { date: 'ASC' },
     });
     const posts = await this.postsRepo.find({
-      where: { accountId, publishedAt: Between(new Date(period.from), new Date(period.to)) },
+      where: { accountId, publishedAt: Between(new Date(period.from), endOfDayUtc(period.to)) },
       order: { publishedAt: 'DESC' },
     });
 
@@ -38,7 +48,7 @@ export class StatsService {
   }
 
   async getTopPosts(accountId: string, filter: Period & { type?: PostType }, limit: number) {
-    const where: any = { accountId, publishedAt: Between(new Date(filter.from), new Date(filter.to)) };
+    const where: any = { accountId, publishedAt: Between(new Date(filter.from), endOfDayUtc(filter.to)) };
     if (filter.type) where.type = filter.type;
 
     const posts = await this.postsRepo.find({ where });

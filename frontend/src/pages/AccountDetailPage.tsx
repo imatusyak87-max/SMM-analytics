@@ -4,12 +4,13 @@ import { apiClient } from '../api/client';
 import { PostList } from '../components/PostList';
 import { PostTypeFilter } from '../components/PostTypeFilter';
 import { RefreshButton } from '../components/RefreshButton';
+import { TrendChart } from '../components/TrendChart';
 import styles from './AccountDetailPage.module.css';
 
 interface DetailData {
   account: { id: string; name: string };
   latestSnapshot: { followersCount: number; avgEr: number | null } | null;
-  trend: unknown[];
+  trend: Array<{ date: string; followersCount: number }>;
   posts: Array<{ id: string; type: string; caption: string | null; likes: number; comments: number; shares: number; publishedAt: string }>;
 }
 
@@ -51,6 +52,14 @@ export function AccountDetailPage() {
         </div>
         <RefreshButton accountId={data.account.id} />
       </div>
+      <TrendChart
+        series={[
+          {
+            label: data.account.name,
+            data: data.trend.map((s) => ({ date: s.date, value: s.followersCount })),
+          },
+        ]}
+      />
       <div className={styles.toolbar}>
         <PostTypeFilter value={typeFilter} onChange={setTypeFilter} />
       </div>

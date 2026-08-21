@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
+import { AuthShell } from './components/AuthShell';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -13,7 +14,14 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/login"
+            element={
+              <AuthShell>
+                <LoginPage />
+              </AuthShell>
+            }
+          />
           <Route
             path="/"
             element={

@@ -1,25 +1,9 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { TrendChart } from './TrendChart';
 
-// jsdom doesn't implement ResizeObserver, which recharts' ResponsiveContainer
-// relies on to measure its container and decide whether to render children.
-// Stub it so the chart actually renders in this test environment.
-class ResizeObserverStub {
-  private callback: ResizeObserverCallback;
-  constructor(callback: ResizeObserverCallback) {
-    this.callback = callback;
-  }
-  observe(target: Element) {
-    this.callback([{ target, contentRect: { width: 600, height: 300 } } as ResizeObserverEntry], this as unknown as ResizeObserver);
-  }
-  unobserve() {}
-  disconnect() {}
-}
-
-beforeEach(() => {
-  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
-});
+// The ResizeObserver stub recharts' ResponsiveContainer needs in jsdom is
+// registered globally in setupTests.ts, so every test file gets it for free.
 
 describe('TrendChart', () => {
   it('renders one legend entry per series', () => {

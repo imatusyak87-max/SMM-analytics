@@ -3,12 +3,9 @@ import { AuthProvider } from './auth/AuthContext';
 import { AuthShell } from './components/AuthShell';
 import { Layout } from './components/Layout';
 import { AccountDetailPage } from './pages/AccountDetailPage';
+import { ComparePage } from './pages/ComparePage';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
-
-function Placeholder({ label }: { label: string }) {
-  return <div>{label}</div>;
-}
 
 export default function App() {
   return (
@@ -43,7 +40,7 @@ export default function App() {
             path="/compare"
             element={
               <Layout>
-                <Placeholder label="compare" />
+                <ComparePage />
               </Layout>
             }
           />

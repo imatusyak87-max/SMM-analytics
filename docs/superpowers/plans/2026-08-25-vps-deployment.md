@@ -266,12 +266,12 @@ volumes:
 
 - [ ] **Step 2: Validate the compose file syntax**
 
-Run (from the worktree root; a throwaway `.env` supplies the variables `config` needs to interpolate — it's deleted immediately after and was never committed):
+Run (from the worktree root; a throwaway, differently-named env file supplies the variables `config` needs to interpolate, passed explicitly via `--env-file` so the real dev `.env` already present in this worktree is never touched):
 ```bash
-cp .env.example .env
-printf '\nPOSTGRES_USER=postgres\nPOSTGRES_PASSWORD=placeholder\nPOSTGRES_DB=smm_dashboard\n' >> .env
-docker compose -f docker-compose.prod.yml config --quiet
-rm .env
+cp .env.example .env.prod-validate
+printf '\nPOSTGRES_USER=postgres\nPOSTGRES_PASSWORD=placeholder\nPOSTGRES_DB=smm_dashboard\n' >> .env.prod-validate
+docker compose --env-file .env.prod-validate -f docker-compose.prod.yml config --quiet
+rm .env.prod-validate
 ```
 Expected: no output, exit code 0 (a non-zero exit or printed error means the compose file has a syntax problem).
 
@@ -350,7 +350,7 @@ docker compose -f docker-compose.prod.yml build
 docker compose -f docker-compose.prod.yml up -d
 echo "Waiting for postgres to accept connections..."
 for i in $(seq 1 30); do
-  if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "$POSTGRES_USER" > /dev/null 2>&1; then
+  if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
     break
   fi
   sleep 1

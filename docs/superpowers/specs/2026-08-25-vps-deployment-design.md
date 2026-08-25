@@ -75,7 +75,9 @@ All four services share one Docker Compose network (Compose's default network fo
 1. Build stage: `node:20-alpine`, `npm ci`, `npm run build` → static assets in `frontend/dist`.
 2. Serve stage: `nginx:alpine`, copy the built assets into `/usr/share/nginx/html`, copy a custom `frontend/nginx.conf` that:
    - Serves the static SPA with a fallback to `index.html` for client-side routing (`/accounts/:id`, `/compare`, etc.).
-   - Reverse-proxies `/auth/`, `/accounts/`, `/stats/`, `/sync/`, `/webhooks/`, `/health` to `http://backend:3000`.
+   - Reverse-proxies `/api/` to `http://backend:3000/` (stripping the `/api` prefix) for all JSON API calls, and proxies `/webhooks/` and `/health` to `http://backend:3000` unprefixed.
+
+The `/api` prefix is required, not cosmetic: the backend's REST routes (`/accounts`, `/accounts/:id`, etc.) and the frontend's client-side route `/accounts/:id` (the account detail page) share the same path. Proxying `/accounts/` straight to the backend would mean a browser refresh on the detail page hits the backend's JSON endpoint instead of serving `index.html`. Namespacing API calls under `/api` (nginx rewrites `/api/foo` → `/foo` before proxying) avoids the collision without changing any backend route. The frontend build gets a new `frontend/.env.production` (`VITE_API_URL=/api`), which Vite loads automatically for `npm run build`; the frontend's existing dev config (`VITE_API_URL` unset, defaulting to `http://localhost:3000` per `frontend/src/api/client.ts`) is untouched. `/webhooks/` and `/health` don't collide with any frontend route, so they stay unprefixed, matching §10's `http://<vps-ip>/webhooks/telegram/:accountId` and §12's `curl http://<vps-ip>/health`.
 
 The existing dev `frontend/Dockerfile` is untouched; `docker-compose.prod.yml` points at `Dockerfile.prod` instead.
 

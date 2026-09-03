@@ -59,7 +59,7 @@ export class StatsService {
 
   async getOverview() {
     const accounts = await this.accountsRepo.find({ where: { isActive: true } });
-    const result = [];
+    const result: { account: Account; latestSnapshot: AccountSnapshot | null }[] = [];
     for (const account of accounts) {
       const latestSnapshot = await this.snapshotsRepo.findOne({
         where: { accountId: account.id },
@@ -71,7 +71,7 @@ export class StatsService {
   }
 
   async compare(accountIds: string[], period: Period) {
-    const result = [];
+    const result: { account: Account | null; trend: AccountSnapshot[] }[] = [];
     for (const accountId of accountIds) {
       const account = await this.accountsRepo.findOneBy({ id: accountId });
       const trend = await this.snapshotsRepo.find({

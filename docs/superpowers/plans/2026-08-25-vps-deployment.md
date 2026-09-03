@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deploy the core platform + Telegram connector to a fresh Ubuntu/Debian VPS over plain HTTP (no domain yet), with a repeatable `git push`-to-deploy workflow for future connector plans.
+**Goal:** Deploy the core platform + Telegram connector to a fresh Ubuntu/Debian VPS over plain HTTP (no domain yet), with a repeatable GitHub-based deploy workflow for future connector plans.
 
-**Architecture:** A new `docker-compose.prod.yml` runs `postgres`/`redis`/`backend` on an internal-only Docker network behind a single `nginx` container (the only published port, 80) that serves the built React app and reverse-proxies `/api/*` (prefix-stripped), `/webhooks/*`, and `/health` to the backend. Code reaches the VPS via `git push` to a bare repo whose `post-receive` hook rebuilds and restarts the stack and runs pending migrations.
+**Architecture:** A new `docker-compose.prod.yml` runs `postgres`/`redis`/`backend` on an internal-only Docker network behind a single `nginx` container (the only published port, 80) that serves the built React app and reverse-proxies `/api/*` (prefix-stripped), `/webhooks/*`, and `/health` to the backend. Code reaches the VPS via a private GitHub repo and a read-only deploy key (Tasks 4-6 are run by the user directly — the assistant's environment cannot originate outbound SSH, see Global Constraints).
 
 **Tech Stack:** Docker, Docker Compose, nginx, TypeORM CLI (`typeorm-ts-node-commonjs`), bcrypt, ufw, git hooks.
 
@@ -16,7 +16,7 @@
 - `postgres` and `redis` publish **no** host ports in `docker-compose.prod.yml` — reachable only by service name on the internal Docker network (spec §5).
 - Secrets live only in `/opt/smm-dashboard/app/.env` on the VPS, generated with `openssl rand` — never committed to git (spec §7).
 - Migrations run via the TypeORM CLI (`typeorm-ts-node-commonjs migration:run`) against the real database on every deploy; `synchronize` stays `false` outside tests, unchanged from the existing `DbModule`/`data-source.ts` config (spec §8).
-- Code reaches the VPS via `git push` to a bare repo at `/opt/smm-dashboard.git` — no GitHub, no CI (spec §4).
+- **Revised during execution:** the assistant's Bash tool cannot originate outbound SSH (confirmed against both the VPS and, as a control, GitHub's SSH server — TCP connects, the SSH banner exchange never completes; HTTPS works fine from the same environment). Tasks 4-6 below are therefore executed by the user directly (their own terminal or the VPS console), not by the assistant driving SSH — the assistant provides the exact commands but does not run them. Code reaches the VPS via a **private GitHub repo** (`https://github.com/imatusyak87-max/SMM-analytics`, pushed over HTTPS) and a **deploy key** the VPS uses to `git clone`/`git pull` — not a bare repo on the VPS (spec §4, revised).
 - `ufw` allows only `22/tcp` (SSH) and `80/tcp` (HTTP), default-deny otherwise (spec §11).
 - All application code in this plan (Tasks 1-3) is created/committed on the **`core-platform-telegram` branch**, inside the worktree at `.worktrees/core-platform-telegram/` — that's where the implemented app already lives (backend, frontend, existing `docker-compose.yml`). Tasks 4-6 are infrastructure-only (VPS + git remote), touch no files in that worktree, and produce no repo commits.
 - Never write the VPS IP address, SSH credentials, or generated secrets into any file inside the repository (worktree or otherwise) — they're session-only / VPS-only values.
@@ -226,7 +226,7 @@ git commit -m "feat: add production frontend image with nginx reverse proxy"
 
 **Interfaces:**
 - Consumes: `backend/Dockerfile` (existing, builds `node dist/main.js`), `frontend/Dockerfile.prod` + `frontend/nginx.conf` (Task 2).
-- Produces: `postgres`, `redis`, `backend`, `nginx` services on Compose's default network. Consumed directly by the `post-receive` hook written in Task 5.
+- Produces: `postgres`, `redis`, `backend`, `nginx` services on Compose's default network. Run directly by the deploy commands in Task 6 (§4 revised: no push-triggered hook — the user runs `docker compose` by hand on the VPS).
 
 - [ ] **Step 1: Write the compose file**
 
@@ -288,94 +288,92 @@ git commit -m "feat: add production docker-compose stack (internal-only db/redis
 
 **Files:** none — this task makes no changes inside the repository; it prepares the VPS itself over SSH.
 
+**Execution note (revised):** the assistant cannot SSH out (see Global Constraints). Every step below is a command the **user** runs themselves — in their own terminal or the VPS provider's web console — not something the assistant executes via the Bash tool. The assistant provides the exact commands and interprets pasted-back output.
+
 **Interfaces:**
-- Produces: a VPS with Docker Engine, the Compose plugin, and `ufw` installed and configured — required by Task 5 (bare repo + hook) and Task 6 (first deploy).
+- Produces: a VPS with Docker Engine, the Compose plugin, and `ufw` installed and configured — required by Task 5 (GitHub deploy key + clone) and Task 6 (first deploy).
 
 - [ ] **Step 1: Get connection details**
 
-If not already known this session, ask the user for: the VPS IP address, the SSH username, and the authentication method (existing key on this machine, or a password to enter interactively). Do not write these into any file in the repository — hold them only in the shell session for the remainder of this plan.
+If not already known, ask the user for the VPS IP address and the SSH username. Do not write these into any file in the repository.
 
 - [ ] **Step 2: Confirm SSH connectivity**
 
-Run: `ssh <user>@<vps-ip> "echo connected"`
+The user runs, from their own terminal: `ssh <user>@<vps-ip> "echo connected"`
 Expected: prints `connected`.
 
 - [ ] **Step 3: Install base packages**
 
-Run: `ssh <user>@<vps-ip> "sudo apt-get update && sudo apt-get install -y ca-certificates curl gnupg git ufw"`
+The user runs (on the VPS, via the SSH session from Step 2, or the provider's console): `sudo apt-get update && sudo apt-get install -y ca-certificates curl gnupg git ufw`
 Expected: exit code 0.
 
 - [ ] **Step 4: Install Docker Engine and the Compose plugin**
 
-Run: `ssh <user>@<vps-ip> "curl -fsSL https://get.docker.com | sudo sh"`
+The user runs: `curl -fsSL https://get.docker.com | sudo sh`
 Expected: script completes without error; Docker's official install script also enables and starts the `docker` service.
 
 - [ ] **Step 5: Verify Docker and enable it on boot**
 
-Run: `ssh <user>@<vps-ip> "docker --version && docker compose version && sudo systemctl enable docker"`
+The user runs: `docker --version && docker compose version && sudo systemctl enable docker`
 Expected: both version commands print a version string; `enable` succeeds (or reports it's already enabled).
 
 - [ ] **Step 6: Configure the firewall**
 
-Run: `ssh <user>@<vps-ip> "sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw --force enable && sudo ufw status"`
+The user runs: `sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw --force enable && sudo ufw status`
 Expected: `ufw status` output shows exactly `22/tcp ALLOW` (or `OpenSSH ALLOW`), `80/tcp ALLOW`, and `Status: active`.
 
 No commit for this task — nothing in the repository changed.
 
 ---
 
-## Task 5: Bare git repo and deploy hook on the VPS
+## Task 5: GitHub deploy key and initial clone on the VPS
 
-**Files:** none in the repository — creates `/opt/smm-dashboard.git` and `/opt/smm-dashboard/app` on the VPS, and adds a local git remote.
+**Files:** none in the repository — generates a keypair on the VPS, adds the public half as a GitHub deploy key, and clones the repo to `/opt/smm-dashboard/app`.
+
+**Execution note (revised):** as in Task 4, every step is run by the user themselves (VPS console/SSH session and the GitHub web UI), not by the assistant.
 
 **Interfaces:**
-- Consumes: `docker-compose.prod.yml` (Task 3), the backend/frontend images it builds (Tasks 1-2), which must already be committed on the branch being pushed.
-- Produces: a `post-receive` hook that checks out `master` into `/opt/smm-dashboard/app`, builds/starts the prod stack, and runs migrations — triggered by `git push` in Task 6. Also produces the local `vps` git remote used to trigger it.
+- Consumes: `docker-compose.prod.yml` (Task 3) and the backend/frontend images it builds (Tasks 1-2), already pushed to `https://github.com/imatusyak87-max/SMM-analytics` on the `core-platform-telegram` branch.
+- Produces: a working tree at `/opt/smm-dashboard/app` on the `core-platform-telegram` branch, ready for the build/up/migrate commands run manually in Task 6.
 
-- [ ] **Step 1: Create the bare repo and target directories**
+- [ ] **Step 1: Generate a deploy keypair on the VPS**
 
-Run: `ssh <user>@<vps-ip> "sudo mkdir -p /opt/smm-dashboard.git /opt/smm-dashboard/app && sudo chown -R \$(whoami):\$(whoami) /opt/smm-dashboard.git /opt/smm-dashboard/app && git init --bare /opt/smm-dashboard.git"`
-Expected: prints `Initialized empty Git repository in /opt/smm-dashboard.git/`.
+The user runs (on the VPS): `ssh-keygen -t ed25519 -f ~/.ssh/smm_deploy_key -N "" -C "smm-dashboard-vps-deploy-key"`
+Expected: prints the key fingerprint; `~/.ssh/smm_deploy_key` (private) and `~/.ssh/smm_deploy_key.pub` (public) exist.
 
-- [ ] **Step 2: Install the post-receive hook**
+- [ ] **Step 2: Register the public key as a read-only GitHub deploy key**
 
-Run:
+The user runs (on the VPS): `cat ~/.ssh/smm_deploy_key.pub`, copies the output, then in a browser goes to `https://github.com/imatusyak87-max/SMM-analytics/settings/keys` → **Add deploy key** → pastes it, leaves "Allow write access" **unchecked** (read-only is sufficient — the VPS only ever pulls), and saves.
+Expected: the new key appears in the repo's Deploy keys list.
+
+- [ ] **Step 3: Clone the repo using the deploy key**
+
+The user runs (on the VPS):
 ```bash
-ssh <user>@<vps-ip> "cat > /opt/smm-dashboard.git/hooks/post-receive" <<'EOF'
-#!/bin/sh
-set -e
-git --work-tree=/opt/smm-dashboard/app --git-dir=/opt/smm-dashboard.git checkout -f master
+mkdir -p /opt/smm-dashboard
+GIT_SSH_COMMAND="ssh -i ~/.ssh/smm_deploy_key -o IdentitiesOnly=yes" git clone git@github.com:imatusyak87-max/SMM-analytics.git /opt/smm-dashboard/app
 cd /opt/smm-dashboard/app
-docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml up -d
-echo "Waiting for postgres to accept connections..."
-for i in $(seq 1 30); do
-  if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
-docker compose -f docker-compose.prod.yml exec -T backend npx typeorm-ts-node-commonjs migration:run -d src/db/data-source.ts
-EOF
-ssh <user>@<vps-ip> "chmod +x /opt/smm-dashboard.git/hooks/post-receive"
+git checkout core-platform-telegram
 ```
-Expected: no error output; the hook file exists and is executable (`ssh <user>@<vps-ip> "ls -l /opt/smm-dashboard.git/hooks/post-receive"` shows the `x` permission bit).
+Expected: clone succeeds; `git branch --show-current` prints `core-platform-telegram`; `ls` shows `backend/`, `frontend/`, `docker-compose.prod.yml`, etc.
 
-- [ ] **Step 3: Add the local git remote**
+- [ ] **Step 4: Save the SSH command for future pulls**
 
-Run (from the worktree): `git remote add vps ssh://<user>@<vps-ip>/opt/smm-dashboard.git`
-Expected: `git remote -v` lists `vps` with the correct URL.
+The user runs (on the VPS, so future `git pull`s don't need the `-i`/`-o` flags repeated): `git -C /opt/smm-dashboard/app config core.sshCommand "ssh -i ~/.ssh/smm_deploy_key -o IdentitiesOnly=yes"`
+Expected: no output; `git -C /opt/smm-dashboard/app pull` (run once to confirm) succeeds with `Already up to date.`
 
-No commit for this task — the remote is local git config, not a tracked file; the hook lives on the VPS.
+No commit for this task — nothing in the repository changed; the deploy key and clone live only on the VPS and on GitHub's deploy-keys list.
 
 ---
 
-## Task 6: First deploy — secrets, push, migrate, seed, verify
+## Task 6: First deploy — secrets, build, migrate, seed, verify
 
-**Files:** none in the repository — writes `/opt/smm-dashboard/app/.env` on the VPS and pushes already-committed code.
+**Files:** none in the repository — writes `/opt/smm-dashboard/app/.env` on the VPS and builds/starts the already-cloned code.
+
+**Execution note (revised):** every step is run by the user themselves, on the VPS (SSH session or console).
 
 **Interfaces:**
-- Consumes: everything from Tasks 1-5 (seed script, prod images, compose file, bare repo + hook, VPS access).
+- Consumes: everything from Tasks 1-5 (seed script, prod images, compose file, GitHub clone, VPS access).
 - Produces: a running deployment, verified against spec §12.
 
 - [ ] **Step 1: Get the Telegram bot token and desired login credentials**
@@ -384,16 +382,14 @@ Ask the user for: their Telegram bot token (from @BotFather) and the email/passw
 
 - [ ] **Step 2: Generate secrets and write `.env` on the VPS**
 
-Run:
+The user runs (on the VPS):
 ```bash
-ssh <user>@<vps-ip> bash -s <<'EOF'
-set -e
-mkdir -p /opt/smm-dashboard/app
+cd /opt/smm-dashboard/app
 JWT_SECRET=$(openssl rand -hex 32)
 CRED_KEY=$(openssl rand -hex 32)
 WEBHOOK_SECRET=$(openssl rand -hex 32)
 PG_PASSWORD=$(openssl rand -hex 20)
-cat > /opt/smm-dashboard/app/.env <<ENV
+cat > .env <<ENV
 DATABASE_URL=postgres://postgres:${PG_PASSWORD}@postgres:5432/smm_dashboard
 REDIS_URL=redis://redis:6379
 JWT_SECRET=${JWT_SECRET}
@@ -406,33 +402,44 @@ POSTGRES_PASSWORD=${PG_PASSWORD}
 POSTGRES_DB=smm_dashboard
 ENV
 echo "Wrote .env"
-EOF
 ```
 Expected: prints `Wrote .env`.
 
 - [ ] **Step 3: Fill in the real bot token**
 
-Run: `ssh <user>@<vps-ip> "sed -i 's|TELEGRAM_BOT_TOKEN=__SET_ME__|TELEGRAM_BOT_TOKEN=<real-token>|' /opt/smm-dashboard/app/.env"`
-Expected: no output; `ssh <user>@<vps-ip> "grep TELEGRAM_BOT_TOKEN /opt/smm-dashboard/app/.env"` shows the real token, not `__SET_ME__`.
+The user edits `/opt/smm-dashboard/app/.env` (e.g. `nano .env`) and replaces `__SET_ME__` with the real Telegram bot token.
+Expected: `grep TELEGRAM_BOT_TOKEN /opt/smm-dashboard/app/.env` shows the real token, not `__SET_ME__`.
 
-- [ ] **Step 4: Push to deploy**
+- [ ] **Step 4: Build, start, and migrate**
 
-Run (from the worktree): `git push vps core-platform-telegram:master`
-Expected: push output includes the `post-receive` hook's build/up/migration output, ending with a line like `Migration InitialSchema... has been executed successfully` (or, on a re-deploy, `No migrations are pending`).
+The user runs (on the VPS, from `/opt/smm-dashboard/app`):
+```bash
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d
+echo "Waiting for postgres to accept connections..."
+for i in $(seq 1 30); do
+  if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+docker compose -f docker-compose.prod.yml exec -T backend npx typeorm-ts-node-commonjs migration:run -d src/db/data-source.ts
+```
+Expected: build succeeds; `up -d` reports all four containers created/started; the migration command ends with a line like `Migration InitialSchema... has been executed successfully` (or, on a re-run, `No migrations are pending`). This same four-command sequence is what a future redeploy looks like too, after a `git pull`.
 
 - [ ] **Step 5: Seed the first login user**
 
-Run: `ssh <user>@<vps-ip> "cd /opt/smm-dashboard/app && docker compose -f docker-compose.prod.yml exec -T backend node dist/db/seed-user.js <email> <password> Admin"`
+The user runs: `docker compose -f docker-compose.prod.yml exec -T backend node dist/db/seed-user.js <email> <password> Admin`
 Expected: prints `Seeded user <email>`.
 
 - [ ] **Step 6: Verify the stack is healthy**
 
-Run: `ssh <user>@<vps-ip> "cd /opt/smm-dashboard/app && docker compose -f docker-compose.prod.yml ps"`
+The user runs: `docker compose -f docker-compose.prod.yml ps`
 Expected: all four services (`postgres`, `redis`, `backend`, `nginx`) show state `running`/`Up`.
 
 - [ ] **Step 7: Verify the API is reachable through nginx**
 
-Run:
+The user runs (from any machine, e.g. their own terminal):
 ```bash
 curl -s http://<vps-ip>/health
 curl -s -X POST http://<vps-ip>/api/auth/login -H 'Content-Type: application/json' -d '{"email":"<email>","password":"<password>"}'
@@ -441,11 +448,11 @@ Expected: first call returns `{"status":"ok"}`; second returns JSON containing `
 
 - [ ] **Step 8: Verify the firewall and internal-only DB/Redis**
 
-Run: `ssh <user>@<vps-ip> "sudo ufw status && docker compose -f /opt/smm-dashboard/app/docker-compose.prod.yml -f /opt/smm-dashboard/app/docker-compose.prod.yml ps --format '{{.Names}} {{.Ports}}'"`
+The user runs (on the VPS): `sudo ufw status && docker compose -f docker-compose.prod.yml ps --format '{{.Names}} {{.Ports}}'`
 Expected: `ufw status` shows only `22/tcp`/`OpenSSH` and `80/tcp` as `ALLOW`; the `postgres` and `redis` rows show no host port mapping (empty or only the internal container port, no `0.0.0.0:`).
 
 - [ ] **Step 9: Verify the frontend and an end-to-end Telegram sync**
 
 Open `http://<vps-ip>/` in a browser and log in with the seeded credentials. Add a Telegram account the bot is an admin of (via the UI, which calls `POST /api/accounts`), then trigger a manual refresh (`POST /api/accounts/:id/sync` via the UI's refresh button) and confirm the sync job reaches `status: "success"` and the account's follower count populates — this exercises the deployed stack's outbound Telegram Bot API calls end-to-end.
 
-No repository commit for this task — all changes are on the VPS, and the pushed code was already committed in Tasks 1-3.
+No repository commit for this task — all changes are on the VPS, and the code deployed was already committed and pushed to GitHub in Tasks 1-3.

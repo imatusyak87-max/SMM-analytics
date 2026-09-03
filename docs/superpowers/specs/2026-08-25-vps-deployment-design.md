@@ -12,8 +12,8 @@ Deploy the core platform + Telegram connector (implemented on the `core-platform
 - VPS: Ubuntu/Debian, nothing installed yet — Docker must be installed as part of this work.
 - No domain pointed at the VPS yet. Deploy over plain HTTP. TLS is a deferred follow-up, not part of this plan.
 - Because there is no HTTPS, the Telegram Bot API webhook (`setWebhook`) cannot be registered — Telegram rejects non-HTTPS webhook URLs. Live post ingestion via webhook stays inactive until a domain + TLS are added later. Scheduled stats sync (follower counts via `getChatMemberCount`/`getChat`, outbound HTTP calls the VPS makes, not inbound) is unaffected and works over plain HTTP.
-- Deployment is carried out directly over SSH by the assistant in this session, using the Bash tool — not a handed-off runbook.
-- The repo has no git remote today. Code reaches the VPS via a bare git repository hosted on the VPS itself (git-push-to-deploy), not GitHub.
+- **Revised during execution:** the assistant's Bash tool cannot originate outbound SSH connections at all (confirmed against both the VPS and, as a control, GitHub's own SSH server — TCP connects, but the SSH banner exchange never completes; HTTPS from the same environment works fine). Deployment therefore cannot be carried out by the assistant driving SSH directly, contrary to the original plan. VPS-side steps (Tasks 4-6 of the implementation plan) are run by the user directly, from their own terminal or the VPS provider's console, following a runbook. See the revised §4 below for how code reaches the VPS given this constraint.
+- The repo had no git remote when this was written. Because the assistant can push over HTTPS but not SSH, code is hosted on a **private GitHub repository** (`https://github.com/imatusyak87-max/SMM-analytics`) rather than a bare repo on the VPS — see §4.
 
 ## 3. Architecture
 
@@ -38,24 +38,23 @@ Internet
 |   | build) |      +---------+      +-------------------+  |
 |   +--------+                                                |
 |                                                            |
-|  /opt/smm-dashboard.git  (bare repo, push target)          |
-|  /opt/smm-dashboard/app  (checked-out working tree,        |
-|    post-receive hook target; docker compose runs here)     |
+|  GitHub (private repo, SMM-analytics) <--- deploy key ---- |
+|  /opt/smm-dashboard/app  (git clone of the repo;           |
+|    docker compose runs here)                                |
 +----------------------------------------------------------+
 ```
 
 `nginx` is the only container with a published host port. `backend`, `postgres`, and `redis` are reachable only by service name on the internal Docker network. `ufw` additionally blocks all inbound ports except 22 (SSH) and 80 (HTTP) at the OS level, so a Docker networking misconfiguration can't accidentally expose Postgres/Redis to the internet.
 
-## 4. Code delivery: git-push-to-deploy
+## 4. Code delivery: GitHub + deploy key, manual pull-to-deploy
 
-- A bare repo is created at `/opt/smm-dashboard.git` on the VPS.
-- Its `post-receive` hook does, on every push:
-  1. `git --work-tree=/opt/smm-dashboard/app --git-dir=/opt/smm-dashboard.git checkout -f master` (the hook always deploys whatever lands on `master` in the bare repo, regardless of what local branch name was pushed from)
-  2. `cd /opt/smm-dashboard/app && docker compose -f docker-compose.prod.yml build`
-  3. `docker compose -f docker-compose.prod.yml up -d`
-  4. Run the pending TypeORM migrations against the `backend` container (§6).
-- Locally, the user adds a remote (`git remote add vps ssh://<user>@<vps-ip>/opt/smm-dashboard.git`) and deploys with `git push vps core-platform-telegram:master`. Future connector plans (VK, YouTube, Instagram, LinkedIn) reuse this same path — no redesign needed per plan.
-- This session's initial deploy is done manually over SSH (create the bare repo + hook, then push from the local machine and watch it run) rather than assuming it works blind.
+**Revised from the original bare-repo design** (see §2): the assistant cannot drive `git push`-to-VPS itself over SSH, so code is hosted on a private GitHub repo instead, and the VPS pulls from it — run by the user, not automated by a push hook.
+
+- Code lives at `https://github.com/imatusyak87-max/SMM-analytics` (private), pushed there over HTTPS with a short-lived, repo-scoped fine-grained personal access token (used once, then revoked — not stored anywhere).
+- On the VPS: an SSH keypair is generated locally on the VPS (`ssh-keygen`, no passphrase, dedicated to this purpose) and its **public** key is added to the GitHub repo as a read-only **Deploy key** (repo Settings → Deploy keys). This lets the VPS clone/pull the private repo over SSH — the VPS's own outbound SSH to github.com is unaffected by the assistant's environment limitation, since that limitation is specific to the assistant's Bash tool, not the VPS.
+- Initial checkout: `git clone git@github.com:imatusyak87-max/SMM-analytics.git /opt/smm-dashboard/app` (deploy key must be loaded, e.g. via `ssh-agent` or an explicit `GIT_SSH_COMMAND`), then `git checkout core-platform-telegram` (the branch with the implemented app — not `master`, which only holds docs/specs/plans).
+- Redeploys: `cd /opt/smm-dashboard/app && git pull && docker compose -f docker-compose.prod.yml build && docker compose -f docker-compose.prod.yml up -d`, then re-run migrations (§8). This is a manual sequence the user runs themselves (or scripts into a one-liner on the VPS) — there is no push-triggered hook in this revised design, since standing up and testing such a hook would itself require the assistant to SSH in, which it cannot do.
+- Future connector plans (VK, YouTube, Instagram, LinkedIn) reuse this same GitHub-hosted, pull-based path.
 
 ## 5. Runtime topology: `docker-compose.prod.yml`
 
@@ -95,7 +94,7 @@ A `.env` file is created directly on the VPS at `/opt/smm-dashboard/app/.env` (a
 
 ## 8. Database migrations
 
-The committed TypeORM migration (`backend/src/db/migrations/InitialSchema*`, from Task 4 of the implementation plan) is run against the fresh `postgres` container as an explicit step in the deploy hook, after `backend`'s image is built but using a one-off `docker compose run`/`exec` invocation of the TypeORM CLI — not `synchronize: true` (which is test-only per the existing `DbModule` config, and must stay that way in prod).
+The committed TypeORM migration (`backend/src/db/migrations/InitialSchema*`, from Task 4 of the implementation plan) is run against the fresh `postgres` container as an explicit manual step (§4) after `backend`'s image is built, using a one-off `docker compose exec` invocation of the TypeORM CLI — not `synchronize: true` (which is test-only per the existing `DbModule` config, and must stay that way in prod).
 
 ## 9. Initial login user
 
@@ -132,7 +131,7 @@ After deployment:
 ## 13. Out of scope
 
 - Domain registration, TLS/HTTPS, and the resulting Telegram webhook registration (§10).
-- CI/CD (GitHub Actions or similar) — deploys are manual `git push vps` for now.
+- CI/CD (GitHub Actions or similar) — deploys are a manual `git pull` + rebuild sequence run by the user on the VPS for now.
 - Database backups/snapshots.
 - Multi-user auth, roles, or an admin UI for user management (the seed script in §9 is a one-off CLI tool, not a feature).
 - Log aggregation, monitoring, alerting.

@@ -19,6 +19,20 @@ describe('RefreshButton', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Queue unavailable'));
   });
 
+  it('tells the page to reload once the sync succeeds', async () => {
+    vi.useFakeTimers();
+    (apiClient.post as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });
+    (apiClient.get as any).mockResolvedValue({ data: { id: 'job-1', status: 'success' } });
+    const onSynced = vi.fn();
+    render(<RefreshButton accountId="acc-1" onSynced={onSynced} />);
+
+    fireEvent.click(screen.getByText('Обновить'));
+    await vi.advanceTimersByTimeAsync(2500);
+    vi.useRealTimers();
+
+    expect(onSynced).toHaveBeenCalled();
+  });
+
   it('shows the job status once the sync has been queued', async () => {
     (apiClient.post as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });
     (apiClient.get as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });

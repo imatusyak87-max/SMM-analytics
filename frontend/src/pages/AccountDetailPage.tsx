@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { PostList } from '../components/PostList';
@@ -19,11 +19,15 @@ export function AccountDetailPage() {
   const [data, setData] = useState<DetailData | null>(null);
   const [typeFilter, setTypeFilter] = useState('all');
 
-  useEffect(() => {
+  const load = useCallback(() => {
     const to = new Date().toISOString().slice(0, 10);
     const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    apiClient.get(`/accounts/${id}/detail`, { params: { from, to } }).then((res) => setData(res.data));
+    return apiClient.get(`/accounts/${id}/detail`, { params: { from, to } }).then((res) => setData(res.data));
   }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const filteredPosts = useMemo(() => {
     if (!data) return [];
@@ -50,7 +54,7 @@ export function AccountDetailPage() {
             </div>
           </div>
         </div>
-        <RefreshButton accountId={data.account.id} />
+        <RefreshButton accountId={data.account.id} onSynced={load} />
       </div>
       <TrendChart
         series={[

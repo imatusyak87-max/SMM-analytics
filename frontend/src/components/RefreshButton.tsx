@@ -8,7 +8,12 @@ function statusClassName(status: string): string {
   return styles.status;
 }
 
-export function RefreshButton({ accountId }: { accountId: string }) {
+interface RefreshButtonProps {
+  accountId: string;
+  onSynced?: () => void;
+}
+
+export function RefreshButton({ accountId, onSynced }: RefreshButtonProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -29,6 +34,7 @@ export function RefreshButton({ accountId }: { accountId: string }) {
           setStatus(updated.status);
           if (updated.status === 'success' || updated.status === 'failed') {
             clearInterval(poll.current!);
+            if (updated.status === 'success') onSynced?.();
           }
         } catch {
           clearInterval(poll.current!);

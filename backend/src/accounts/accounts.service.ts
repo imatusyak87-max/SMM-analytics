@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account, AccountType } from '../db/entities/account.entity';
@@ -9,6 +9,8 @@ import { parseAccountLink } from './parse-account-link';
 
 @Injectable()
 export class AccountsService {
+  private readonly logger = new Logger(AccountsService.name);
+
   constructor(
     @InjectRepository(Account) private repo: Repository<Account>,
     private registry: ConnectorRegistry,
@@ -36,9 +38,13 @@ export class AccountsService {
     let info: AccountInfo;
     try {
       info = await connector.getAccountInfo(parsed as Account);
-    } catch {
+    } catch (error) {
+      const reason = (error as Error).message;
+      this.logger.warn(
+        `Could not resolve ${parsed.platform} account ${parsed.externalId}: ${reason}`,
+      );
       throw new BadRequestException(
-        "Couldn't find that account — check the link.",
+        `Couldn't add that account — ${parsed.platform} said: ${reason}`,
       );
     }
 

@@ -88,6 +88,22 @@ describe('AccountsService', () => {
       expect(repo.save).not.toHaveBeenCalled();
     });
 
+    it('surfaces why the platform rejected the account, not just that it failed', async () => {
+      const repo = makeRepo();
+      const connector = {
+        getAccountInfo: jest
+          .fn()
+          .mockRejectedValue(new Error('Bad Request: chat not found')),
+      };
+      const service = new AccountsService(repo, {
+        get: jest.fn().mockReturnValue(connector),
+      } as any);
+
+      await expect(
+        service.createFromLink('https://t.me/nosuchchannel'),
+      ).rejects.toThrow(/chat not found/);
+    });
+
     it('rejects a link the platform cannot resolve to a real account', async () => {
       const repo = makeRepo();
       const connector = {

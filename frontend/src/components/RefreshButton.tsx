@@ -24,7 +24,7 @@ export function RefreshButton({ accountId }: { accountId: string }) {
   return (
     <div className={styles.wrapper}>
       <button type="button" className={styles.button} onClick={handleClick}>
-        Обновить сейчас
+        Обновить
       </button>
       {status && <span className={statusClassName(status)}>{status}</span>}
     </div>

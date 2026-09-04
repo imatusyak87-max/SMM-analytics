@@ -14,12 +14,12 @@ describe('AddAccountModal', () => {
     render(<AddAccountModal onClose={vi.fn()} onCreated={onCreated} />);
 
     fireEvent.change(screen.getByLabelText('Ссылка на аккаунт'), {
-      target: { value: 'https://t.me/fedulovadigital' },
+      target: { value: 'https://t.me/somechannel' },
     });
     fireEvent.click(screen.getByText('Добавить'));
 
     await waitFor(() =>
-      expect(apiClient.post).toHaveBeenCalledWith('/accounts/from-link', { link: 'https://t.me/fedulovadigital' }),
+      expect(apiClient.post).toHaveBeenCalledWith('/accounts/from-link', { link: 'https://t.me/somechannel' }),
     );
     expect(onCreated).toHaveBeenCalled();
   });

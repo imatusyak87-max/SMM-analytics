@@ -21,17 +21,11 @@
 }
 
 .title {
-  margin: 0 0 6px;
+  margin: 0 0 20px;
   font-family: var(--heading);
   font-size: 19px;
   font-weight: 600;
   color: var(--text-h);
-}
-
-.hint {
-  margin: 0 0 20px;
-  font-size: 14px;
-  color: var(--text);
 }
 
 .label {

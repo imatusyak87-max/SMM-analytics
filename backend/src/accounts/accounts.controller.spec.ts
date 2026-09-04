@@ -9,11 +9,11 @@ describe('AccountsController', () => {
     const controller = new AccountsController(service);
 
     const result = await controller.createFromLink({
-      link: 'https://t.me/fedulovadigital',
+      link: 'https://t.me/somechannel',
     });
 
     expect(service.createFromLink).toHaveBeenCalledWith(
-      'https://t.me/fedulovadigital',
+      'https://t.me/somechannel',
     );
     expect(result).toBe(created);
   });

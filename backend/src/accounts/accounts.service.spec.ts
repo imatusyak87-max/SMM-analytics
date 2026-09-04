@@ -35,7 +35,7 @@ describe('AccountsService', () => {
         getAccountInfo: jest
           .fn()
           .mockResolvedValue({
-            name: 'FD Agency | SMM',
+            name: 'Some Channel',
             avatarUrl: 'https://cdn/photo.jpg',
           }),
       };
@@ -43,19 +43,19 @@ describe('AccountsService', () => {
         get: jest.fn().mockReturnValue(connector),
       } as any);
 
-      await service.createFromLink('https://t.me/fedulovadigital');
+      await service.createFromLink('https://t.me/somechannel');
 
       expect(connector.getAccountInfo).toHaveBeenCalledWith(
         expect.objectContaining({
           platform: AccountPlatform.TELEGRAM,
-          externalId: '@fedulovadigital',
+          externalId: '@somechannel',
         }),
       );
       expect(repo.save).toHaveBeenCalledWith(
         expect.objectContaining({
           platform: AccountPlatform.TELEGRAM,
-          externalId: '@fedulovadigital',
-          name: 'FD Agency | SMM',
+          externalId: '@somechannel',
+          name: 'Some Channel',
           avatarUrl: 'https://cdn/photo.jpg',
           type: AccountType.PUBLIC_NO_ACCESS,
           isActive: true,

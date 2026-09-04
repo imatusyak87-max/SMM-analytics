@@ -18,7 +18,7 @@ describe('OverviewPage', () => {
 
     fireEvent.click(screen.getByText('Добавить аккаунт'));
     fireEvent.change(screen.getByLabelText('Ссылка на аккаунт'), {
-      target: { value: 'https://t.me/fedulovadigital' },
+      target: { value: 'https://t.me/somechannel' },
     });
     fireEvent.click(screen.getByText('Добавить'));
 

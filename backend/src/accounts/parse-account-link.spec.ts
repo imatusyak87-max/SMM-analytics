@@ -3,9 +3,9 @@ import { AccountPlatform } from '../db/entities/account.entity';
 
 describe('parseAccountLink', () => {
   it('parses a Telegram channel link into platform and tag', () => {
-    expect(parseAccountLink('https://t.me/fedulovadigital')).toEqual({
+    expect(parseAccountLink('https://t.me/somechannel')).toEqual({
       platform: AccountPlatform.TELEGRAM,
-      externalId: '@fedulovadigital',
+      externalId: '@somechannel',
     });
   });
 

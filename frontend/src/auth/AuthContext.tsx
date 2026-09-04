@@ -10,7 +10,14 @@ interface AuthValue {
 const AuthContext = createContext<AuthValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('accessToken'));
+  // Set synchronously during the first render, not in an effect: child effects
+  // run before the parent's, so an effect here would fire after pages have
+  // already sent their first (unauthenticated) requests.
+  const [token, setToken] = useState<string | null>(() => {
+    const stored = localStorage.getItem('accessToken');
+    if (stored) setAuthToken(stored);
+    return stored;
+  });
 
   async function login(email: string, password: string) {
     const { data } = await apiClient.post('/auth/login', { email, password });

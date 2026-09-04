@@ -30,7 +30,6 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.dialog} role="dialog" aria-label="Добавьте аккаунт" onClick={(e) => e.stopPropagation()}>
         <h2 className={styles.title}>Добавьте аккаунт конкурента</h2>
-        <p className={styles.hint}>Вставьте ссылку на аккаунт — название подтянется автоматически.</p>
         <form onSubmit={handleSubmit}>
           <label className={styles.label} htmlFor="account-link">
             Ссылка на аккаунт
@@ -38,7 +37,7 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
           <input
             id="account-link"
             className={styles.input}
-            placeholder="https://t.me/fedulovadigital"
+            placeholder="https://t.me/channelname"
             value={link}
             onChange={(e) => setLink(e.target.value)}
           />

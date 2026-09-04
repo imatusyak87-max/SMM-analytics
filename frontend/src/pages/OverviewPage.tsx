@@ -61,7 +61,12 @@ export function OverviewPage() {
       ) : (
         <div className={styles.grid}>
           {items.map((item) => (
-            <AccountCard key={item.account.id} account={item.account} latestSnapshot={item.latestSnapshot} />
+            <AccountCard
+              key={item.account.id}
+              account={item.account}
+              latestSnapshot={item.latestSnapshot}
+              onDeleted={load}
+            />
           ))}
         </div>
       )}

@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AccountPlatform, AccountType } from '../db/entities/account.entity';
 
@@ -26,6 +26,50 @@ describe('AccountsService', () => {
       expect.objectContaining({ isActive: true }),
     );
     expect(result).toBe(saved);
+  });
+
+  describe('remove', () => {
+    function makeRepoWithTransaction(account: unknown) {
+      const em = { delete: jest.fn() };
+      const repo = {
+        findOneBy: jest.fn().mockResolvedValue(account),
+        manager: {
+          transaction: jest.fn((cb: (em: unknown) => Promise<void>) => cb(em)),
+        },
+      } as any;
+      return { repo, em };
+    }
+
+    it('clears the data belonging to the account before removing it', async () => {
+      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1' });
+      const service = new AccountsService(repo, { get: jest.fn() } as any);
+
+      await service.remove('acc-1');
+
+      const deletedTables = em.delete.mock.calls.map(
+        (call: unknown[]) => (call[0] as { name: string }).name,
+      );
+      expect(deletedTables).toEqual([
+        'Post',
+        'AccountSnapshot',
+        'SyncJob',
+        'AccountCredential',
+        'Account',
+      ]);
+      expect(em.delete).toHaveBeenCalledWith(expect.anything(), {
+        accountId: 'acc-1',
+      });
+    });
+
+    it('does not delete anything for an account that does not exist', async () => {
+      const { repo, em } = makeRepoWithTransaction(null);
+      const service = new AccountsService(repo, { get: jest.fn() } as any);
+
+      await expect(service.remove('missing')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(em.delete).not.toHaveBeenCalled();
+    });
   });
 
   describe('createFromLink', () => {

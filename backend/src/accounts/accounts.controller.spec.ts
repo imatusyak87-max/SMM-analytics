@@ -17,4 +17,13 @@ describe('AccountsController', () => {
     );
     expect(result).toBe(created);
   });
+
+  it('deletes an account by id', async () => {
+    const service = { remove: jest.fn().mockResolvedValue(undefined) } as any;
+    const controller = new AccountsController(service);
+
+    await controller.remove('acc-1');
+
+    expect(service.remove).toHaveBeenCalledWith('acc-1');
+  });
 });

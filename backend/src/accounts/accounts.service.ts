@@ -2,6 +2,10 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account, AccountType } from '../db/entities/account.entity';
+import { AccountCredential } from '../db/entities/account-credential.entity';
+import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
+import { Post } from '../db/entities/post.entity';
+import { SyncJob } from '../db/entities/sync-job.entity';
 import { ConnectorRegistry } from '../connectors/connector-registry.service';
 import { AccountInfo, SocialConnector } from '../connectors/connector.interface';
 import { CreateAccountDto } from './dto/create-account.dto';
@@ -68,6 +72,17 @@ export class AccountsService {
     const account = await this.repo.findOneBy({ id });
     if (!account) throw new NotFoundException(`Account ${id} not found`);
     return account;
+  }
+
+  async remove(id: string) {
+    await this.findOne(id);
+    await this.repo.manager.transaction(async (em) => {
+      await em.delete(Post, { accountId: id });
+      await em.delete(AccountSnapshot, { accountId: id });
+      await em.delete(SyncJob, { accountId: id });
+      await em.delete(AccountCredential, { accountId: id });
+      await em.delete(Account, { id });
+    });
   }
 
   async deactivate(id: string) {

@@ -11,7 +11,17 @@ describe('OverviewPage', () => {
 
   it('opens the add-account form and reloads accounts after one is created', async () => {
     (apiClient.get as any).mockResolvedValue({ data: [] });
-    (apiClient.post as any).mockResolvedValue({ data: { id: 'acc-1' } });
+    (apiClient.post as any)
+      .mockResolvedValueOnce({
+        data: {
+          platform: 'telegram',
+          externalId: '@somechannel',
+          name: 'Some Channel',
+          followersCount: 10,
+          avatarDataUri: null,
+        },
+      })
+      .mockResolvedValueOnce({ data: { id: 'acc-1' } });
 
     render(<MemoryRouter><OverviewPage /></MemoryRouter>);
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(1));
@@ -20,7 +30,7 @@ describe('OverviewPage', () => {
     fireEvent.change(screen.getByLabelText('Ссылка на аккаунт'), {
       target: { value: 'https://t.me/somechannel' },
     });
-    fireEvent.click(screen.getByText('Добавить'));
+    fireEvent.click(await screen.findByText('Добавить'));
 
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(2));
     expect(screen.queryByLabelText('Ссылка на аккаунт')).not.toBeInTheDocument();

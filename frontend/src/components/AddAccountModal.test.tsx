@@ -5,36 +5,64 @@ import { apiClient } from '../api/client';
 
 vi.mock('../api/client', () => ({ apiClient: { post: vi.fn() } }));
 
+const previewData = {
+  platform: 'telegram',
+  externalId: '@somechannel',
+  name: 'Some Channel',
+  followersCount: 4321,
+  avatarDataUri: 'data:image/jpeg;base64,aW1n',
+};
+
+function pasteLink(value = 'https://t.me/somechannel') {
+  fireEvent.change(screen.getByLabelText('Ссылка на аккаунт'), { target: { value } });
+}
+
 describe('AddAccountModal', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('posts the pasted link and reports success to its parent', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: { id: 'acc-1' } });
+  it('shows the resolved channel after a link is pasted', async () => {
+    (apiClient.post as any).mockResolvedValue({ data: previewData });
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    pasteLink();
+
+    await waitFor(() =>
+      expect(apiClient.post).toHaveBeenCalledWith('/accounts/preview', {
+        link: 'https://t.me/somechannel',
+      }),
+    );
+    expect(await screen.findByText('Some Channel')).toBeInTheDocument();
+    expect(screen.getByText('4321')).toBeInTheDocument();
+    expect(screen.getByAltText('Some Channel')).toHaveAttribute('src', previewData.avatarDataUri);
+  });
+
+  it('adds the previewed channel and reports success to its parent', async () => {
+    (apiClient.post as any)
+      .mockResolvedValueOnce({ data: previewData })
+      .mockResolvedValueOnce({ data: { id: 'acc-1' } });
     const onCreated = vi.fn();
     render(<AddAccountModal onClose={vi.fn()} onCreated={onCreated} />);
 
-    fireEvent.change(screen.getByLabelText('Ссылка на аккаунт'), {
-      target: { value: 'https://t.me/somechannel' },
-    });
-    fireEvent.click(screen.getByText('Добавить'));
+    pasteLink();
+    fireEvent.click(await screen.findByText('Добавить'));
 
     await waitFor(() =>
-      expect(apiClient.post).toHaveBeenCalledWith('/accounts/from-link', { link: 'https://t.me/somechannel' }),
+      expect(apiClient.post).toHaveBeenLastCalledWith('/accounts/from-link', {
+        link: 'https://t.me/somechannel',
+      }),
     );
     expect(onCreated).toHaveBeenCalled();
   });
 
-  it('shows the server error and stays open when the link is rejected', async () => {
+  it('offers nothing to add while the link cannot be resolved', async () => {
     (apiClient.post as any).mockRejectedValue({
       response: { data: { message: 'vk is not supported yet.' } },
     });
-    const onCreated = vi.fn();
-    render(<AddAccountModal onClose={vi.fn()} onCreated={onCreated} />);
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
-    fireEvent.change(screen.getByLabelText('Ссылка на аккаунт'), { target: { value: 'https://vk.com/somegroup' } });
-    fireEvent.click(screen.getByText('Добавить'));
+    pasteLink('https://vk.com/somegroup');
 
-    await waitFor(() => expect(screen.getByText('vk is not supported yet.')).toBeInTheDocument());
-    expect(onCreated).not.toHaveBeenCalled();
+    expect(await screen.findByText('vk is not supported yet.')).toBeInTheDocument();
+    expect(screen.queryByText('Добавить')).not.toBeInTheDocument();
   });
 });

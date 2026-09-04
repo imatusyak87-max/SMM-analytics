@@ -3,7 +3,7 @@ import axios from 'axios';
 export class TelegramApiClient {
   private baseUrl: string;
 
-  constructor(botToken: string) {
+  constructor(private botToken: string) {
     this.baseUrl = `https://api.telegram.org/bot${botToken}`;
   }
 
@@ -11,6 +11,17 @@ export class TelegramApiClient {
     const { data } = await axios.get(`${this.baseUrl}/${method}`, { params });
     if (!data.ok) throw new Error(data.description ?? `Telegram API call to ${method} failed`);
     return data.result as T;
+  }
+
+  async downloadFile(fileId: string): Promise<{ data: Buffer; contentType: string }> {
+    const { file_path } = await this.call<{ file_path: string }>('getFile', { file_id: fileId });
+    const response = await axios.get(`https://api.telegram.org/file/bot${this.botToken}/${file_path}`, {
+      responseType: 'arraybuffer',
+    });
+    return {
+      data: Buffer.from(response.data as ArrayBuffer),
+      contentType: (response.headers?.['content-type'] as string) ?? 'image/jpeg',
+    };
   }
 
   async getChatMemberCount(chatId: string): Promise<number> {

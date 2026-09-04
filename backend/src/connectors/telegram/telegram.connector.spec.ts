@@ -36,6 +36,18 @@ describe('TelegramConnector', () => {
     expect(info.avatarUrl).toBe('file123');
   });
 
+  it('getAvatar downloads the photo the file reference points at', async () => {
+    const client = {
+      downloadFile: jest.fn().mockResolvedValue({ data: Buffer.from('bytes'), contentType: 'image/jpeg' }),
+    } as any;
+    const connector = new TelegramConnector(client);
+
+    const avatar = await connector.getAvatar('file123');
+
+    expect(client.downloadFile).toHaveBeenCalledWith('file123');
+    expect(avatar.contentType).toBe('image/jpeg');
+  });
+
   it('getPosts returns an empty array (posts arrive via webhook, not pull)', async () => {
     const client = {} as any;
     const connector = new TelegramConnector(client);

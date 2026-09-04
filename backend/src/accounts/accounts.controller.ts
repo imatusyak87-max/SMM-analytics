@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
@@ -12,6 +13,18 @@ export class AccountsController {
   @Post()
   create(@Body() dto: CreateAccountDto) {
     return this.accountsService.create(dto);
+  }
+
+  @Post('preview')
+  preview(@Body() dto: CreateAccountFromLinkDto) {
+    return this.accountsService.preview(dto.link);
+  }
+
+  @Get(':id/avatar')
+  async avatar(@Param('id') id: string, @Res() res: Response) {
+    const image = await this.accountsService.getAvatar(id);
+    res.set({ 'Content-Type': image.contentType, 'Cache-Control': 'private, max-age=3600' });
+    res.send(image.data);
   }
 
   @Post('from-link')

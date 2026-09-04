@@ -58,6 +58,64 @@
   color: #d92d20;
 }
 
+.resolving {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.avatar,
+.avatarFallback {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.avatarFallback {
+  background: var(--accent-bg);
+}
+
+.previewText {
+  min-width: 0;
+  flex: 1;
+}
+
+.previewName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewFollowers {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.previewCount {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;

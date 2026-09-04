@@ -6,6 +6,11 @@ export interface AccountInfo {
   avatarUrl: string | null;
 }
 
+export interface AvatarImage {
+  data: Buffer;
+  contentType: string;
+}
+
 export interface AccountStats {
   followersCount: number;
   followingCount: number | null;
@@ -34,6 +39,8 @@ export interface ConnectorPost {
 export interface SocialConnector {
   platform: AccountPlatform;
   getAccountInfo(account: Account): Promise<AccountInfo>;
+  /** Resolves the opaque reference returned in AccountInfo.avatarUrl into actual image bytes. */
+  getAvatar(fileRef: string): Promise<AvatarImage>;
   getAccountStats(account: Account): Promise<AccountStats>;
   getPosts(account: Account, sinceDate: Date): Promise<ConnectorPost[]>;
 }

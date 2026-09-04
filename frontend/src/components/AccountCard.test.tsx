@@ -4,9 +4,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AccountCard } from './AccountCard';
 import { apiClient } from '../api/client';
 
-vi.mock('../api/client', () => ({ apiClient: { delete: vi.fn() } }));
+vi.mock('../api/client', () => ({ apiClient: { delete: vi.fn(), get: vi.fn() } }));
 
-const account = { id: 'acc-1', platform: 'telegram', name: 'Chan', avatarUrl: null, type: 'public_no_access' };
+const account = { id: 'acc-1', platform: 'telegram', name: 'Chan', avatarUrl: 'file123', type: 'public_no_access' };
 
 function renderCard(onDeleted = vi.fn()) {
   render(
@@ -19,6 +19,17 @@ function renderCard(onDeleted = vi.fn()) {
 
 describe('AccountCard', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('fetches the channel photo through the authenticated client, not a bare img src', async () => {
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:avatar', revokeObjectURL: () => {} });
+    (apiClient.get as any).mockResolvedValue({ data: new Blob(['img']) });
+    renderCard();
+
+    await waitFor(() =>
+      expect(apiClient.get).toHaveBeenCalledWith('/accounts/acc-1/avatar', { responseType: 'blob' }),
+    );
+    expect(await screen.findByAltText('Chan')).toHaveAttribute('src', 'blob:avatar');
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it('deletes the account once the confirmation is accepted', async () => {

@@ -1,6 +1,8 @@
 import { type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { PlatformIcon } from './PlatformIcon';
+import { useAvatar } from './useAvatar';
 import styles from './AccountCard.module.css';
 
 interface AccountCardProps {
@@ -10,6 +12,8 @@ interface AccountCardProps {
 }
 
 export function AccountCard({ account, latestSnapshot, onDeleted }: AccountCardProps) {
+  const avatarSrc = useAvatar(account.id, account.avatarUrl !== null);
+
   async function handleDelete(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -28,8 +32,20 @@ export function AccountCard({ account, latestSnapshot, onDeleted }: AccountCardP
           />
         </svg>
       </button>
-      <span className={styles.badge}>{account.platform}</span>
-      <h3 className={styles.name}>{account.name}</h3>
+      <div className={styles.identity}>
+        {avatarSrc ? (
+          <img className={styles.avatar} src={avatarSrc} alt={account.name} />
+        ) : (
+          <div className={styles.avatarFallback} aria-hidden="true" />
+        )}
+        <div className={styles.identityText}>
+          <span className={styles.badge}>
+            <PlatformIcon platform={account.platform} />
+            {account.platform}
+          </span>
+          <h3 className={styles.name}>{account.name}</h3>
+        </div>
+      </div>
       <div className={styles.stats}>
         <div className={styles.stat}>
           <span className={styles.statLabel}>Followers</span>

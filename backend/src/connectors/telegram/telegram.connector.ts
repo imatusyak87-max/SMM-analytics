@@ -1,5 +1,5 @@
 import { AccountPlatform, Account } from '../../db/entities/account.entity';
-import { AccountInfo, AccountStats, ConnectorPost, SocialConnector } from '../connector.interface';
+import { AccountInfo, AccountStats, AvatarImage, ConnectorPost, SocialConnector } from '../connector.interface';
 import { TelegramApiClient } from './telegram-api.client';
 
 export class TelegramConnector implements SocialConnector {
@@ -10,6 +10,10 @@ export class TelegramConnector implements SocialConnector {
   async getAccountInfo(account: Account): Promise<AccountInfo> {
     const chat = await this.client.getChat(account.externalId);
     return { name: chat.title, avatarUrl: chat.photoUrl };
+  }
+
+  async getAvatar(fileRef: string): Promise<AvatarImage> {
+    return this.client.downloadFile(fileRef);
   }
 
   async getAccountStats(account: Account): Promise<AccountStats> {

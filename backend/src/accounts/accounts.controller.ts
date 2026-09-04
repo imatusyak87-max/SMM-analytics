@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/co
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
+import { CreateAccountFromLinkDto } from './dto/create-account-from-link.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('accounts')
@@ -11,6 +12,11 @@ export class AccountsController {
   @Post()
   create(@Body() dto: CreateAccountDto) {
     return this.accountsService.create(dto);
+  }
+
+  @Post('from-link')
+  createFromLink(@Body() dto: CreateAccountFromLinkDto) {
+    return this.accountsService.createFromLink(dto.link);
   }
 
   @Get()

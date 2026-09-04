@@ -6,12 +6,32 @@
   box-sizing: border-box;
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 .heading {
-  margin: 0 0 24px;
+  margin: 0;
   font-family: var(--heading);
   font-size: 22px;
   font-weight: 600;
   color: var(--text-h);
+}
+
+.addButton {
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .grid {

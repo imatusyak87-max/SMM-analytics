@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { AccountCard } from '../components/AccountCard';
+import { AddAccountModal } from '../components/AddAccountModal';
 import styles from './OverviewPage.module.css';
 
 interface OverviewItem {
@@ -12,30 +13,45 @@ export function OverviewPage() {
   const [items, setItems] = useState<OverviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const mounted = useRef(true);
 
-    apiClient
+  const load = useCallback(() => {
+    return apiClient
       .get('/stats/overview')
       .then((res) => {
-        if (!cancelled) setItems(res.data);
+        if (mounted.current) setItems(res.data);
       })
       .catch(() => {
-        if (!cancelled) setError(true);
+        if (mounted.current) setError(true);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (mounted.current) setLoading(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    load();
+    return () => {
+      mounted.current = false;
+    };
+  }, [load]);
+
+  function handleCreated() {
+    setIsAdding(false);
+    load();
+  }
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.heading}>Overview</h1>
+      <div className={styles.header}>
+        <h1 className={styles.heading}>Overview</h1>
+        <button type="button" className={styles.addButton} onClick={() => setIsAdding(true)}>
+          Добавить аккаунт
+        </button>
+      </div>
       {loading ? (
         <p className={styles.loading}>Loading accounts…</p>
       ) : error ? (
@@ -49,6 +65,7 @@ export function OverviewPage() {
           ))}
         </div>
       )}
+      {isAdding && <AddAccountModal onClose={() => setIsAdding(false)} onCreated={handleCreated} />}
     </div>
   );
 }

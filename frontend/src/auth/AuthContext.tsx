@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
-import { apiClient, setAuthToken } from '../api/client';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { apiClient, setAuthToken, onUnauthorized } from '../api/client';
 
 interface AuthValue {
   token: string | null;
@@ -31,6 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthToken(null);
     setToken(null);
   }
+
+  // An expired or revoked token still looks like a session to the app, so every
+  // request fails while the UI claims to be logged in. Dropping the token lets
+  // the route guard send the user to the login page.
+  useEffect(() => onUnauthorized(logout), []);
 
   return <AuthContext.Provider value={{ token, login, logout }}>{children}</AuthContext.Provider>;
 }

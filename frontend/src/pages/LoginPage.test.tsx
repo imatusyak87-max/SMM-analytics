@@ -8,6 +8,7 @@ import { apiClient } from '../api/client';
 vi.mock('../api/client', () => ({
   apiClient: { post: vi.fn() },
   setAuthToken: vi.fn(),
+  onUnauthorized: vi.fn(() => () => {}),
 }));
 
 describe('LoginPage', () => {

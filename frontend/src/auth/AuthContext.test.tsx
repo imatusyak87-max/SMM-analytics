@@ -1,11 +1,12 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthProvider, useAuth } from './AuthContext';
-import { apiClient, setAuthToken } from '../api/client';
+import { apiClient, setAuthToken, onUnauthorized } from '../api/client';
 
 vi.mock('../api/client', () => ({
   apiClient: { post: vi.fn() },
   setAuthToken: vi.fn(),
+  onUnauthorized: vi.fn(() => () => {}),
 }));
 
 function Consumer() {
@@ -30,6 +31,18 @@ describe('AuthContext', () => {
     render(<AuthProvider><Consumer /></AuthProvider>);
 
     expect(setAuthToken).toHaveBeenCalledWith('stored-tok');
+  });
+
+  it('drops an expired session so the guard sends the user back to login', async () => {
+    localStorage.setItem('accessToken', 'expired-tok');
+    render(<AuthProvider><Consumer /></AuthProvider>);
+    expect(screen.getByText('expired-tok')).toBeInTheDocument();
+
+    const rejectSession = (onUnauthorized as any).mock.calls[0][0];
+    await act(async () => rejectSession());
+
+    expect(localStorage.getItem('accessToken')).toBeNull();
+    expect(screen.getByText('no-token')).toBeInTheDocument();
   });
 
   it('stores the token returned by /auth/login', async () => {

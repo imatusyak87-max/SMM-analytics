@@ -19,13 +19,13 @@ describe('StatsController', () => {
 
   it('detail passes accountId and period through', async () => {
     const controller = buildController();
-    await controller.detail('acc-1', '2026-08-01', '2026-08-13');
+    await controller.detail('acc-1', { from: '2026-08-01', to: '2026-08-13' });
     expect(controller['statsService'].getAccountDetail).toHaveBeenCalledWith('acc-1', { from: '2026-08-01', to: '2026-08-13' });
   });
 
   it('compare splits the comma-separated accountIds query param', async () => {
     const controller = buildController();
-    await controller.compare('acc-1,acc-2', '2026-08-01', '2026-08-13');
+    await controller.compare({ accountIds: 'acc-1,acc-2', from: '2026-08-01', to: '2026-08-13' });
     expect(controller['statsService'].compare).toHaveBeenCalledWith(['acc-1', 'acc-2'], { from: '2026-08-01', to: '2026-08-13' });
   });
 });

@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { Between } from 'typeorm';
 import { StatsService } from './stats.service';
 
@@ -140,5 +141,32 @@ describe('StatsService.compare', () => {
     expect(result).toHaveLength(2);
     expect(result[0].account.id).toBe('acc-1');
     expect(result[0].trend).toEqual([{ date: '2026-08-13', followersCount: 100 }]);
+  });
+});
+
+describe('StatsService.getAccountDetail for a missing account', () => {
+  it('throws NotFoundException instead of returning a 200 with a null account', async () => {
+    const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(null) } as any;
+    const snapshotsRepo = { find: jest.fn().mockResolvedValue([]) } as any;
+    const postsRepo = { find: jest.fn().mockResolvedValue([]) } as any;
+    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo);
+
+    await expect(
+      service.getAccountDetail('gone', { from: '2026-08-01', to: '2026-08-13' }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('does not query snapshots or posts for an account that does not exist', async () => {
+    const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(null) } as any;
+    const snapshotsRepo = { find: jest.fn().mockResolvedValue([]) } as any;
+    const postsRepo = { find: jest.fn().mockResolvedValue([]) } as any;
+    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo);
+
+    await service
+      .getAccountDetail('gone', { from: '2026-08-01', to: '2026-08-13' })
+      .catch(() => undefined);
+
+    expect(snapshotsRepo.find).not.toHaveBeenCalled();
+    expect(postsRepo.find).not.toHaveBeenCalled();
   });
 });

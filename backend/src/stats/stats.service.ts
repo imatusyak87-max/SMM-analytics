@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import { Account } from '../db/entities/account.entity';
@@ -30,6 +30,8 @@ export class StatsService {
 
   async getAccountDetail(accountId: string, period: Period) {
     const account = await this.accountsRepo.findOneBy({ id: accountId });
+    if (!account) throw new NotFoundException(`Account ${accountId} not found`);
+
     const trend = await this.snapshotsRepo.find({
       where: { accountId, date: Between(period.from, period.to) },
       order: { date: 'ASC' },

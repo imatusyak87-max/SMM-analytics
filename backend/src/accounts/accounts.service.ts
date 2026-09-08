@@ -34,10 +34,18 @@ export class AccountsService {
       throw this.unresolvable(parsed.platform, parsed.externalId, error as Error);
     }
 
+    // The avatar is decorative: a channel that resolved should still be previewable
+    // and addable when only its picture fails to download.
     let avatarDataUri: string | null = null;
     if (info.avatarUrl) {
-      const avatar = await connector.getAvatar(info.avatarUrl);
-      avatarDataUri = `data:${avatar.contentType};base64,${avatar.data.toString('base64')}`;
+      try {
+        const avatar = await connector.getAvatar(info.avatarUrl);
+        avatarDataUri = `data:${avatar.contentType};base64,${avatar.data.toString('base64')}`;
+      } catch (error) {
+        this.logger.warn(
+          `Could not download avatar for ${parsed.platform} ${parsed.externalId}: ${(error as Error).message}`,
+        );
+      }
     }
 
     return {

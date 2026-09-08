@@ -117,6 +117,26 @@ describe('AccountsService', () => {
       expect(connector.getAvatar).not.toHaveBeenCalled();
     });
 
+    it('still previews the channel when its avatar cannot be downloaded', async () => {
+      const repo = makeRepo();
+      const connector = {
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: 'file123' }),
+        getAccountStats: jest.fn().mockResolvedValue({ followersCount: 4321 }),
+        getAvatar: jest.fn().mockRejectedValue(new Error('file download failed')),
+      };
+      const service = new AccountsService(
+        repo,
+        { get: jest.fn().mockReturnValue(connector) } as any,
+        { createManual: jest.fn() } as any,
+      );
+
+      const result = await service.preview('https://t.me/somechannel');
+
+      expect(result.name).toBe('Some Channel');
+      expect(result.followersCount).toBe(4321);
+      expect(result.avatarDataUri).toBeNull();
+    });
+
     it('rejects a link it cannot resolve', async () => {
       const repo = makeRepo();
       const service = new AccountsService(

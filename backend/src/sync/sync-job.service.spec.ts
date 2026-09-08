@@ -17,7 +17,7 @@ describe('SyncJobService', () => {
     expect(queue.add).toHaveBeenCalledWith(
       'sync-account',
       { syncJobId: 'job-1', accountId: 'acc-1' },
-      { priority: 1 },
+      expect.objectContaining({ priority: 1, attempts: 3, backoff: { type: 'exponential', delay: 30000 } }),
     );
     expect(result).toBe(saved);
   });
@@ -39,6 +39,10 @@ describe('SyncJobService', () => {
 
     expect(result).toHaveLength(2);
     expect(queue.add).toHaveBeenCalledTimes(2);
-    expect(queue.add).toHaveBeenCalledWith('sync-account', expect.anything(), { priority: 10 });
+    expect(queue.add).toHaveBeenCalledWith(
+      'sync-account',
+      expect.anything(),
+      expect.objectContaining({ priority: 10, attempts: 3 }),
+    );
   });
 });

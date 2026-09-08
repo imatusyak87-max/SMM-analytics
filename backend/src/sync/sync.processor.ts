@@ -15,6 +15,11 @@ interface SyncJobData {
   accountId: string;
 }
 
+function isFinalAttempt(job: Job<SyncJobData>): boolean {
+  const allowed = job.opts?.attempts ?? 1;
+  return (job.attemptsMade ?? 0) + 1 >= allowed;
+}
+
 @Processor('sync')
 export class SyncProcessor extends WorkerHost {
   private readonly logger = new Logger(SyncProcessor.name);
@@ -75,20 +80,28 @@ export class SyncProcessor extends WorkerHost {
 
       await this.syncJobsRepo.update(syncJobId, { status: SyncStatus.SUCCESS, finishedAt: new Date() });
     } catch (error) {
-      try {
-        await this.syncJobsRepo.update(syncJobId, {
-          status: SyncStatus.FAILED,
-          errorMessage: (error as Error).message,
-          finishedAt: new Date(),
-        });
-      } catch (updateError) {
-        this.logger.error(
-          `Failed to record FAILED status for sync job ${syncJobId} after original error: ${
-            (error as Error).message
-          }`,
-          (updateError as Error).stack,
-        );
+      // Only the last attempt is a real failure — marking earlier ones FAILED would
+      // show the user a failure that a retry is about to fix.
+      if (isFinalAttempt(job)) {
+        try {
+          await this.syncJobsRepo.update(syncJobId, {
+            status: SyncStatus.FAILED,
+            errorMessage: (error as Error).message,
+            finishedAt: new Date(),
+          });
+        } catch (updateError) {
+          this.logger.error(
+            `Failed to record FAILED status for sync job ${syncJobId} after original error: ${
+              (error as Error).message
+            }`,
+            (updateError as Error).stack,
+          );
+        }
       }
+
+      // BullMQ decides retry and backoff from a rejected promise; swallowing here
+      // marked every failed job successful.
+      throw error;
     }
   }
 }

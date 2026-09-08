@@ -42,4 +42,51 @@ describe('RefreshButton', () => {
 
     await waitFor(() => expect(screen.getByText('pending')).toBeInTheDocument());
   });
+
+  it('stops polling after a second click, rather than leaving an orphaned poller running forever', async () => {
+    vi.useFakeTimers();
+    (apiClient.post as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });
+    (apiClient.get as any).mockResolvedValue({ data: { id: 'job-1', status: 'success' } });
+    render(<RefreshButton accountId="acc-1" />);
+
+    fireEvent.click(screen.getByText('Обновить'));
+    fireEvent.click(screen.getByText('Обновить'));
+    await vi.advanceTimersByTimeAsync(2500);
+
+    const callsOnceFinished = (apiClient.get as any).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(20000);
+    vi.useRealTimers();
+
+    expect((apiClient.get as any).mock.calls.length).toBe(callsOnceFinished);
+  });
+
+  it('still reports success after a second click', async () => {
+    vi.useFakeTimers();
+    (apiClient.post as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });
+    (apiClient.get as any).mockResolvedValue({ data: { id: 'job-1', status: 'success' } });
+    const onSynced = vi.fn();
+    render(<RefreshButton accountId="acc-1" onSynced={onSynced} />);
+
+    fireEvent.click(screen.getByText('Обновить'));
+    fireEvent.click(screen.getByText('Обновить'));
+    await vi.advanceTimersByTimeAsync(2500);
+    vi.useRealTimers();
+
+    expect(onSynced).toHaveBeenCalled();
+    expect(screen.getByText('success')).toBeInTheDocument();
+  });
+
+  it('queues only one sync when the button is clicked twice in a row', async () => {
+    vi.useFakeTimers();
+    (apiClient.post as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });
+    (apiClient.get as any).mockResolvedValue({ data: { id: 'job-1', status: 'success' } });
+    render(<RefreshButton accountId="acc-1" />);
+
+    fireEvent.click(screen.getByText('Обновить'));
+    fireEvent.click(screen.getByText('Обновить'));
+    await vi.advanceTimersByTimeAsync(2500);
+    vi.useRealTimers();
+
+    expect((apiClient.post as any).mock.calls.length).toBe(1);
+  });
 });

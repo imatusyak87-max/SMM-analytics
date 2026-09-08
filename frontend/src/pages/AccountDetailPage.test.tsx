@@ -44,4 +44,21 @@ describe('AccountDetailPage', () => {
     expect(screen.queryByText('Hello')).not.toBeInTheDocument();
     expect(screen.getByText('Video post')).toBeInTheDocument();
   });
+
+  it('shows an error instead of hanging on the spinner when the account cannot be loaded', async () => {
+    (apiClient.get as any).mockRejectedValue({ response: { status: 500 } });
+
+    renderAt('/accounts/acc-1');
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.queryByText('Загрузка…')).not.toBeInTheDocument();
+  });
+
+  it('says the account was not found when the server returns a 404', async () => {
+    (apiClient.get as any).mockRejectedValue({ response: { status: 404 } });
+
+    renderAt('/accounts/gone');
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Аккаунт не найден'));
+  });
 });

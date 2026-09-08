@@ -52,4 +52,15 @@ describe('AccountCard', () => {
     expect(apiClient.delete).not.toHaveBeenCalled();
     expect(onDeleted).not.toHaveBeenCalled();
   });
+
+  it('tells the user when deleting the account failed, instead of silently doing nothing', async () => {
+    vi.stubGlobal('confirm', () => true);
+    (apiClient.delete as any).mockRejectedValue({ response: { data: { message: 'Account is locked' } } });
+    const onDeleted = renderCard();
+
+    fireEvent.click(screen.getByLabelText('Удалить аккаунт'));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Account is locked'));
+    expect(onDeleted).not.toHaveBeenCalled();
+  });
 });

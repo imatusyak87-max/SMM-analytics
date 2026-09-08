@@ -20,6 +20,7 @@ export function ComparePage() {
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [compareData, setCompareData] = useState<CompareItem[]>([]);
+  const [compareError, setCompareError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,13 +45,28 @@ export function ComparePage() {
   useEffect(() => {
     if (selected.length === 0) {
       setCompareData([]);
+      setCompareError(false);
       return;
     }
+    // Selections change faster than the requests answer; without this flag a slow
+    // earlier response could land last and leave the chart disagreeing with the table.
+    let cancelled = false;
     const to = new Date().toISOString().slice(0, 10);
     const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     apiClient
       .get('/stats/compare', { params: { accountIds: selected.join(','), from, to } })
-      .then((res) => setCompareData(res.data));
+      .then((res) => {
+        if (cancelled) return;
+        setCompareError(false);
+        setCompareData(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setCompareError(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selected]);
 
   function toggle(accountId: string) {
@@ -94,6 +110,11 @@ export function ComparePage() {
             <p className={styles.empty}>Pick two or more accounts above to compare their stats.</p>
           ) : (
             <>
+              {compareError && (
+                <p className={styles.error} role="alert">
+                  Не удалось загрузить сравнение
+                </p>
+              )}
               <CompareTable rows={rows} />
               <TrendChart
                 series={compareData.map((item) => ({

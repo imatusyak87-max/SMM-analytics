@@ -1,4 +1,4 @@
-import { type MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { PlatformIcon } from './PlatformIcon';
@@ -13,13 +13,20 @@ interface AccountCardProps {
 
 export function AccountCard({ account, latestSnapshot, onDeleted }: AccountCardProps) {
   const avatarSrc = useAvatar(account.id, account.avatarUrl !== null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleDelete(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     if (!confirm(`Удалить «${account.name}» и всю собранную статистику?`)) return;
-    await apiClient.delete(`/accounts/${account.id}`);
-    onDeleted();
+    try {
+      setDeleteError(null);
+      await apiClient.delete(`/accounts/${account.id}`);
+      onDeleted();
+    } catch (err: any) {
+      // Without this the card just sat there, giving no sign the delete had failed.
+      setDeleteError(err.response?.data?.message ?? 'Не удалось удалить аккаунт');
+    }
   }
 
   return (
@@ -32,6 +39,11 @@ export function AccountCard({ account, latestSnapshot, onDeleted }: AccountCardP
           />
         </svg>
       </button>
+      {deleteError && (
+        <span className={styles.deleteError} role="alert">
+          {deleteError}
+        </span>
+      )}
       <div className={styles.identity}>
         {avatarSrc ? (
           <img className={styles.avatar} src={avatarSrc} alt={account.name} />

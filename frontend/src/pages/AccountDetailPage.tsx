@@ -17,12 +17,25 @@ interface DetailData {
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<DetailData | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState('all');
 
   const load = useCallback(() => {
     const to = new Date().toISOString().slice(0, 10);
     const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    return apiClient.get(`/accounts/${id}/detail`, { params: { from, to } }).then((res) => setData(res.data));
+    return apiClient
+      .get(`/accounts/${id}/detail`, { params: { from, to } })
+      .then((res) => {
+        setError(null);
+        setData(res.data);
+      })
+      .catch((err: any) => {
+        setError(
+          err.response?.status === 404
+            ? 'Аккаунт не найден'
+            : 'Не удалось загрузить данные аккаунта',
+        );
+      });
   }, [id]);
 
   useEffect(() => {
@@ -33,6 +46,14 @@ export function AccountDetailPage() {
     if (!data) return [];
     return typeFilter === 'all' ? data.posts : data.posts.filter((p) => p.type === typeFilter);
   }, [data, typeFilter]);
+
+  if (error) {
+    return (
+      <p className={styles.error} role="alert">
+        {error}
+      </p>
+    );
+  }
 
   if (!data) return <p className={styles.loading}>Загрузка…</p>;
 

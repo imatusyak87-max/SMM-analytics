@@ -126,3 +126,10 @@
   font-weight: 600;
   color: var(--text-h);
 }
+
+.deleteError {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--danger, #c0392b);
+  font-size: 13px;
+}

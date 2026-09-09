@@ -100,8 +100,12 @@ Chosen over the two alternatives:
 ### 6.1 telegram-preview.client.ts
 
 Fetches `https://t.me/s/<channel>` and `?before=<id>` for older pages. Responsible
-only for HTTP. Throttles ~300ms between page requests and caps a single walk at 25
-pages, so a first sync of a high-volume channel cannot become a request storm.
+only for HTTP: one URL, one page, no pagination logic of its own.
+
+The ~300ms throttle between pages and the 25-page cap live in the connector's walk
+rather than here, since that is where the loop is and a client that only ever
+fetches one page has nothing to throttle. A first sync of a high-volume channel
+therefore still cannot become a request storm.
 
 ### 6.2 telegram-preview.parser.ts
 
@@ -172,9 +176,15 @@ summary: { followersCount, postsCount,
            erViews, erFollowers }
 ```
 
-Computed as a single SQL aggregate — not by loading rows and summing in JS, which
-is the defect the 2026-09-09 review already flagged in `getTopPosts` and which
-there is no reason to reproduce in new code.
+**Amended during planning.** The summary is computed in JS from the rows
+`getAccountDetail` has already loaded — not by a second SQL aggregate, as this
+section first said. Those rows are fetched and returned to the client regardless,
+because the browser sorts them, so summing them costs no query and no extra row.
+
+This is deliberately *not* the defect the 2026-09-09 review flagged in
+`getTopPosts`, which loads every row from the database solely to sort them and
+throw most away. The distinction that matters is whether rows are loaded *for* the
+computation, not whether the computation happens in SQL.
 
 The `posts` array carries `id`, `type`, `publishedAt`, `caption`, `thumbnailUrl`,
 `permalink`, `views`, `likes`, `er`, `erViews`.

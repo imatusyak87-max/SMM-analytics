@@ -54,12 +54,21 @@ sync, so each dump contains that day's snapshot:
 ### Copy backups off the VPS
 
 Dumps on the same machine protect against a bad migration or an accidental
-delete, but not against losing the VPS. Pull them down periodically (run on your
-own machine, substituting your SSH user):
+delete, but not against losing the VPS. Pull them down periodically, from
+PowerShell on the Windows machine (substituting your SSH user):
 
-```bash
-scp youruser@78.17.37.21:/opt/smm-dashboard/backups/smm-*.dump /c/Backups/smm/
+```powershell
+New-Item -ItemType Directory -Force C:\Backups\smm
+cd C:\Backups\smm
+scp youruser@78.17.37.21:"/opt/smm-dashboard/backups/smm-*.dump" .
 ```
+
+Two things this form avoids. `scp` does not create the destination directory, so
+it must exist first. And a Windows path as the final argument is ambiguous —
+`scp` can read `C:\Backups` as host `C`, path `\Backups` — so change into the
+target directory and pass `.` instead. A Git Bash style `/c/Backups/...` path
+does not work here either: `C:\Windows\System32\OpenSSH\scp.exe` is a native
+Windows binary and takes it literally.
 
 ### Restore drill — do this once
 

@@ -1,6 +1,7 @@
 import { TelegramConnector } from './telegram.connector';
 import { AccountPlatform, AccountType } from '../../db/entities/account.entity';
 import { PostType } from '../../db/entities/post.entity';
+import { PreviewUnavailableError } from './telegram-preview.parser';
 
 describe('TelegramConnector', () => {
   const account = {
@@ -121,4 +122,28 @@ describe('TelegramConnector.getPosts', () => {
 
     expect(preview.fetchPage).toHaveBeenCalledTimes(25);
   }, 10_000); // 24 real inter-page delays at PAGE_DELAY_MS=300 exceed Jest's 5s default
+
+  it('treats a PreviewUnavailableError on a later page as the end of history, not a failure', async () => {
+    const preview = {
+      fetchPage: jest
+        .fn()
+        .mockResolvedValueOnce(page([101, 102, 103], '2026-09-03T10:00:00+00:00'))
+        .mockRejectedValueOnce(new PreviewUnavailableError('no posts before 101')),
+    };
+    const connector = new TelegramConnector({} as any, preview as any);
+
+    const posts = await connector.getPosts(account, new Date('2026-01-01'));
+
+    expect(posts.map((p) => p.externalPostId)).toEqual(['101', '102', '103']);
+    expect(preview.fetchPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('still rejects when the very first page throws PreviewUnavailableError', async () => {
+    const preview = {
+      fetchPage: jest.fn().mockRejectedValue(new PreviewUnavailableError('channel disabled its preview')),
+    };
+    const connector = new TelegramConnector({} as any, preview as any);
+
+    await expect(connector.getPosts(account, new Date('2026-01-01'))).rejects.toThrow(PreviewUnavailableError);
+  });
 });

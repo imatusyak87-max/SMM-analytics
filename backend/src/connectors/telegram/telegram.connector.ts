@@ -2,7 +2,7 @@ import { AccountPlatform, Account } from '../../db/entities/account.entity';
 import { AccountInfo, AccountStats, AvatarImage, ConnectorPost, SocialConnector } from '../connector.interface';
 import { TelegramApiClient } from './telegram-api.client';
 import { TelegramPreviewClient } from './telegram-preview.client';
-import { parsePreviewPage } from './telegram-preview.parser';
+import { parsePreviewPage, PreviewUnavailableError } from './telegram-preview.parser';
 
 const MAX_PAGES = 25;
 const PAGE_DELAY_MS = 300;
@@ -45,8 +45,21 @@ export class TelegramConnector implements SocialConnector {
     for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
       if (pageNumber > 0) await delay(PAGE_DELAY_MS);
 
-      const html = await this.preview.fetchPage(channel, before);
-      const parsed = parsePreviewPage(html, channel.replace(/^@/, ''));
+      let parsed;
+      try {
+        const html = await this.preview.fetchPage(channel, before);
+        parsed = parsePreviewPage(html, channel.replace(/^@/, ''));
+      } catch (err) {
+        // The first page throwing PreviewUnavailableError means the channel's preview
+        // is unreadable altogether (disabled, or Telegram changed its markup) — that
+        // must still fail loudly so the sync job is marked failed and BullMQ retries.
+        // The SAME error on a later page just means we've walked past the start of
+        // the channel's history, which is a normal way for the walk to end, not a
+        // failure — stop and return what was already collected. Any other error
+        // (network, timeout, ...) always propagates, on any page.
+        if (pageNumber > 0 && err instanceof PreviewUnavailableError) break;
+        throw err;
+      }
 
       // The last page of a channel's history can be requested again with the same
       // cursor (or, in tests, a mock that keeps handing back the same fixture) —

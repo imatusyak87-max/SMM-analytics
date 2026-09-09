@@ -30,5 +30,7 @@ export function parseAccountLink(link: string): ParsedAccountLink | null {
   const segment = url.pathname.split('/').filter(Boolean).pop();
   if (!segment) return null;
 
-  return { platform, externalId: `@${segment.replace(/^@/, '')}` };
+  // Handles are case-insensitive on these platforms, so normalise here: the unique
+  // constraint on (platform, externalId) can only catch duplicates that compare equal.
+  return { platform, externalId: `@${segment.replace(/^@/, '').toLowerCase()}` };
 }

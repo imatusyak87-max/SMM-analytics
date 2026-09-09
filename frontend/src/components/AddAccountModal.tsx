@@ -14,6 +14,7 @@ interface AccountPreview {
   name: string;
   followersCount: number;
   avatarDataUri: string | null;
+  alreadyAdded: boolean;
 }
 
 export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
@@ -103,8 +104,16 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
               <div className={styles.previewFollowers}>
                 <span className={styles.previewCount}>{preview.followersCount}</span> подписчиков
               </div>
+              {preview.alreadyAdded && (
+                <p className={styles.duplicate}>Этот аккаунт уже добавлен</p>
+              )}
             </div>
-            <button type="button" className={styles.submit} onClick={handleAdd} disabled={adding}>
+            <button
+              type="button"
+              className={styles.submit}
+              onClick={handleAdd}
+              disabled={adding || preview.alreadyAdded}
+            >
               Добавить
             </button>
           </div>

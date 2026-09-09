@@ -1,11 +1,12 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AccountPlatform, AccountType } from '../db/entities/account.entity';
 
-function makeRepo(saved: unknown = { id: '1' }) {
+function makeRepo(saved: unknown = { id: '1' }, existing: unknown = null) {
   return {
     save: jest.fn().mockResolvedValue(saved),
     create: jest.fn((x) => x),
+    findOneBy: jest.fn().mockResolvedValue(existing),
   } as any;
 }
 
@@ -94,6 +95,7 @@ describe('AccountsService', () => {
         name: 'Some Channel',
         followersCount: 4321,
         avatarDataUri: `data:image/jpeg;base64,${Buffer.from('img').toString('base64')}`,
+        alreadyAdded: false,
       });
       expect(repo.save).not.toHaveBeenCalled();
     });
@@ -115,6 +117,43 @@ describe('AccountsService', () => {
 
       expect(result.avatarDataUri).toBeNull();
       expect(connector.getAvatar).not.toHaveBeenCalled();
+    });
+
+    it('reports that an already added channel is a duplicate', async () => {
+      const repo = makeRepo({ id: '1' }, { id: 'existing', externalId: '@somechannel' });
+      const connector = {
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null }),
+        getAccountStats: jest.fn().mockResolvedValue({ followersCount: 4321 }),
+        getAvatar: jest.fn(),
+      };
+      const service = new AccountsService(
+        repo,
+        { get: jest.fn().mockReturnValue(connector) } as any,
+        { createManual: jest.fn() } as any,
+      );
+
+      const result = await service.preview('https://t.me/somechannel');
+
+      expect(result.alreadyAdded).toBe(true);
+      expect(result.name).toBe('Some Channel');
+    });
+
+    it('reports a channel that is not yet added as addable', async () => {
+      const repo = makeRepo();
+      const connector = {
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null }),
+        getAccountStats: jest.fn().mockResolvedValue({ followersCount: 4321 }),
+        getAvatar: jest.fn(),
+      };
+      const service = new AccountsService(
+        repo,
+        { get: jest.fn().mockReturnValue(connector) } as any,
+        { createManual: jest.fn() } as any,
+      );
+
+      const result = await service.preview('https://t.me/somechannel');
+
+      expect(result.alreadyAdded).toBe(false);
     });
 
     it('still previews the channel when its avatar cannot be downloaded', async () => {
@@ -257,6 +296,82 @@ describe('AccountsService', () => {
         service.createFromLink('https://t.me/nosuchchannel'),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createFromLink duplicate protection', () => {
+    function serviceWith(repo: any, syncJobs = { createManual: jest.fn() }) {
+      const connector = {
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null }),
+      };
+      return {
+        service: new AccountsService(repo, { get: jest.fn().mockReturnValue(connector) } as any, syncJobs as any),
+        syncJobs,
+        connector,
+      };
+    }
+
+    it('rejects a link for an account that is already added', async () => {
+      const repo = makeRepo({ id: '1' }, { id: 'existing', externalId: '@somechannel' });
+      const { service } = serviceWith(repo);
+
+      await expect(service.createFromLink('https://t.me/somechannel')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it('looks the duplicate up by platform and handle together', async () => {
+      const repo = makeRepo({ id: '1' }, { id: 'existing' });
+      const { service } = serviceWith(repo);
+
+      await service.createFromLink('https://t.me/somechannel').catch(() => undefined);
+
+      expect(repo.findOneBy).toHaveBeenCalledWith({
+        platform: AccountPlatform.TELEGRAM,
+        externalId: '@somechannel',
+      });
+    });
+
+    it('saves nothing and queues no sync when the account already exists', async () => {
+      const repo = makeRepo({ id: '1' }, { id: 'existing' });
+      const { service, syncJobs } = serviceWith(repo);
+
+      await service.createFromLink('https://t.me/somechannel').catch(() => undefined);
+
+      expect(repo.save).not.toHaveBeenCalled();
+      expect(syncJobs.createManual).not.toHaveBeenCalled();
+    });
+
+    it('treats the same channel in different case as already added', async () => {
+      const repo = makeRepo({ id: '1' }, { id: 'existing' });
+      const { service } = serviceWith(repo);
+
+      await expect(service.createFromLink('https://t.me/SomeChannel')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(repo.findOneBy).toHaveBeenCalledWith(
+        expect.objectContaining({ externalId: '@somechannel' }),
+      );
+    });
+
+    // Two adds racing past the findOneBy check both reach the insert; the database
+    // constraint is what actually stops the second one.
+    it('maps a unique violation from the database to the same conflict', async () => {
+      const repo = makeRepo();
+      repo.save = jest.fn().mockRejectedValue(Object.assign(new Error('duplicate key'), { code: '23505' }));
+      const { service } = serviceWith(repo);
+
+      await expect(service.createFromLink('https://t.me/somechannel')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it('does not swallow unrelated database errors as conflicts', async () => {
+      const repo = makeRepo();
+      repo.save = jest.fn().mockRejectedValue(Object.assign(new Error('disk full'), { code: '53100' }));
+      const { service } = serviceWith(repo);
+
+      await expect(service.createFromLink('https://t.me/somechannel')).rejects.toThrow('disk full');
     });
   });
 });

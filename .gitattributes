@@ -1,2 +1,4 @@
 # Shell scripts run on Linux; CRLF would break the shebang ("bad interpreter").
 *.sh text eol=lf
+# The Caddyfile is read inside a Linux container; keep it LF like the shell scripts.
+Caddyfile text eol=lf

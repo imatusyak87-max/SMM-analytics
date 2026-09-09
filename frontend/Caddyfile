@@ -1,0 +1,32 @@
+# frontend/Caddyfile
+# SITE_ADDRESS is the public hostname (e.g. fdagency.duckdns.org), set in the
+# root .env and passed through docker-compose.prod.yml. A bare hostname tells
+# Caddy to serve HTTPS on 443, obtain and renew a Let's Encrypt certificate
+# automatically, and redirect port 80 to it.
+{$SITE_ADDRESS}
+
+root * /usr/share/caddy
+encode gzip
+
+# /api/foo -> backend:3000/foo. The prefix is stripped because the backend's
+# REST routes collide with the frontend's client-side routes (/accounts/:id
+# exists in both); see docs/superpowers/specs/2026-08-25-vps-deployment-design.md.
+handle_path /api/* {
+	reverse_proxy backend:3000
+}
+
+# Unprefixed: these collide with nothing in the SPA.
+handle /webhooks/* {
+	reverse_proxy backend:3000
+}
+
+handle /health {
+	reverse_proxy backend:3000
+}
+
+# Everything else is the SPA: serve the file if it exists, else index.html so
+# client-side routes survive a browser refresh.
+handle {
+	try_files {path} /index.html
+	file_server
+}

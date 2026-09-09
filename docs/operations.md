@@ -123,3 +123,66 @@ environment, so nothing secret is typed:
 cd /opt/smm-dashboard/app && docker compose -f docker-compose.prod.yml exec -T postgres \
   sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT count(*) FROM accounts;"'
 ```
+
+## HTTPS
+
+The site is served by Caddy (the `caddy` service in `docker-compose.prod.yml`),
+which obtains and renews a Let's Encrypt certificate on its own. There is no
+certbot, no renewal cron entry, and nothing to remember — renewal happens about
+30 days before expiry, in the background.
+
+Two prerequisites, both one-time:
+
+- `SITE_ADDRESS` in `.env` — the public hostname, e.g. `fdagency.duckdns.org`.
+  It must match the DNS record exactly.
+- Ports **80 and 443** open. 80 is not optional even though the site is HTTPS:
+  Let's Encrypt validates over it, and Caddy uses it to redirect plain HTTP.
+
+```bash
+ufw allow 80/tcp && ufw allow 443/tcp
+```
+
+### Don't delete the caddy_data volume
+
+`caddy_data` holds the issued certificate and the ACME account key. It survives
+`docker compose down` and rebuilds, which is the point: Let's Encrypt caps
+identical certificates at **5 per week**, so a container that re-requests on
+every restart will exhaust the limit and leave the site without HTTPS for days.
+Rebuild freely; just never `docker compose down -v`, which removes it (and
+`pgdata` with it).
+
+### Checking the certificate
+
+```bash
+curl -sSI https://$(grep '^SITE_ADDRESS=' /opt/smm-dashboard/app/.env | cut -d= -f2) | head -1
+cd /opt/smm-dashboard/app && docker compose -f docker-compose.prod.yml logs caddy | grep -iE 'certificate|error' | tail -20
+```
+
+A first-time issue takes a few seconds. `challenge failed` in those logs almost
+always means DNS points somewhere else or port 80 is closed — check both before
+retrying, because each failed attempt counts against the rate limit.
+
+### Telegram webhooks need HTTPS
+
+Telegram refuses to register a plain-HTTP webhook, so this is what makes the
+Telegram connector work at all. After the certificate is live, point each
+tracked account's webhook at the HTTPS URL. Credentials come from the
+container's own environment, so no token is typed:
+
+```bash
+cd /opt/smm-dashboard/app
+ACCOUNT_ID=<the account's uuid>
+docker compose -f docker-compose.prod.yml exec -T backend node -e '
+const [id] = process.argv.slice(1);
+const url = `https://${process.env.SITE_ADDRESS}/webhooks/telegram/${id}`;
+fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ url, secret_token: process.env.TELEGRAM_WEBHOOK_SECRET }),
+}).then((r) => r.json()).then((r) => console.log(url, r));
+' "$ACCOUNT_ID"
+```
+
+`{"ok":true,...}` means it took. The `secret_token` is echoed back by Telegram on
+every update and checked by `TelegramWebhookGuard`; without it the endpoint would
+be an open write path.

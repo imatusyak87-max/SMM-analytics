@@ -19,13 +19,25 @@ services:
     depends_on: [postgres, redis]
     restart: unless-stopped
 
-  nginx:
+  caddy:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
     depends_on: [backend]
-    ports: ["80:80"]
+    # 80 is not optional: Let's Encrypt validates over it, and Caddy uses it to
+    # redirect plain HTTP to HTTPS.
+    ports: ["80:80", "443:443"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+    # caddy_data holds the issued certificates and the ACME account key. Without
+    # it every rebuild would re-request the certificate, and Let's Encrypt caps
+    # identical certificates at 5 per week.
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
     restart: unless-stopped
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

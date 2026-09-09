@@ -77,13 +77,23 @@ confirm the data is really there:
 
 ```bash
 cd /opt/smm-dashboard/app
+DUMP=$(ls -t /opt/smm-dashboard/backups/smm-*.dump | head -1); echo "restoring $DUMP"
+docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" --if-exists restore_test'
 docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'createdb -U "$POSTGRES_USER" restore_test'
-docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d restore_test' < /opt/smm-dashboard/backups/smm-YYYYMMDD-HHMMSS.dump
-docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d restore_test -c "SELECT count(*) FROM accounts; SELECT count(*) FROM account_snapshots;"'
+docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d restore_test' < "$DUMP"
+docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d restore_test -c "SELECT count(*) AS accounts FROM accounts;"'
+docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d restore_test -c "SELECT count(*) AS snapshots FROM account_snapshots;"'
 docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" restore_test'
 ```
 
-If those counts match production, the backups are real.
+If those counts match production, the backups are real. The block selects the
+newest dump itself, so there is no filename to substitute, and it clears any
+`restore_test` left behind by an earlier attempt. It only ever touches that
+throwaway database.
+
+`ERROR: relation "accounts" does not exist` means the restore step never ran and
+you are querying an empty database — usually a dump path that does not exist,
+which still leaves `createdb` done.
 
 ### Restore for real (destructive)
 
@@ -93,8 +103,9 @@ during the restore:
 ```bash
 cd /opt/smm-dashboard/app
 docker compose -f docker-compose.prod.yml stop backend
+DUMP=$(ls -t /opt/smm-dashboard/backups/smm-*.dump | head -1)   # or name one explicitly
 docker compose -f docker-compose.prod.yml exec -T postgres \
-  sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < /opt/smm-dashboard/backups/smm-YYYYMMDD-HHMMSS.dump
+  sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < "$DUMP"
 docker compose -f docker-compose.prod.yml start backend
 ```
 

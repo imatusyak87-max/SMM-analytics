@@ -63,7 +63,57 @@ describe('parseAccountLink', () => {
   });
 
   it('lowercases handles on the other platforms too', () => {
-    expect(parseAccountLink('https://www.instagram.com/SomeOne/')?.externalId).toBe('@someone');
-    expect(parseAccountLink('https://vk.com/SomeGroup')?.externalId).toBe('@somegroup');
+    expect(
+      parseAccountLink('https://www.instagram.com/SomeOne/')?.externalId,
+    ).toBe('@someone');
+    expect(parseAccountLink('https://vk.com/SomeGroup')?.externalId).toBe(
+      '@somegroup',
+    );
+  });
+});
+
+// t.me links come in more shapes than "domain plus handle". Taking the last path
+// segment turned a link to a post into an account named after the post's number.
+describe('parseAccountLink: Telegram link shapes', () => {
+  it('parses a link to a post as the channel the post belongs to', () => {
+    expect(parseAccountLink('https://t.me/mychannel/123')).toEqual({
+      platform: AccountPlatform.TELEGRAM,
+      externalId: '@mychannel',
+    });
+  });
+
+  it('parses the web-preview form of a channel link', () => {
+    expect(parseAccountLink('https://t.me/s/mychannel')).toEqual({
+      platform: AccountPlatform.TELEGRAM,
+      externalId: '@mychannel',
+    });
+  });
+
+  it('parses a post inside the web-preview form as the channel too', () => {
+    expect(parseAccountLink('https://t.me/s/mychannel/123')?.externalId).toBe(
+      '@mychannel',
+    );
+  });
+
+  it('returns null for a private channel link, which carries no public username', () => {
+    expect(parseAccountLink('https://t.me/c/1234567890/5')).toBeNull();
+  });
+
+  it('returns null for invite links, which name no channel the bot can look up', () => {
+    expect(parseAccountLink('https://t.me/+AbCdEfGhIjKl')).toBeNull();
+    expect(
+      parseAccountLink('https://t.me/joinchat/AAAAAEHbEkejzxUjAUCfYg'),
+    ).toBeNull();
+  });
+
+  it('returns null for a segment that cannot be a Telegram username', () => {
+    expect(parseAccountLink('https://t.me/ab')).toBeNull();
+    expect(parseAccountLink('https://t.me/has-a-hyphen')).toBeNull();
+  });
+
+  it('tolerates a handle typed with its @ still attached', () => {
+    expect(parseAccountLink('https://t.me/@mychannel')?.externalId).toBe(
+      '@mychannel',
+    );
   });
 });

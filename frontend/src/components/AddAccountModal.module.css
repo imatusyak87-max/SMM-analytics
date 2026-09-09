@@ -148,3 +148,9 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.duplicate {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--danger, #c0392b);
+}

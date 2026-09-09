@@ -48,4 +48,22 @@ describe('parseAccountLink', () => {
       parseAccountLink('https://www.youtube.com/@somechannel')?.externalId,
     ).toBe('@somechannel');
   });
+
+  // Telegram usernames are case-insensitive, so t.me/MyChannel and t.me/mychannel
+  // are one channel. Without normalising here they become two externalIds, and the
+  // unique constraint on (platform, externalId) would not see them as duplicates.
+  it('lowercases the handle so the same channel in different case parses identically', () => {
+    expect(parseAccountLink('https://t.me/MyChannel')).toEqual({
+      platform: AccountPlatform.TELEGRAM,
+      externalId: '@mychannel',
+    });
+    expect(parseAccountLink('https://t.me/MyChannel')).toEqual(
+      parseAccountLink('https://t.me/mychannel'),
+    );
+  });
+
+  it('lowercases handles on the other platforms too', () => {
+    expect(parseAccountLink('https://www.instagram.com/SomeOne/')?.externalId).toBe('@someone');
+    expect(parseAccountLink('https://vk.com/SomeGroup')?.externalId).toBe('@somegroup');
+  });
 });

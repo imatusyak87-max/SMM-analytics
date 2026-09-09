@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account, AccountType } from '../db/entities/account.entity';
@@ -11,6 +17,9 @@ import { AccountInfo, AccountStats, AvatarImage, SocialConnector } from '../conn
 import { SyncJobService } from '../sync/sync-job.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { ParsedAccountLink, parseAccountLink } from './parse-account-link';
+
+const ALREADY_ADDED = 'Этот аккаунт уже добавлен';
+const PG_UNIQUE_VIOLATION = '23505';
 
 @Injectable()
 export class AccountsService {
@@ -54,6 +63,9 @@ export class AccountsService {
       name: info.name,
       followersCount: stats.followersCount,
       avatarDataUri,
+      // Lets the add dialog say so before the user clicks; the 409 on create is
+      // still what enforces it.
+      alreadyAdded: (await this.findExisting(parsed)) !== null,
     };
   }
 
@@ -70,6 +82,8 @@ export class AccountsService {
   async createFromLink(link: string) {
     const { parsed, connector } = this.resolveLink(link);
 
+    if (await this.findExisting(parsed)) throw new ConflictException(ALREADY_ADDED);
+
     let info: AccountInfo;
     try {
       info = await connector.getAccountInfo(parsed as Account);
@@ -77,19 +91,33 @@ export class AccountsService {
       throw this.unresolvable(parsed.platform, parsed.externalId, error as Error);
     }
 
-    const account = await this.repo.save(
-      this.repo.create({
-        platform: parsed.platform,
-        externalId: parsed.externalId,
-        name: info.name,
-        avatarUrl: info.avatarUrl,
-        type: AccountType.PUBLIC_NO_ACCESS,
-        isActive: true,
-      }),
-    );
+    let account: Account;
+    try {
+      account = await this.repo.save(
+        this.repo.create({
+          platform: parsed.platform,
+          externalId: parsed.externalId,
+          name: info.name,
+          avatarUrl: info.avatarUrl,
+          type: AccountType.PUBLIC_NO_ACCESS,
+          isActive: true,
+        }),
+      );
+    } catch (error) {
+      // Two adds can race past the check above; the unique index is what actually
+      // stops the second one, and it should read as the same conflict to the user.
+      if ((error as { code?: string }).code === PG_UNIQUE_VIOLATION) {
+        throw new ConflictException(ALREADY_ADDED);
+      }
+      throw error;
+    }
 
     await this.syncJobs.createManual(account.id);
     return account;
+  }
+
+  private findExisting(parsed: ParsedAccountLink): Promise<Account | null> {
+    return this.repo.findOneBy({ platform: parsed.platform, externalId: parsed.externalId });
   }
 
   private resolveLink(link: string): { parsed: ParsedAccountLink; connector: SocialConnector } {

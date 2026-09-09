@@ -65,4 +65,35 @@ describe('AddAccountModal', () => {
     expect(await screen.findByText('vk is not supported yet.')).toBeInTheDocument();
     expect(screen.queryByText('Добавить')).not.toBeInTheDocument();
   });
+
+  it('warns and blocks Добавить when the channel is already added', async () => {
+    (apiClient.post as any).mockResolvedValue({ data: { ...previewData, alreadyAdded: true } });
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    pasteLink();
+
+    expect(await screen.findByText('Этот аккаунт уже добавлен')).toBeInTheDocument();
+    expect(screen.getByText('Добавить')).toBeDisabled();
+  });
+
+  it('does not send an add request for an already added channel', async () => {
+    (apiClient.post as any).mockResolvedValue({ data: { ...previewData, alreadyAdded: true } });
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    pasteLink();
+    fireEvent.click(await screen.findByText('Добавить'));
+
+    await waitFor(() => expect(screen.getByText('Этот аккаунт уже добавлен')).toBeInTheDocument());
+    expect(apiClient.post).not.toHaveBeenCalledWith('/accounts/from-link', expect.anything());
+  });
+
+  it('leaves Добавить usable for a channel that is not yet added', async () => {
+    (apiClient.post as any).mockResolvedValue({ data: { ...previewData, alreadyAdded: false } });
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    pasteLink();
+
+    expect(await screen.findByText('Добавить')).toBeEnabled();
+    expect(screen.queryByText('Этот аккаунт уже добавлен')).not.toBeInTheDocument();
+  });
 });

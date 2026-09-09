@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Unique } from 'typeorm';
 
 export enum AccountPlatform {
   TELEGRAM = 'telegram',
@@ -15,6 +15,9 @@ export enum AccountType {
 }
 
 @Entity('accounts')
+// The same channel must not be addable twice. Handles are normalised to lowercase
+// in parseAccountLink so that case variants compare equal here.
+@Unique(['platform', 'externalId'])
 export class Account {
   @PrimaryGeneratedColumn('uuid') id: string;
   @Column({ type: 'enum', enum: AccountPlatform }) platform: AccountPlatform;

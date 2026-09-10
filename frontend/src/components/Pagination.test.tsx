@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { Pagination, pageItems } from './Pagination';
+import { Pagination } from './Pagination';
+import { pageItems } from './pageItems';
 
 const noop = () => {};
 

@@ -43,6 +43,22 @@ describe('parsePreviewPage', () => {
     expect(posts()[1].reactions).toBe(1248);
   });
 
+  // Standard emoji reactions render the emoji itself as text inside the span
+  // (<i class="emoji"><b>🔥</b></i>3), unlike custom emoji, whose <tg-emoji> is
+  // empty. Reading the span's whole text gave "🔥3", which parses as no number —
+  // so every channel using plain emoji reactions stored 0 reactions.
+  it('counts standard emoji reactions, whose emoji is rendered as text', () => {
+    const html = `
+      <div class="tgme_widget_message" data-post="testchannel/579">
+        <div class="tgme_widget_message_reactions js-message_reactions">
+          <span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>3</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F9881.png')"><b>😁</b></i>2</span>
+        </div>
+        <span class="tgme_widget_message_views">184</span>
+        <time datetime="2026-06-24T16:01:06+00:00"></time>
+      </div>`;
+    expect(parsePreviewPage(html, 'testchannel')[0].reactions).toBe(5);
+  });
+
   it('types a post by its media: photos are IMAGE, video is VIDEO, neither is POST', () => {
     expect(posts().map((p) => p.type)).toEqual([PostType.POST, PostType.IMAGE, PostType.VIDEO]);
   });

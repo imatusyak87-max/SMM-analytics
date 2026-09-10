@@ -45,7 +45,10 @@ export function parsePreviewPage(html: string, channel: string): ParsedPreviewPo
     // Paid reactions count Stars sent, not people reacting, so one donor can add
     // tens of thousands to a post. Excluding them keeps reactions a measure of engagement.
     message.find('.tgme_reaction:not(.tgme_reaction_paid)').each((_i, reaction) => {
-      reactions += parseCompactNumber($(reaction).text()) ?? 0;
+      // Only the span's own text is the count. Its child element is the emoji,
+      // and a standard emoji renders as text ("🔥"), which would spoil the number.
+      const count = $(reaction).contents().filter((_j, node) => node.type === 'text').text();
+      reactions += parseCompactNumber(count) ?? 0;
     });
 
     const messageText = message.find('.tgme_widget_message_text').first();

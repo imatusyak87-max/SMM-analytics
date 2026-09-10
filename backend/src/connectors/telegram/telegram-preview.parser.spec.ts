@@ -19,9 +19,18 @@ describe('parsePreviewPage', () => {
 
   it('reads text, views and the summed reaction counts', () => {
     const post = posts()[1];
-    expect(post.caption).toBe('Пост с картинкой');
+    expect(post.caption).toBe('Пост с картинкой\nВторая строка');
     expect(post.views).toBe(12300);
     expect(post.reactions).toBe(1248);
+  });
+
+  // The fixture's post 102 has a <br/> between two lines of text. cheerio's
+  // .text() drops <br/> entirely, running the lines together, so the modal's
+  // white-space: pre-wrap never sees a line break to render.
+  it('keeps a line break from a <br/> in the caption instead of dropping it', () => {
+    const post = posts()[1];
+    expect(post.caption).toContain('\n');
+    expect(post.caption).toBe('Пост с картинкой\nВторая строка');
   });
 
   it('reports no reactions as zero rather than as missing', () => {

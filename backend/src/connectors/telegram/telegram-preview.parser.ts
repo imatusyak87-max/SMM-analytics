@@ -46,7 +46,11 @@ export function parsePreviewPage(html: string, channel: string): ParsedPreviewPo
       reactions += parseCompactNumber($(reaction).text()) ?? 0;
     });
 
-    const caption = message.find('.tgme_widget_message_text').first().text().trim();
+    const messageText = message.find('.tgme_widget_message_text').first();
+    // .text() drops <br/> entirely, running consecutive lines together — replace
+    // each one with a newline first so multi-paragraph captions survive.
+    messageText.find('br').replaceWith('\n');
+    const caption = messageText.text().trim();
 
     posts.push({
       externalPostId,

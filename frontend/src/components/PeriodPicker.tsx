@@ -30,14 +30,23 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | undefined>();
   const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Closing via keyboard or the dialog's own buttons unmounts whatever had
+  // focus inside the popover, so focus must be sent back to the trigger.
+  // An outside click already moved focus elsewhere on its own; don't steal it.
+  function close(restoreFocus: boolean) {
+    setOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  }
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') close(true);
     };
     const onPointerDown = (event: MouseEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!wrapRef.current?.contains(event.target as Node)) close(false);
     };
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('mousedown', onPointerDown);
@@ -67,7 +76,7 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
   function apply() {
     if (!draft?.from) return;
     onChange({ preset: null, from: toIsoDate(draft.from), to: toIsoDate(draft.to ?? draft.from) });
-    setOpen(false);
+    close(true);
   }
 
   const label = formatPeriod(value);
@@ -89,6 +98,7 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
       </div>
       <div className={styles.calendar} ref={wrapRef}>
         <button
+          ref={triggerRef}
           type="button"
           className={value.preset === null ? styles.calendarActive : styles.calendarButton}
           aria-haspopup="dialog"
@@ -112,7 +122,7 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
               disabled={{ after: today }}
             />
             <div className={styles.actions}>
-              <button type="button" className={styles.secondary} onClick={() => setOpen(false)}>
+              <button type="button" className={styles.secondary} onClick={() => close(true)}>
                 Отмена
               </button>
               <button

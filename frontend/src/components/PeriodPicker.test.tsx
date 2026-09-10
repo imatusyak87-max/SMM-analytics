@@ -57,6 +57,7 @@ describe('PeriodPicker', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
     expect(onChange).toHaveBeenCalledWith({ preset: null, from: '2026-08-01', to: '2026-08-10' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Выбрать даты/ })).toHaveFocus();
   });
 
   it('orders the range whichever day is clicked first', () => {
@@ -102,6 +103,7 @@ describe('PeriodPicker', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Выбрать даты/ })).toHaveFocus();
   });
 
   it('closes on «Отмена» without applying', () => {
@@ -112,5 +114,17 @@ describe('PeriodPicker', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Выбрать даты/ })).toHaveFocus();
+  });
+
+  it('closes on an outside click without applying or moving focus', () => {
+    const onChange = renderPicker();
+    openCalendar();
+
+    fireEvent.mouseDown(document.body);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Выбрать даты/ })).not.toHaveFocus();
   });
 });

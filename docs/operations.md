@@ -259,18 +259,40 @@ channel and read the output:
 ```bash
 cd backend && npx ts-node -e "
 import { TelegramPreviewClient } from './src/connectors/telegram/telegram-preview.client';
-import { parsePreviewPage } from './src/connectors/telegram/telegram-preview.parser';
+import { parsePreviewPage, PreviewUnavailableError } from './src/connectors/telegram/telegram-preview.parser';
 
 async function main() {
   const client = new TelegramPreviewClient();
 
-  const html1 = await client.fetchPage('durov');
-  const posts1 = parsePreviewPage(html1, 'durov');
+  let posts1;
+  try {
+    const html1 = await client.fetchPage('durov');
+    posts1 = parsePreviewPage(html1, 'durov');
+  } catch (err) {
+    if (err instanceof PreviewUnavailableError) {
+      console.error('PAGE 1 BROKEN:', err.message, '-- this is a real break: the markup changed, or the channel disabled its web preview.');
+    } else {
+      console.error('PAGE 1 ERROR (network or environment, not the parser):', err);
+    }
+    process.exitCode = 1;
+    return;
+  }
   console.log('page 1 posts:', posts1.length, posts1[0]);
   const oldest1 = posts1.reduce((a, b) => (a.publishedAt < b.publishedAt ? a : b));
 
-  const html2 = await client.fetchPage('durov', oldest1.externalPostId);
-  const posts2 = parsePreviewPage(html2, 'durov');
+  let posts2;
+  try {
+    const html2 = await client.fetchPage('durov', oldest1.externalPostId);
+    posts2 = parsePreviewPage(html2, 'durov');
+  } catch (err) {
+    if (err instanceof PreviewUnavailableError) {
+      console.log('PAGE 2 END OF HISTORY:', err.message, '-- normal for a channel whose whole history fits on one page, not a failure. Rerun against a deep-history channel (durov has plenty) to actually exercise pagination.');
+      return;
+    }
+    console.error('PAGE 2 ERROR (network or environment, not the parser):', err);
+    process.exitCode = 1;
+    return;
+  }
   console.log('page 2 posts:', posts2.length, posts2[0]);
   const newest2 = posts2.reduce((a, b) => (a.publishedAt > b.publishedAt ? a : b));
 
@@ -278,23 +300,46 @@ async function main() {
   const ids1 = new Set(posts1.map((p) => p.externalPostId));
   console.log('no id overlap:', !posts2.some((p) => ids1.has(p.externalPostId)));
 }
-main();
+main().catch((err) => {
+  console.error('UNEXPECTED ERROR:', err);
+  process.exitCode = 1;
+});
 "
 ```
 
-Expected, against an active public channel like `durov`: a post count of about
-20 on each page, a first post on page 1 with a real `publishedAt` and non-null
-`views` (a `thumbnailUrl` if it carries media), both trailing assertions
-printing `true`, and no overlap between the two pages' `externalPostId`s.
+Expected, against an active public channel like `durov`: `page 1 posts:` printed with a count
+around 20 and a first post with a real `publishedAt` and non-null `views` (a `thumbnailUrl` if it
+carries media); `page 2 posts:` printed similarly; both trailing lines printing `true`. The script
+exits non-zero only on an actual break, never on end-of-history — see below.
 
-- **Zero posts, or `views` null on a post that visibly shows a view count on
-  t.me** means the markup changed — not that the channel is quiet. A quiet
-  channel still returns its (older) existing posts with real view counts; it
-  simply has none newer than last time.
-- **Either trailing assertion printing `false`** means pagination broke —
-  either `?before=` stopped working, or the "oldest post first" assumption no
-  longer holds.
+`parsePreviewPage` never returns an empty array: per its own source, whenever it finds zero post
+blocks it throws `PreviewUnavailableError` instead (see "A channel that has disabled its web
+preview cannot be tracked for posts" above). So "zero posts" is never something this script
+prints — it is something that surfaces as a caught exception, and which exception, on which page,
+is what tells break apart from ordinary end-of-history:
 
-Either failure means the parser needs a fix and its fixtures need updating —
-that is real implementation work with its own review, not something to patch
-inline while running an operational check.
+- **`PAGE 1 BROKEN` (`PreviewUnavailableError` on the *first* page)** is a real break: either the
+  markup changed, or the channel disabled its web preview. `TelegramConnector.getPosts` treats
+  this the same way — a first-page `PreviewUnavailableError` is rethrown and fails the sync job —
+  so this script's exit code matches production behavior. Exits non-zero.
+- **`PAGE 2 END OF HISTORY` (`PreviewUnavailableError` on a *later* page)** is normal, not a
+  failure: it means the channel's whole history fit on the pages already walked.
+  `TelegramConnector.getPosts` treats this identically — a later-page `PreviewUnavailableError`
+  just stops the walk and returns what was collected, it does not fail the job. `durov` has far
+  more than one page of history, so seeing this here would be unexpected for that specific
+  channel — if it happens, rerun against another deep-history channel before concluding anything,
+  since a short-history channel legitimately ends within one page. Exits zero.
+- **`views` null on a post that visibly shows a view count on t.me, while `page 1 posts` still
+  printed a nonzero count** means the parser is finding post blocks but failing to extract views
+  from them specifically — still a real break, just not the same failure shape as
+  `PreviewUnavailableError`.
+- **`PAGE 1 ERROR` / `PAGE 2 ERROR`, or `UNEXPECTED ERROR`** (anything that isn't a
+  `PreviewUnavailableError`) is a network or environment problem — a timeout, DNS failure, or
+  similar — not evidence the parser is broken. Exits non-zero, but don't treat it as a markup
+  change without ruling out connectivity first.
+- **Either trailing `true`/`false` line printing `false`** means pagination broke — either
+  `?before=` stopped working, or the "oldest post first" assumption no longer holds.
+
+A real break (page 1, or a trailing assertion `false`) means the parser needs a fix and its
+fixtures need updating — that is real implementation work with its own review, not something to
+patch inline while running an operational check.

@@ -1,0 +1,208 @@
+/*
+ * Presets reuse the segmented-control idiom PostSortSelect shares (recessed
+ * --code-bg track; the chosen segment lifts onto --bg with an accent outline).
+ * Eight options wrap onto further lines on narrow screens instead of overflowing.
+ */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg);
+}
+
+.option {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.option:hover {
+  color: var(--text-h);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+.option:active {
+  transform: scale(0.97);
+}
+
+.active {
+  composes: option;
+  color: var(--text-h);
+  background: var(--bg);
+  border-color: var(--accent-border);
+  cursor: default;
+}
+
+.calendar {
+  position: relative;
+}
+
+.calendarButton {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.calendarButton:hover {
+  color: var(--text-h);
+  border-color: var(--accent-border);
+}
+
+.calendarButton:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+.calendarButton:active {
+  transform: scale(0.97);
+}
+
+/* A custom range is the active choice, so the button takes the selected look. */
+.calendarActive {
+  composes: calendarButton;
+  color: var(--text-h);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  box-sizing: border-box;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  color: var(--text-h);
+  --rdp-accent-color: var(--accent);
+  --rdp-accent-background-color: var(--accent-bg);
+  --rdp-today-color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.secondary,
+.primary {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.secondary {
+  color: var(--text);
+  background: transparent;
+}
+
+.secondary:hover {
+  color: var(--text-h);
+}
+
+.primary {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondary:active,
+.primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.secondary:focus-visible,
+.primary:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+/* On a phone the popover spans the bar instead of hanging off the button. */
+@media (max-width: 640px) {
+  .bar {
+    position: relative;
+  }
+
+  .calendar {
+    position: static;
+  }
+
+  .popover {
+    left: 0;
+    right: 0;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option,
+  .calendarButton,
+  .secondary,
+  .primary {
+    transition: none;
+  }
+
+  .option:active,
+  .calendarButton:active,
+  .secondary:active,
+  .primary:active {
+    transform: none;
+  }
+}

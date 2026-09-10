@@ -37,6 +37,12 @@ describe('parsePreviewPage', () => {
     expect(posts()[2].reactions).toBe(0);
   });
 
+  // A paid reaction counts Stars sent, not people reacting, so one donor can add
+  // tens of thousands to a post. Excluded, so reactions measure engagement.
+  it('excludes paid Stars reactions from the reaction count', () => {
+    expect(posts()[1].reactions).toBe(1248);
+  });
+
   it('types a post by its media: photos are IMAGE, video is VIDEO, neither is POST', () => {
     expect(posts().map((p) => p.type)).toEqual([PostType.POST, PostType.IMAGE, PostType.VIDEO]);
   });

@@ -42,7 +42,9 @@ export function parsePreviewPage(html: string, channel: string): ParsedPreviewPo
     else if (photo) type = PostType.IMAGE;
 
     let reactions = 0;
-    message.find('.tgme_reaction').each((_i, reaction) => {
+    // Paid reactions count Stars sent, not people reacting, so one donor can add
+    // tens of thousands to a post. Excluding them keeps reactions a measure of engagement.
+    message.find('.tgme_reaction:not(.tgme_reaction_paid)').each((_i, reaction) => {
       reactions += parseCompactNumber($(reaction).text()) ?? 0;
     });
 

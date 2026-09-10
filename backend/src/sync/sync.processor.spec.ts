@@ -153,6 +153,32 @@ describe('SyncProcessor', () => {
     await expect(processor.process(finalAttempt())).rejects.toThrow('db is still down');
   });
 
+  it('still writes the day\'s follower snapshot, with avgEr null, when getPosts fails', async () => {
+    const { processor, snapshotsRepo } = buildProcessor({
+      getPosts: jest.fn().mockRejectedValue(new Error('t.me timed out')),
+    });
+
+    await expect(processor.process(finalAttempt())).rejects.toThrow('t.me timed out');
+
+    expect(snapshotsRepo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 'acc-1', followersCount: 100, avgEr: null }),
+      ['accountId', 'date'],
+    );
+  });
+
+  it('still fails the job when getPosts fails, even though the snapshot was written', async () => {
+    const { processor, syncJobsRepo } = buildProcessor({
+      getPosts: jest.fn().mockRejectedValue(new Error('t.me timed out')),
+    });
+
+    await expect(processor.process(finalAttempt())).rejects.toThrow('t.me timed out');
+
+    expect(syncJobsRepo.update).toHaveBeenCalledWith(
+      'job-1',
+      expect.objectContaining({ status: SyncStatus.FAILED, errorMessage: 't.me timed out' }),
+    );
+  });
+
   it('treats a job with no retry options as its own final attempt', async () => {
     const { processor, syncJobsRepo } = buildProcessor({
       getAccountStats: jest.fn().mockRejectedValue(new Error('boom')),

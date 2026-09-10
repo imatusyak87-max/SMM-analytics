@@ -47,23 +47,46 @@ export class SyncProcessor extends WorkerHost {
       const stats = await connector.getAccountStats(account);
       const since = new Date();
       since.setDate(since.getDate() - 90);
-      const posts = await connector.getPosts(account, since);
-
       const today = new Date().toISOString().slice(0, 10);
+
       let erSum = 0;
       let erCount = 0;
 
-      for (const post of posts) {
-        const er = calculateEr(post.likes, post.comments, post.shares, stats.followersCount);
-        const erViews = calculateErByViews(post.likes, post.views);
-        if (er !== null) {
-          erSum += er;
-          erCount += 1;
+      try {
+        const posts = await connector.getPosts(account, since);
+
+        for (const post of posts) {
+          const er = calculateEr(post.likes, post.comments, post.shares, stats.followersCount);
+          const erViews = calculateErByViews(post.likes, post.views);
+          if (er !== null) {
+            erSum += er;
+            erCount += 1;
+          }
+          await this.postsRepo.upsert(
+            { accountId, ...post, er, erViews, lastSyncedAt: new Date() },
+            ['accountId', 'externalPostId'],
+          );
         }
-        await this.postsRepo.upsert(
-          { accountId, ...post, er, erViews, lastSyncedAt: new Date() },
-          ['accountId', 'externalPostId'],
+      } catch (postsError) {
+        // A t.me timeout, a 429 during the batch, or a channel whose preview is
+        // hidden must not also wipe today's follower snapshot — the snapshot is
+        // independent of post scraping and would otherwise stop for good on a
+        // channel whose preview never recovers. Write it with avgEr: null (same
+        // as a day with zero posts), then rethrow so the job still fails and
+        // BullMQ still retries.
+        await this.snapshotsRepo.upsert(
+          {
+            accountId,
+            date: today,
+            followersCount: stats.followersCount,
+            followingCount: stats.followingCount,
+            postsCount: stats.postsCount,
+            avgReach: null,
+            avgEr: null,
+          },
+          ['accountId', 'date'],
         );
+        throw postsError;
       }
 
       await this.snapshotsRepo.upsert(

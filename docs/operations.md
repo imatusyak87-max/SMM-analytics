@@ -254,58 +254,73 @@ Telegram redesign can silently break the parser. No fixture can catch that —
 fixtures are frozen snapshots of markup that was already known to parse. The
 only way to tell "the channel just hasn't posted in a while" apart from "the
 parser is broken" is to run this check against a real, currently active
-channel and read the output:
+channel and read the output.
+
+Run it on the VPS, inside the running `backend` container — the host only
+holds the git checkout, not `node_modules`, since everything is installed
+inside the Docker image. The container runs the compiled app from `dist/`
+(see `backend/Dockerfile`: `npm run build` then `CMD ["node", "dist/main.js"]`,
+`WORKDIR /app`), so requiring the compiled modules there is guaranteed to
+work without depending on dev dependencies or a source build being present.
+This follows the same `docker compose exec` pattern as the webhook section
+above, and for the same quoting reason — the script is wrapped in single
+quotes, so it is written with double quotes internally rather than single:
 
 ```bash
-cd backend && npx ts-node -e "
-import { TelegramPreviewClient } from './src/connectors/telegram/telegram-preview.client';
-import { parsePreviewPage, PreviewUnavailableError } from './src/connectors/telegram/telegram-preview.parser';
+cd /opt/smm-dashboard/app && docker compose -f docker-compose.prod.yml exec -T backend node -e '
+const { TelegramPreviewClient } = require("./dist/connectors/telegram/telegram-preview.client");
+const { parsePreviewPage, PreviewUnavailableError } = require("./dist/connectors/telegram/telegram-preview.parser");
 
 async function main() {
   const client = new TelegramPreviewClient();
 
   let posts1;
   try {
-    const html1 = await client.fetchPage('durov');
-    posts1 = parsePreviewPage(html1, 'durov');
+    const html1 = await client.fetchPage("durov");
+    posts1 = parsePreviewPage(html1, "durov");
   } catch (err) {
     if (err instanceof PreviewUnavailableError) {
-      console.error('PAGE 1 BROKEN:', err.message, '-- this is a real break: the markup changed, or the channel disabled its web preview.');
+      console.error("PAGE 1 BROKEN:", err.message, "-- this is a real break: the markup changed, or the channel disabled its web preview.");
     } else {
-      console.error('PAGE 1 ERROR (network or environment, not the parser):', err);
+      console.error("PAGE 1 ERROR (network or environment, not the parser):", err);
     }
     process.exitCode = 1;
     return;
   }
-  console.log('page 1 posts:', posts1.length, posts1[0]);
+  console.log("page 1 posts:", posts1.length, posts1[0]);
   const oldest1 = posts1.reduce((a, b) => (a.publishedAt < b.publishedAt ? a : b));
 
   let posts2;
   try {
-    const html2 = await client.fetchPage('durov', oldest1.externalPostId);
-    posts2 = parsePreviewPage(html2, 'durov');
+    const html2 = await client.fetchPage("durov", oldest1.externalPostId);
+    posts2 = parsePreviewPage(html2, "durov");
   } catch (err) {
     if (err instanceof PreviewUnavailableError) {
-      console.log('PAGE 2 END OF HISTORY:', err.message, '-- normal for a channel whose whole history fits on one page, not a failure. Rerun against a deep-history channel (durov has plenty) to actually exercise pagination.');
+      console.log("PAGE 2 END OF HISTORY:", err.message, "-- normal for a channel whose whole history fits on one page, not a failure. Rerun against a deep-history channel (durov has plenty) to actually exercise pagination.");
       return;
     }
-    console.error('PAGE 2 ERROR (network or environment, not the parser):', err);
+    console.error("PAGE 2 ERROR (network or environment, not the parser):", err);
     process.exitCode = 1;
     return;
   }
-  console.log('page 2 posts:', posts2.length, posts2[0]);
+  console.log("page 2 posts:", posts2.length, posts2[0]);
   const newest2 = posts2.reduce((a, b) => (a.publishedAt > b.publishedAt ? a : b));
 
-  console.log('page 2 newest older than page 1 oldest:', newest2.publishedAt < oldest1.publishedAt);
+  console.log("page 2 newest older than page 1 oldest:", newest2.publishedAt < oldest1.publishedAt);
   const ids1 = new Set(posts1.map((p) => p.externalPostId));
-  console.log('no id overlap:', !posts2.some((p) => ids1.has(p.externalPostId)));
+  console.log("no id overlap:", !posts2.some((p) => ids1.has(p.externalPostId)));
 }
 main().catch((err) => {
-  console.error('UNEXPECTED ERROR:', err);
+  console.error("UNEXPECTED ERROR:", err);
   process.exitCode = 1;
 });
-"
+'
 ```
+
+The same script also runs from a local checkout after `cd backend && npm run
+build`, invoked directly with `node -e '...'` (not `npx ts-node`, which mangles
+a multi-line `-e` argument on Windows) against the same `./dist/...` paths —
+useful for checking the parser without touching the VPS.
 
 Expected, against an active public channel like `durov`: `page 1 posts:` printed with a count
 around 20 and a first post with a real `publishedAt` and non-null `views` (a `thumbnailUrl` if it

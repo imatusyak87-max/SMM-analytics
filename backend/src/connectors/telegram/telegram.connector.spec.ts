@@ -146,4 +146,16 @@ describe('TelegramConnector.getPosts', () => {
 
     await expect(connector.getPosts(account, new Date('2026-01-01'))).rejects.toThrow(PreviewUnavailableError);
   });
+
+  it('still rejects when a later page throws a generic (non-preview) error', async () => {
+    const preview = {
+      fetchPage: jest
+        .fn()
+        .mockResolvedValueOnce(page([101, 102, 103], '2026-09-03T10:00:00+00:00'))
+        .mockRejectedValueOnce(new Error('network')),
+    };
+    const connector = new TelegramConnector({} as any, preview as any);
+
+    await expect(connector.getPosts(account, new Date('2026-01-01'))).rejects.toThrow('network');
+  });
 });

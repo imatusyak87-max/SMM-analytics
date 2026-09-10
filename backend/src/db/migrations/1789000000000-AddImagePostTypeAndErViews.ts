@@ -5,11 +5,13 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Telegram posts are typed by their media: a photo post is IMAGE whether it
  * carries one photo or an album. `er` keeps its meaning (engagement against
- * followers); `erViews` is engagement against actual reach, which is the more
- * meaningful figure on Telegram, where a post reaches a fraction of subscribers.
+ * followers); `erViews` is engagement against views, which is the more
+ * meaningful figure on Telegram, where a post reaches a fraction of
+ * subscribers. `reach` is a separate column, always null for Telegram.
  *
- * ADD VALUE cannot run inside a transaction block in older Postgres, so it is
- * issued before the column change and never bundled with data migration.
+ * ADD VALUE is issued as its own statement, ahead of the column change, so
+ * the new enum value is never used in the same transaction it was added in
+ * — which Postgres does not allow, on any version.
  */
 export class AddImagePostTypeAndErViews1789000000000 implements MigrationInterface {
   name = 'AddImagePostTypeAndErViews1789000000000';

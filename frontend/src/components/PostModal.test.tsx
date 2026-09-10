@@ -43,11 +43,16 @@ describe('PostModal', () => {
   });
 
   it('shows the full text, image and every metric', () => {
-    render(<PostModal post={post} onClose={() => {}} />);
+    const { container } = render(<PostModal post={post} onClose={() => {}} />);
     expect(screen.getByText('Полный текст поста')).toBeInTheDocument();
-    expect(screen.getByAltText('Полный текст поста')).toHaveAttribute('src', 'https://cdn/p1');
+    expect(container.querySelector('img')).toHaveAttribute('src', 'https://cdn/p1');
     expect(screen.getByText(digits('12300'))).toBeInTheDocument();
     expect(screen.getByText(digits('1248'))).toBeInTheDocument();
+  });
+
+  it('marks the image decorative, since the full caption is already shown right beside it as text', () => {
+    const { container } = render(<PostModal post={post} onClose={() => {}} />);
+    expect(container.querySelector('img')).toHaveAttribute('alt', '');
   });
 
   it('shows the date AND the time of publication', () => {

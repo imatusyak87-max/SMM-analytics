@@ -53,7 +53,7 @@ export function PostList({ posts, sort, onOpen }: PostListProps) {
             }}
           >
             {post.thumbnailUrl && (
-              <img className={styles.thumb} src={post.thumbnailUrl} alt={post.caption ?? ''} />
+              <img className={styles.thumb} src={post.thumbnailUrl} alt="" />
             )}
             {post.caption && <span className={styles.caption}>{post.caption}</span>}
             <div className={styles.metrics}>
@@ -67,7 +67,7 @@ export function PostList({ posts, sort, onOpen }: PostListProps) {
               </span>
               <span className={styles.metric}>
                 <span className={styles.metricValue}>{formatPercent(post.erViews)}</span>
-                <span className={styles.metricLabel}>ER</span>
+                <span className={styles.metricLabel}>ERR</span>
               </span>
             </div>
           </button>

@@ -11,9 +11,18 @@ const posts = [
 describe('PostList', () => {
   it('shows the snippet, image and metrics for each post', () => {
     render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
-    expect(screen.getByText('Первый')).toBeInTheDocument();
-    expect(screen.getByAltText('Первый')).toHaveAttribute('src', 'https://cdn/p1');
+    const firstCaption = screen.getByText('Первый');
+    expect(firstCaption).toBeInTheDocument();
+    const firstCard = firstCaption.closest('button')!;
+    expect(firstCard.querySelector('img')).toHaveAttribute('src', 'https://cdn/p1');
     expect(screen.getByText('900')).toBeInTheDocument();
+  });
+
+  it('marks each post image decorative, since its caption is already shown as visible text', () => {
+    const { container } = render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
+    const images = container.querySelectorAll('img');
+    expect(images.length).toBeGreaterThan(0);
+    images.forEach((img) => expect(img).toHaveAttribute('alt', ''));
   });
 
   it('sorts by views by default, highest first', () => {

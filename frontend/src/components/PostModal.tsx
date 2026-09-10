@@ -52,7 +52,7 @@ export function PostModal({ post, onClose }: PostModalProps) {
           ×
         </button>
         {post.thumbnailUrl && (
-          <img className={styles.image} src={post.thumbnailUrl} alt={post.caption ?? ''} />
+          <img className={styles.image} src={post.thumbnailUrl} alt="" />
         )}
         <time className={styles.date} dateTime={post.publishedAt}>
           {dateTimeFormat.format(new Date(post.publishedAt))}

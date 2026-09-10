@@ -4,7 +4,7 @@ import type { PostSort } from './PostList';
 const SORTS: Array<{ value: PostSort; label: string }> = [
   { value: 'views', label: 'Просмотры' },
   { value: 'reactions', label: 'Реакции' },
-  { value: 'er', label: 'ER' },
+  { value: 'er', label: 'ERR' },
   { value: 'date', label: 'Дата' },
 ];
 

@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PostList } from './PostList';
+import { formatPercent } from '../format';
 
 const posts = [
   { id: 'p1', type: 'image', caption: 'Первый', publishedAt: '2026-09-01T10:00:00Z', thumbnailUrl: 'https://cdn/p1', permalink: 'https://t.me/c/1', views: 100, likes: 10, er: 1, erViews: 10 },
@@ -44,6 +45,15 @@ describe('PostList', () => {
     render(<PostList posts={posts} sort="views" onOpen={onOpen} />);
     fireEvent.click(screen.getByText('Первый'));
     expect(onOpen).toHaveBeenCalledWith(posts[0]);
+  });
+
+  it('shows ER against views (erViews), not ER against followers (er), on each card', () => {
+    render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
+    const items = screen.getAllByRole('listitem');
+    const p1Item = items.find((item) => within(item).queryByText('Первый'));
+    const p1 = within(p1Item!);
+    expect(p1.getByText(formatPercent(posts[0].erViews))).toBeInTheDocument();
+    expect(p1.queryByText(formatPercent(posts[0].er))).not.toBeInTheDocument();
   });
 
   it('explains an empty list instead of showing nothing', () => {

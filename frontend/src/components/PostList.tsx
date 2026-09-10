@@ -56,7 +56,7 @@ export function PostList({ posts, sort, onOpen }: PostListProps) {
                 <span className={styles.metricLabel}>реакции</span>
               </span>
               <span className={styles.metric}>
-                <span className={styles.metricValue}>{formatPercent(post.er)}</span>
+                <span className={styles.metricValue}>{formatPercent(post.erViews)}</span>
                 <span className={styles.metricLabel}>ER</span>
               </span>
             </div>

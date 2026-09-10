@@ -1,4 +1,5 @@
 import styles from './StatTiles.module.css';
+import { formatCount, formatPercent } from '../format';
 
 /** Mirrors the `summary` object returned by GET /accounts/:id/detail. */
 export interface AccountSummary {
@@ -12,18 +13,6 @@ export interface AccountSummary {
   erViews: number | null;
   /** ER against the channel's current subscriber count, as a percentage. */
   erFollowers: number | null;
-}
-
-const EMPTY = '—';
-const wholeNumber = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
-const oneDecimal = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-
-function formatCount(value: number | null): string {
-  return value == null ? EMPTY : wholeNumber.format(value);
-}
-
-function formatPercent(value: number | null): string {
-  return value == null ? EMPTY : `${oneDecimal.format(value)}%`;
 }
 
 /**

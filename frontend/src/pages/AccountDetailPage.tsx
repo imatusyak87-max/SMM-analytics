@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { PeriodSelector } from '../components/PeriodSelector';
-import { PostList } from '../components/PostList';
+import { PostList, type PostItem, type PostSort } from '../components/PostList';
+import { PostSortSelect } from '../components/PostSortSelect';
 import { PostTypeFilter } from '../components/PostTypeFilter';
 import { RefreshButton } from '../components/RefreshButton';
 import { StatTiles, type AccountSummary } from '../components/StatTiles';
@@ -15,7 +16,7 @@ interface DetailData {
   account: { id: string; name: string };
   latestSnapshot: { followersCount: number; avgEr: number | null } | null;
   trend: Array<{ date: string; followersCount: number }>;
-  posts: Array<{ id: string; type: string; caption: string | null; likes: number; comments: number; shares: number; publishedAt: string }>;
+  posts: PostItem[];
   summary: AccountSummary;
 }
 
@@ -24,6 +25,7 @@ export function AccountDetailPage() {
   const [data, setData] = useState<DetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState('all');
+  const [sort, setSort] = useState<PostSort>('views');
   const [days, setDays] = useState(30);
   const [pending, setPending] = useState(false);
   // Only the most recent request may write state, so a slow response for a
@@ -95,8 +97,9 @@ export function AccountDetailPage() {
       />
       <div className={styles.toolbar}>
         <PostTypeFilter value={typeFilter} onChange={setTypeFilter} />
+        <PostSortSelect value={sort} onChange={setSort} />
       </div>
-      <PostList posts={filteredPosts} />
+      <PostList posts={filteredPosts} sort={sort} onOpen={() => {}} />
     </div>
   );
 }

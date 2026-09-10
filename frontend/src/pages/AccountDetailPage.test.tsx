@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 import { AccountDetailPage } from './AccountDetailPage';
@@ -87,11 +87,14 @@ describe('AccountDetailPage', () => {
       },
     });
 
-    renderAt('/accounts/acc-1');
+    const { container } = renderAt('/accounts/acc-1');
 
-    expect(await screen.findByText('Просмотры')).toBeInTheDocument();
-    expect(screen.getByText('Средние просмотры')).toBeInTheDocument();
-    expect(screen.getByText(digits('4000'))).toBeInTheDocument();
+    // Scoped to the stat tiles' <dl>: PostSortSelect also has a "Просмотры" option.
+    await waitFor(() => expect(container.querySelector('dl')).toBeInTheDocument());
+    const tiles = within(container.querySelector('dl')!);
+    expect(tiles.getByText('Просмотры')).toBeInTheDocument();
+    expect(tiles.getByText('Средние просмотры')).toBeInTheDocument();
+    expect(tiles.getByText(digits('4000'))).toBeInTheDocument();
   });
 
   it('refetches with a narrower range when the period changes', async () => {

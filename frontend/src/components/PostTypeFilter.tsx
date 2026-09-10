@@ -1,6 +1,10 @@
 import styles from './PostTypeFilter.module.css';
 
-const TYPES = ['post', 'reel', 'carousel', 'video', 'short', 'story'];
+const TYPES: Array<{ value: string; label: string }> = [
+  { value: 'image', label: 'Изображение' },
+  { value: 'video', label: 'Видео' },
+  { value: 'post', label: 'Текст' },
+];
 
 interface PostTypeFilterProps {
   value: string;
@@ -19,8 +23,8 @@ export function PostTypeFilter({ value, onChange }: PostTypeFilterProps) {
       >
         <option value="all">Все</option>
         {TYPES.map((t) => (
-          <option key={t} value={t}>
-            {t}
+          <option key={t.value} value={t.value}>
+            {t.label}
           </option>
         ))}
       </select>

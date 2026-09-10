@@ -1,36 +1,79 @@
+/*
+ * Post grid. Reuses the page's existing idioms rather than inventing a new
+ * one: card border/radius/hover from AccountCard, metric label/value from
+ * StatTiles' inline scale (14px value, var(--mono) 600, tabular figures).
+ */
 .list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
 }
 
-.post {
+.item {
+  display: flex;
+}
+
+.card {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
   padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Same hover/focus affordance as AccountCard: these cards are clickable. */
+.card:hover,
+.card:focus-visible {
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow);
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}
+
+.thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--code-bg);
 }
 
 .caption {
-  font-size: 15px;
+  font-size: 14px;
+  line-height: 1.4;
   color: var(--text-h);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .metrics {
   display: flex;
-  gap: 18px;
+  gap: 16px;
+  margin-top: auto;
 }
 
 .metric {
   display: flex;
-  align-items: baseline;
-  gap: 5px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .metricValue {
@@ -38,6 +81,7 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text-h);
+  font-variant-numeric: tabular-nums;
 }
 
 .metricLabel {

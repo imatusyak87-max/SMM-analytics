@@ -114,6 +114,46 @@ docker compose -f docker-compose.prod.yml start backend
 Override with environment variables, in the cron entry or the shell:
 `APP_DIR`, `BACKUP_DIR`, `COMPOSE_FILE`, `RETENTION_DAYS`.
 
+## Redeploying
+
+`up -d --build` alone is not a safe redeploy: it starts the new backend image
+immediately, before any migration has run. If the new code expects a column
+the database does not have yet (an `erViews` NestJS entity is enough), the
+running backend starts erroring on **every** `getAccountDetail` request and
+**every** sync upsert with `column "erViews" does not exist` — the gap
+between "container up" and "migration run" is not a step to leave until
+later.
+
+Run these in order, every time:
+
+```bash
+cd /opt/smm-dashboard/app && git pull
+docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+docker compose -f docker-compose.prod.yml exec -T backend npx typeorm migration:run -d dist/db/data-source.js
+```
+
+1. `git pull` — get the new code.
+2. `up -d --build --remove-orphans` — rebuild and restart the changed
+   services. `--remove-orphans` is required, not cosmetic: the frontend
+   service was renamed from `nginx` to `caddy`, and without this flag the old
+   `nginx` container is left running and keeps holding port 80, so the new
+   `caddy` service never binds it.
+3. `migration:run`, **immediately after** step 2, no gap. Until it runs, the
+   backend that step 2 just started is serving the new code against the old
+   schema, and fails every account-detail request and every sync job with a
+   missing-column error.
+
+Then confirm posts are actually flowing before considering the deploy done —
+see "Checking for a markup change vs. a quiet channel" below, which runs the
+same live-page check this redeploy would otherwise leave unverified.
+
+**Never add `-v` to a `down` command.** `docker compose -f
+docker-compose.prod.yml down -v` deletes both named volumes: `caddy_data`
+(the TLS certificate — see "Don't delete the caddy_data volume" below) and
+`pgdata` (every snapshot ever collected — see "Database backups" above,
+which cannot be reconstructed from the platform APIs). A redeploy never needs
+`down` at all; `up -d --build --remove-orphans` replaces containers in place.
+
 ## Ad-hoc queries against the live database
 
 The same pattern works for any query — credentials come from the container's own

@@ -162,12 +162,46 @@ A first-time issue takes a few seconds. `challenge failed` in those logs almost
 always means DNS points somewhere else or port 80 is closed — check both before
 retrying, because each failed attempt counts against the rate limit.
 
-### Telegram webhooks need HTTPS
+### Telegram webhooks — do not register (dormant, would overwrite scraped data)
 
-Telegram refuses to register a plain-HTTP webhook, so this is what makes the
-Telegram connector work at all. After the certificate is live, point each
-tracked account's webhook at the HTTPS URL. Credentials come from the
-container's own environment, so no token is typed:
+**Do not run the `setWebhook` command below.** Registering it will silently
+overwrite every scraped post's `views` and reaction counts with blanks. Read
+this whole section before touching a Telegram webhook.
+
+Since the post-data work landed (see "Where Telegram post data comes from"
+below), the Telegram connector reads posts by scraping the public preview page,
+not through the Bot API or a webhook. Two things this section used to say are
+no longer true, and one was never true:
+
+- **A webhook is not what makes the Telegram connector work.** The connector
+  needs no webhook at all. Posts, views, reactions, captions, and images all
+  come from parsing `t.me/s/<channel>`.
+- **A Telegram bot has exactly one webhook URL, not one per account.** Every
+  `setWebhook` call replaces the previous registration. "Point each tracked
+  account's webhook at the HTTPS URL" was never a workable model — registering
+  a second account's webhook silently disconnects the first. There is no
+  per-account webhook to point.
+- `TelegramWebhookController` (`backend/src/connectors/telegram/telegram-webhook.controller.ts`)
+  is dormant code left over from before the scraper existed. If a webhook were
+  registered, Telegram's `channel_post` updates would land there and it would
+  `upsert` on the same `(accountId, externalPostId)` key the scraper writes to,
+  via `mapTelegramMessageToPost`, which sets `views: null, likes: 0` — because
+  the Bot API payload carries neither. That upsert would overwrite the real,
+  scraped view and reaction counts with those blanks the next time either path
+  ran.
+
+Before this could ever be safely enabled, both of the following would need to
+change, each as its own reviewed piece of work:
+
+1. The webhook upsert must stop overwriting `views` and `likes` — e.g. merge
+   only the fields the Bot API actually reports, instead of writing over the
+   whole row.
+2. Registration would need to become one bot-level endpoint (register once,
+   for the bot, not per account) rather than the current per-account shape,
+   since a bot only ever has one webhook URL.
+
+The command is kept below for reference only — for understanding what the
+dormant controller was originally meant to receive, not for running it:
 
 ```bash
 cd /opt/smm-dashboard/app
@@ -183,6 +217,84 @@ fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/setWebhook`
 ' "$ACCOUNT_ID"
 ```
 
-`{"ok":true,...}` means it took. The `secret_token` is echoed back by Telegram on
-every update and checked by `TelegramWebhookGuard`; without it the endpoint would
-be an open write path.
+`{"ok":true,...}` would mean it took, and the `secret_token` is echoed back by
+Telegram on every update and checked by `TelegramWebhookGuard` — but per the
+warning above, do not run this against a bot that is tracking any account for
+posts.
+
+## Where Telegram post data comes from
+
+Post analytics (views, reactions, captions, images, exact publish time) for
+Telegram come from parsing the public channel preview page,
+`https://t.me/s/<channel>` — never the Bot API, which does not expose view
+counts, reactions, or historical messages at all. This is why the connector
+needs no webhook (see the section above): `TelegramPreviewClient` fetches the
+preview page and `parsePreviewPage`
+(`backend/src/connectors/telegram/telegram-preview.parser.ts`) parses it.
+Older pages are paginated by requesting the preview with `?before=<id>` of the
+oldest post seen so far — a real preview page renders its **oldest** post
+first, so pagination always keys off the oldest `externalPostId` on the
+current page, not the newest.
+
+Two limits are inherent to this source, not bugs:
+
+- **A channel that has disabled its web preview cannot be tracked for posts.**
+  `t.me/s/<channel>` returns a page with no post blocks for such a channel,
+  and `parsePreviewPage` throws `PreviewUnavailableError` rather than
+  reporting zero posts silently.
+- **View counts above 1000 are rounded by Telegram** in the page markup itself
+  (e.g. `24.2M`, `3.38M`) — `parseCompactNumber` decodes the suffix, but the
+  precision loss happens upstream, before the HTML is even generated. This is
+  not something the parser can recover.
+
+### Checking for a markup change vs. a quiet channel
+
+Because this reads Telegram's live HTML instead of a stable API contract, a
+Telegram redesign can silently break the parser. No fixture can catch that —
+fixtures are frozen snapshots of markup that was already known to parse. The
+only way to tell "the channel just hasn't posted in a while" apart from "the
+parser is broken" is to run this check against a real, currently active
+channel and read the output:
+
+```bash
+cd backend && npx ts-node -e "
+import { TelegramPreviewClient } from './src/connectors/telegram/telegram-preview.client';
+import { parsePreviewPage } from './src/connectors/telegram/telegram-preview.parser';
+
+async function main() {
+  const client = new TelegramPreviewClient();
+
+  const html1 = await client.fetchPage('durov');
+  const posts1 = parsePreviewPage(html1, 'durov');
+  console.log('page 1 posts:', posts1.length, posts1[0]);
+  const oldest1 = posts1.reduce((a, b) => (a.publishedAt < b.publishedAt ? a : b));
+
+  const html2 = await client.fetchPage('durov', oldest1.externalPostId);
+  const posts2 = parsePreviewPage(html2, 'durov');
+  console.log('page 2 posts:', posts2.length, posts2[0]);
+  const newest2 = posts2.reduce((a, b) => (a.publishedAt > b.publishedAt ? a : b));
+
+  console.log('page 2 newest older than page 1 oldest:', newest2.publishedAt < oldest1.publishedAt);
+  const ids1 = new Set(posts1.map((p) => p.externalPostId));
+  console.log('no id overlap:', !posts2.some((p) => ids1.has(p.externalPostId)));
+}
+main();
+"
+```
+
+Expected, against an active public channel like `durov`: a post count of about
+20 on each page, a first post on page 1 with a real `publishedAt` and non-null
+`views` (a `thumbnailUrl` if it carries media), both trailing assertions
+printing `true`, and no overlap between the two pages' `externalPostId`s.
+
+- **Zero posts, or `views` null on a post that visibly shows a view count on
+  t.me** means the markup changed — not that the channel is quiet. A quiet
+  channel still returns its (older) existing posts with real view counts; it
+  simply has none newer than last time.
+- **Either trailing assertion printing `false`** means pagination broke —
+  either `?before=` stopped working, or the "oldest post first" assumption no
+  longer holds.
+
+Either failure means the parser needs a fix and its fixtures need updating —
+that is real implementation work with its own review, not something to patch
+inline while running an operational check.

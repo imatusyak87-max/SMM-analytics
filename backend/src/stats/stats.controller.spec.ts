@@ -5,7 +5,7 @@ describe('StatsController', () => {
     const statsService = {
       getOverview: overrides.getOverview ?? jest.fn().mockResolvedValue([]),
       getAccountDetail: overrides.getAccountDetail ?? jest.fn().mockResolvedValue({}),
-      getTopPosts: overrides.getTopPosts ?? jest.fn().mockResolvedValue([]),
+      getPostsPage: overrides.getPostsPage ?? jest.fn().mockResolvedValue({ total: 0, items: [] }),
       compare: overrides.compare ?? jest.fn().mockResolvedValue([]),
     } as any;
     return new StatsController(statsService);
@@ -27,5 +27,18 @@ describe('StatsController', () => {
     const controller = buildController();
     await controller.compare({ accountIds: 'acc-1,acc-2', from: '2026-08-01', to: '2026-08-13' });
     expect(controller['statsService'].compare).toHaveBeenCalledWith(['acc-1', 'acc-2'], { from: '2026-08-01', to: '2026-08-13' });
+  });
+
+  it('posts fills in the defaults for sort, page and size', async () => {
+    const controller = buildController();
+    await controller.posts('acc-1', { from: '2026-08-01', to: '2026-08-13' });
+    expect(controller['statsService'].getPostsPage).toHaveBeenCalledWith('acc-1', {
+      from: '2026-08-01',
+      to: '2026-08-13',
+      type: undefined,
+      sort: 'views',
+      page: 1,
+      size: 10,
+    });
   });
 });

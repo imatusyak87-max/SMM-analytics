@@ -1,9 +1,9 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StatsService } from './stats.service';
-import { CompareFilterDto, PeriodFilterDto, TopPostsFilterDto } from './dto/post-filter.dto';
+import { CompareFilterDto, PeriodFilterDto, PostsPageFilterDto } from './dto/post-filter.dto';
 
-const DEFAULT_TOP_POSTS_LIMIT = 10;
+const DEFAULT_PAGE_SIZE = 10;
 
 @UseGuards(JwtAuthGuard)
 @Controller()
@@ -20,13 +20,16 @@ export class StatsController {
     return this.statsService.getAccountDetail(id, { from: filter.from, to: filter.to });
   }
 
-  @Get('accounts/:id/top-posts')
-  topPosts(@Param('id') id: string, @Query() filter: TopPostsFilterDto) {
-    return this.statsService.getTopPosts(
-      id,
-      { from: filter.from, to: filter.to, type: filter.type },
-      filter.limit ?? DEFAULT_TOP_POSTS_LIMIT,
-    );
+  @Get('accounts/:id/posts')
+  posts(@Param('id') id: string, @Query() filter: PostsPageFilterDto) {
+    return this.statsService.getPostsPage(id, {
+      from: filter.from,
+      to: filter.to,
+      type: filter.type,
+      sort: filter.sort ?? 'views',
+      page: filter.page ?? 1,
+      size: filter.size ?? DEFAULT_PAGE_SIZE,
+    });
   }
 
   @Get('stats/compare')

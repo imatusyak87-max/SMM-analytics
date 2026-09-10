@@ -26,25 +26,6 @@ describe('StatsService.getAccountDetail', () => {
   });
 });
 
-describe('StatsService.getTopPosts', () => {
-  it('orders by likes+comments+shares descending and applies the type filter', async () => {
-    const postsRepo = {
-      find: jest.fn().mockResolvedValue([
-        { id: 'p1', type: 'post', likes: 10, comments: 1, shares: 0 },
-        { id: 'p2', type: 'post', likes: 50, comments: 5, shares: 2 },
-      ]),
-    } as any;
-    const accountsRepo = { findOneBy: jest.fn() } as any;
-    const snapshotsRepo = { find: jest.fn() } as any;
-    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo);
-
-    const result = await service.getTopPosts('acc-1', { from: '2026-08-01', to: '2026-08-13', type: 'post' }, 5);
-
-    expect(result[0].id).toBe('p2');
-    expect(result[1].id).toBe('p1');
-  });
-});
-
 describe('StatsService date range upper bound (regression)', () => {
   // Bug: `new Date('2026-08-13')` parses to 2026-08-13T00:00:00.000Z (midnight UTC),
   // so a Between() upper bound built directly from the `to` string silently excluded
@@ -72,27 +53,6 @@ describe('StatsService date range upper bound (regression)', () => {
     // A post published at 18:00 UTC on the `to` day would have been excluded by the
     // old midnight-UTC boundary (new Date('2026-08-13')) but must fall within the
     // fixed range.
-    const oldBuggyUpperBound = new Date('2026-08-13');
-    const latePost = new Date('2026-08-13T18:00:00.000Z');
-    expect(latePost.getTime()).toBeGreaterThan(oldBuggyUpperBound.getTime());
-    expect(latePost.getTime()).toBeLessThanOrEqual(upper.getTime());
-  });
-
-  it('getTopPosts builds the publishedAt Between() upper bound as end-of-day on `to`, including a post published later that day', async () => {
-    const postsRepo = { find: jest.fn().mockResolvedValue([]) } as any;
-    const accountsRepo = { findOneBy: jest.fn() } as any;
-    const snapshotsRepo = { find: jest.fn() } as any;
-    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo);
-
-    await service.getTopPosts('acc-1', { from: '2026-08-01', to: '2026-08-13' }, 5);
-
-    expect(postsRepo.find).toHaveBeenCalledTimes(1);
-    const call = postsRepo.find.mock.calls[0][0];
-    const [lower, upper] = call.where.publishedAt.value as [Date, Date];
-
-    expect(lower.toISOString()).toBe('2026-08-01T00:00:00.000Z');
-    expect(upper.toISOString()).toBe('2026-08-13T23:59:59.999Z');
-
     const oldBuggyUpperBound = new Date('2026-08-13');
     const latePost = new Date('2026-08-13T18:00:00.000Z');
     expect(latePost.getTime()).toBeGreaterThan(oldBuggyUpperBound.getTime());

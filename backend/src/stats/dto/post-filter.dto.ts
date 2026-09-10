@@ -1,6 +1,11 @@
-import { IsDateString, IsOptional, IsEnum, IsInt, IsString, Max, Min } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsEnum, IsInt, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PostType } from '../../db/entities/post.entity';
+
+export const POST_SORTS = ['views', 'reactions', 'er', 'date'] as const;
+export type PostSortKey = (typeof POST_SORTS)[number];
+
+export const PAGE_SIZES = [10, 25, 50, 100] as const;
 
 export class PeriodFilterDto {
   @IsDateString() from: string;
@@ -11,8 +16,10 @@ export class PostFilterDto extends PeriodFilterDto {
   @IsOptional() @IsEnum(PostType) type?: PostType;
 }
 
-export class TopPostsFilterDto extends PostFilterDto {
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
+export class PostsPageFilterDto extends PostFilterDto {
+  @IsOptional() @IsIn([...POST_SORTS]) sort?: PostSortKey;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsIn([...PAGE_SIZES]) size?: number;
 }
 
 export class CompareFilterDto extends PeriodFilterDto {

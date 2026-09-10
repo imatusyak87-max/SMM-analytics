@@ -15,7 +15,7 @@ describe('Stats query validation', () => {
   const statsService = {
     getOverview: jest.fn().mockResolvedValue([]),
     getAccountDetail: jest.fn().mockResolvedValue({}),
-    getTopPosts: jest.fn().mockResolvedValue([]),
+    getPostsPage: jest.fn().mockResolvedValue({ total: 0, items: [] }),
     compare: jest.fn().mockResolvedValue([]),
   };
 
@@ -73,23 +73,49 @@ describe('Stats query validation', () => {
       .expect(400);
   });
 
-  it('rejects a non-numeric top-posts limit instead of silently returning nothing', async () => {
+  it('applies the defaults — views, page 1, 10 per page — when the posts query omits them', async () => {
     await request(app.getHttpServer())
-      .get('/accounts/acc-1/top-posts')
-      .query({ from: '2026-08-01', to: '2026-08-13', limit: 'abc' })
-      .expect(400);
-  });
-
-  it('defaults the top-posts limit to 10 when it is not given', async () => {
-    await request(app.getHttpServer())
-      .get('/accounts/acc-1/top-posts')
+      .get('/accounts/acc-1/posts')
       .query({ from: '2026-08-01', to: '2026-08-13' })
       .expect(200);
 
-    expect(statsService.getTopPosts).toHaveBeenCalledWith(
-      'acc-1',
-      expect.objectContaining({ from: '2026-08-01', to: '2026-08-13' }),
-      10,
-    );
+    expect(statsService.getPostsPage).toHaveBeenCalledWith('acc-1', {
+      from: '2026-08-01',
+      to: '2026-08-13',
+      type: undefined,
+      sort: 'views',
+      page: 1,
+      size: 10,
+    });
+  });
+
+  it('passes a chosen sort, page, size and type through, with page and size as numbers', async () => {
+    await request(app.getHttpServer())
+      .get('/accounts/acc-1/posts')
+      .query({ from: '2026-08-01', to: '2026-08-13', sort: 'er', page: '3', size: '25', type: 'video' })
+      .expect(200);
+
+    expect(statsService.getPostsPage).toHaveBeenCalledWith('acc-1', {
+      from: '2026-08-01',
+      to: '2026-08-13',
+      type: 'video',
+      sort: 'er',
+      page: 3,
+      size: 25,
+    });
+  });
+
+  it.each([
+    ['a page size that is not one of the options', { size: '7' }],
+    ['a page size above the largest option', { size: '500' }],
+    ['an unknown sort', { sort: 'foo' }],
+    ['page 0', { page: '0' }],
+  ])('rejects %s as a 400', async (_label, extra) => {
+    await request(app.getHttpServer())
+      .get('/accounts/acc-1/posts')
+      .query({ from: '2026-08-01', to: '2026-08-13', ...extra })
+      .expect(400);
+
+    expect(statsService.getPostsPage).not.toHaveBeenCalled();
   });
 });

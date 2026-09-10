@@ -4,6 +4,7 @@ import { Between, Repository } from 'typeorm';
 import { Account } from '../db/entities/account.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post, PostType } from '../db/entities/post.entity';
+import type { PostSortKey } from './dto/post-filter.dto';
 
 interface Period {
   from: string;
@@ -20,6 +21,26 @@ export interface AccountSummary {
   erViews: number | null;
   erFollowers: number | null;
 }
+
+export interface PostsPageQuery extends Period {
+  type?: PostType;
+  sort: PostSortKey;
+  page: number;
+  size: number;
+}
+
+export interface PostsPage {
+  total: number;
+  items: Post[];
+}
+
+/** The UI's sort names mapped to the columns they order by, in one place. */
+const SORT_COLUMNS: Record<PostSortKey, string> = {
+  views: 'post.views',
+  reactions: 'post.likes',
+  er: 'post.erViews',
+  date: 'post.publishedAt',
+};
 
 /**
  * Computed from the rows getAccountDetail already loads and returns, so this adds
@@ -88,14 +109,25 @@ export class StatsService {
     };
   }
 
-  async getTopPosts(accountId: string, filter: Period & { type?: PostType }, limit: number) {
-    const where: any = { accountId, publishedAt: Between(new Date(filter.from), endOfDayUtc(filter.to)) };
-    if (filter.type) where.type = filter.type;
+  async getPostsPage(accountId: string, query: PostsPageQuery): Promise<PostsPage> {
+    const qb = this.postsRepo
+      .createQueryBuilder('post')
+      .where('post.accountId = :accountId', { accountId })
+      .andWhere('post.publishedAt BETWEEN :from AND :to', {
+        from: new Date(query.from),
+        to: endOfDayUtc(query.to),
+      });
+    if (query.type) qb.andWhere('post.type = :type', { type: query.type });
 
-    const posts = await this.postsRepo.find({ where });
-    return posts
-      .sort((a, b) => b.likes + b.comments + b.shares - (a.likes + a.comments + a.shares))
-      .slice(0, limit);
+    const [items, total] = await qb
+      .orderBy(SORT_COLUMNS[query.sort], 'DESC', 'NULLS LAST')
+      .addOrderBy('post.publishedAt', 'DESC')
+      .addOrderBy('post.id', 'ASC')
+      .offset((query.page - 1) * query.size)
+      .limit(query.size)
+      .getManyAndCount();
+
+    return { total, items };
   }
 
   async getOverview() {

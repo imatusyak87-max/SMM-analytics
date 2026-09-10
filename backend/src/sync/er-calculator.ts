@@ -9,7 +9,7 @@ export function calculateEr(
 }
 
 /**
- * Engagement against actual reach. On Telegram this is the more meaningful figure:
+ * Engagement against the post's view count. On Telegram this is the more meaningful figure:
  * a post reaches a fraction of subscribers, so measuring against followers punishes
  * a large channel for Telegram's delivery rather than for its content.
  */

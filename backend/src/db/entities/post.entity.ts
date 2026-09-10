@@ -27,7 +27,7 @@ export class Post {
   @Column('int', { nullable: true }) views: number | null;
   @Column('int', { nullable: true }) reach: number | null;
   @Column('float', { nullable: true }) er: number | null;
-  /** ER against reach: reactions / views. Null when views are unknown. */
+  /** ER against views: reactions / views. Null when views are unknown. */
   @Column('float', { nullable: true }) erViews: number | null;
   @Column({ type: 'timestamptz' }) lastSyncedAt: Date;
 }

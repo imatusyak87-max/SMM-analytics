@@ -8,7 +8,7 @@ import { Account } from '../db/entities/account.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post } from '../db/entities/post.entity';
 import { SyncJob, SyncStatus } from '../db/entities/sync-job.entity';
-import { calculateEr } from './er-calculator';
+import { calculateEr, calculateErByViews } from './er-calculator';
 
 interface SyncJobData {
   syncJobId: string;
@@ -46,7 +46,7 @@ export class SyncProcessor extends WorkerHost {
       const connector = this.registry.get(account.platform);
       const stats = await connector.getAccountStats(account);
       const since = new Date();
-      since.setDate(since.getDate() - 30);
+      since.setDate(since.getDate() - 90);
       const posts = await connector.getPosts(account, since);
 
       const today = new Date().toISOString().slice(0, 10);
@@ -55,12 +55,13 @@ export class SyncProcessor extends WorkerHost {
 
       for (const post of posts) {
         const er = calculateEr(post.likes, post.comments, post.shares, stats.followersCount);
+        const erViews = calculateErByViews(post.likes, post.views);
         if (er !== null) {
           erSum += er;
           erCount += 1;
         }
         await this.postsRepo.upsert(
-          { accountId, ...post, er, lastSyncedAt: new Date() },
+          { accountId, ...post, er, erViews, lastSyncedAt: new Date() },
           ['accountId', 'externalPostId'],
         );
       }

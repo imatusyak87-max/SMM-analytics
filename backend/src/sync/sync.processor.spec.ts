@@ -56,6 +56,31 @@ describe('SyncProcessor', () => {
     );
   });
 
+  it('upserts posts with erViews computed against views, not reach', async () => {
+    const posts = [{
+      externalPostId: 'p1', type: PostType.POST, publishedAt: new Date(), permalink: null,
+      thumbnailUrl: null, caption: 'hi', likes: 10, comments: 0, shares: 0, views: 200, reach: null,
+    }];
+    const { processor, postsRepo } = buildProcessor({ getPosts: jest.fn().mockResolvedValue(posts) });
+
+    await processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any);
+
+    expect(postsRepo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ externalPostId: 'p1', erViews: 5 }),
+      ['accountId', 'externalPostId'],
+    );
+  });
+
+  it('fetches posts from a 90-day window', async () => {
+    const getPosts = jest.fn().mockResolvedValue([]);
+    const { processor } = buildProcessor({ getPosts });
+
+    await processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any);
+
+    const since = getPosts.mock.calls[0][1] as Date;
+    expect((Date.now() - since.getTime()) / 86_400_000).toBeCloseTo(90, 0);
+  });
+
   // A job that is on its last attempt. BullMQ counts attemptsMade from 0 during the
   // first execution, so this is attempt 3 of 3.
   function finalAttempt() {

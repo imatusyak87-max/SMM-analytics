@@ -41,7 +41,17 @@ export function PostList({ posts, sort, onOpen }: PostListProps) {
     <ul className={styles.list}>
       {sorted.map((post) => (
         <li key={post.id} className={styles.item}>
-          <button type="button" className={styles.card} onClick={() => onOpen(post)}>
+          <button
+            type="button"
+            className={styles.card}
+            onClick={(event) => {
+              // Safari does not focus a <button> on a plain mouse click, so the
+              // modal's "return focus to the card" contract needs this explicit
+              // focus() call to hold in every browser, not just Chrome/Firefox.
+              event.currentTarget.focus();
+              onOpen(post);
+            }}
+          >
             {post.thumbnailUrl && (
               <img className={styles.thumb} src={post.thumbnailUrl} alt={post.caption ?? ''} />
             )}

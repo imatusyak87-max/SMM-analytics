@@ -47,6 +47,13 @@ describe('PostList', () => {
     expect(onOpen).toHaveBeenCalledWith(posts[0]);
   });
 
+  it('focuses the card that was clicked, so the modal can return focus to it on close', () => {
+    render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
+    const card = screen.getByText('Первый').closest('button')!;
+    fireEvent.click(card);
+    expect(card).toHaveFocus();
+  });
+
   it('shows ER against views (erViews), not ER against followers (er), on each card', () => {
     render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
     const items = screen.getAllByRole('listitem');

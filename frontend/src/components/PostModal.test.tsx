@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PostModal } from './PostModal';
@@ -10,6 +11,30 @@ const post = {
 };
 
 const digits = (expected: string) => (text: string) => text.replace(/\s/g, '') === expected;
+
+/**
+ * Mimics the real opener (a PostList card): a button that focuses itself
+ * before calling onOpen, exactly as PostList.tsx's card onClick now does.
+ * That focus-on-click is what lets PostModal's open-time
+ * document.activeElement capture actually be the opener in every browser.
+ */
+function Harness() {
+  const [openPost, setOpenPost] = useState<typeof post | null>(null);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.currentTarget.focus();
+          setOpenPost(post);
+        }}
+      >
+        Открыть карточку
+      </button>
+      <PostModal post={openPost} onClose={() => setOpenPost(null)} />
+    </div>
+  );
+}
 
 describe('PostModal', () => {
   it('renders nothing when no post is open', () => {
@@ -65,5 +90,28 @@ describe('PostModal', () => {
     expect(within(erRow).getByText(formatPercent(post.er))).toBeInTheDocument();
     expect(within(erRow).queryByText(formatPercent(post.erViews))).not.toBeInTheDocument();
     expect(within(erRow).getByText('по текущему числу подписчиков')).toBeInTheDocument();
+  });
+
+  it('moves focus into the dialog on open and returns it to the opener when closed via Escape', () => {
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Открыть карточку' });
+    fireEvent.click(opener);
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(opener).toHaveFocus();
+  });
+
+  it('returns focus to the opener when closed via the backdrop', () => {
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Открыть карточку' });
+    fireEvent.click(opener);
+
+    expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveFocus();
+
+    fireEvent.click(screen.getByTestId('post-modal-backdrop'));
+    expect(opener).toHaveFocus();
   });
 });

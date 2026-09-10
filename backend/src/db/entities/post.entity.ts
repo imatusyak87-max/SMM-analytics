@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, Unique } from 'typeorm';
 
 export enum PostType {
   POST = 'post',
+  IMAGE = 'image',
   REEL = 'reel',
   CAROUSEL = 'carousel',
   VIDEO = 'video',
@@ -26,5 +27,7 @@ export class Post {
   @Column('int', { nullable: true }) views: number | null;
   @Column('int', { nullable: true }) reach: number | null;
   @Column('float', { nullable: true }) er: number | null;
+  /** ER against views: reactions / views. Null when views are unknown. */
+  @Column('float', { nullable: true }) erViews: number | null;
   @Column({ type: 'timestamptz' }) lastSyncedAt: Date;
 }

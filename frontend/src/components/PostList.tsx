@@ -1,33 +1,76 @@
 import styles from './PostList.module.css';
+import { formatCount, formatPercent } from '../format';
 
-interface PostListProps {
-  posts: Array<{ id: string; type: string; caption: string | null; likes: number; comments: number; shares: number; publishedAt: string }>;
+export type PostSort = 'views' | 'reactions' | 'er' | 'date';
+
+/** One post from the `posts` array of GET /accounts/:id/detail. */
+export interface PostItem {
+  id: string;
+  type: string;
+  caption: string | null;
+  publishedAt: string;
+  thumbnailUrl: string | null;
+  permalink: string;
+  views: number | null;
+  likes: number;
+  er: number | null;
+  erViews: number | null;
 }
 
-export function PostList({ posts }: PostListProps) {
+interface PostListProps {
+  posts: PostItem[];
+  sort: PostSort;
+  onOpen: (post: PostItem) => void;
+}
+
+const COMPARATORS: Record<PostSort, (a: PostItem, b: PostItem) => number> = {
+  views: (a, b) => (b.views ?? 0) - (a.views ?? 0),
+  reactions: (a, b) => b.likes - a.likes,
+  er: (a, b) => (b.erViews ?? 0) - (a.erViews ?? 0),
+  date: (a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt),
+};
+
+export function PostList({ posts, sort, onOpen }: PostListProps) {
   if (posts.length === 0) {
-    return <p className={styles.empty}>Нет постов для выбранного фильтра.</p>;
+    return <p className={styles.empty}>Постов за этот период нет.</p>;
   }
+
+  const sorted = [...posts].sort(COMPARATORS[sort]);
 
   return (
     <ul className={styles.list}>
-      {posts.map((post) => (
-        <li key={post.id} className={styles.post}>
-          <span className={styles.caption}>{post.caption}</span>
-          <div className={styles.metrics}>
-            <span className={styles.metric}>
-              <span className={styles.metricValue}>{post.likes}</span>
-              <span className={styles.metricLabel}>likes</span>
-            </span>
-            <span className={styles.metric}>
-              <span className={styles.metricValue}>{post.comments}</span>
-              <span className={styles.metricLabel}>comments</span>
-            </span>
-            <span className={styles.metric}>
-              <span className={styles.metricValue}>{post.shares}</span>
-              <span className={styles.metricLabel}>shares</span>
-            </span>
-          </div>
+      {sorted.map((post) => (
+        <li key={post.id} className={styles.item}>
+          <button
+            type="button"
+            className={styles.card}
+            onClick={(event) => {
+              // Safari does not focus a <button> on a plain mouse click, so the
+              // modal's "return focus to the card" contract needs this explicit
+              // focus() call to hold in every browser, not just Chrome/Firefox.
+              event.currentTarget.focus();
+              onOpen(post);
+            }}
+          >
+            {post.thumbnailUrl && (
+              <img className={styles.thumb} src={post.thumbnailUrl} alt="" />
+            )}
+            {post.caption && <span className={styles.caption}>{post.caption}</span>}
+            <div className={styles.metrics}>
+              <span className={styles.metric}>
+                <span className={styles.metricValue}>{formatCount(post.views)}</span>
+                <span className={styles.metricLabel}>просмотры</span>
+              </span>
+              <span className={styles.metric}>
+                <span className={styles.metricValue}>{formatCount(post.likes)}</span>
+                <span className={styles.metricLabel}>реакции</span>
+              </span>
+              <span className={styles.metric}>
+                <span className={styles.metricValue}>{formatPercent(post.erViews)}</span>
+                <span className={styles.metricLabel}>ERR</span>
+              </span>
+            </div>
+          </button>
         </li>
       ))}
     </ul>

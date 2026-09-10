@@ -115,7 +115,9 @@ offline.
 
 Extracts per post: `externalPostId` (from `data-post`), `publishedAt` (from the
 `datetime` attribute, timezone-aware), `caption` (text with tags stripped),
-`thumbnailUrl`, `views`, `likes` (sum of all reaction counts), and `type`.
+`thumbnailUrl`, `views`, `likes` (sum of all reaction counts, excluding paid Stars
+reactions — decided with the user 2026-09-10, since a paid reaction counts Stars
+sent rather than people reacting, and one donor can add tens of thousands), and `type`.
 
 **Type mapping for Telegram:** video thumbnail present → `VIDEO`; any photos
 present, one or several → `IMAGE`; neither → `POST` (text-only). `CAROUSEL`

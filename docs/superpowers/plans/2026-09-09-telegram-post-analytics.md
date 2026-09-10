@@ -13,13 +13,13 @@
 ## Global Constraints
 
 - **User-facing copy is Russian.** Просмотры, Реакции, Подписчики, Средние просмотры, Средние реакции. Never add English UI strings.
-- **The UI tasks (8–11) are built with the taste skill.** Invoke it before writing component markup or CSS.
+- **The UI tasks (9–11) are built with the taste skill.** Invoke it before writing component markup or CSS.
 - **`er` always means ER-by-followers; `erViews` always means ERR-by-views.** The summary object spells the first `erFollowers`.
 - **The scrape window is fixed at 90 days**, independent of the period selector. The selector filters what is displayed; it never narrows what is fetched.
 - **Reactions are stored in the `likes` column.** The `Post` entity is cross-platform and reactions are Telegram's likes. `comments` and `shares` stay 0.
 - **The parser must fail loudly, never silently write zeros.** A channel with no parseable posts throws.
 - **TDD throughout.** Write the test, watch it fail for the right reason, then implement.
-- **Dependencies are not installed on master's `frontend/`.** Run `npm ci` in `frontend/` before Task 8. `backend/` is already installed.
+- **Dependencies are not installed on master's `frontend/`.** Run `npm ci` in `frontend/` before Task 9. `backend/` is already installed.
 
 ---
 
@@ -610,6 +610,7 @@ Append to the existing spec file:
 import { TelegramConnector } from './telegram.connector';
 import { PostType } from '../../db/entities/post.entity';
 
+// Real preview pages render oldest post first; these fixtures follow that order.
 function page(ids: number[], date: string): string {
   const blocks = ids
     .map(
@@ -628,12 +629,12 @@ describe('TelegramConnector.getPosts', () => {
   const account = { externalId: '@testchannel' } as any;
 
   it('returns the posts on the first page', async () => {
-    const preview = { fetchPage: jest.fn().mockResolvedValue(page([103, 102, 101], '2026-09-03T10:00:00+00:00')) };
+    const preview = { fetchPage: jest.fn().mockResolvedValue(page([101, 102, 103], '2026-09-03T10:00:00+00:00')) };
     const connector = new TelegramConnector({} as any, preview as any);
 
     const posts = await connector.getPosts(account, new Date('2026-09-01'));
 
-    expect(posts.map((p) => p.externalPostId)).toEqual(['103', '102', '101']);
+    expect(posts.map((p) => p.externalPostId)).toEqual(['101', '102', '103']);
     expect(posts[0].type).toBe(PostType.POST);
     expect(posts[0].views).toBe(100);
     expect(posts[0].likes).toBe(0);
@@ -643,8 +644,8 @@ describe('TelegramConnector.getPosts', () => {
     const preview = {
       fetchPage: jest
         .fn()
-        .mockResolvedValueOnce(page([103, 102], '2026-09-03T10:00:00+00:00'))
-        .mockResolvedValueOnce(page([101, 100], '2026-08-01T10:00:00+00:00')),
+        .mockResolvedValueOnce(page([102, 103], '2026-09-03T10:00:00+00:00'))
+        .mockResolvedValueOnce(page([100, 101], '2026-08-01T10:00:00+00:00')),
     };
     const connector = new TelegramConnector({} as any, preview as any);
 
@@ -657,7 +658,7 @@ describe('TelegramConnector.getPosts', () => {
 
   it('stops once a page is older than the window, instead of walking the whole channel', async () => {
     const preview = {
-      fetchPage: jest.fn().mockResolvedValue(page([50, 49], '2020-01-01T10:00:00+00:00')),
+      fetchPage: jest.fn().mockResolvedValue(page([49, 50], '2020-01-01T10:00:00+00:00')),
     };
     const connector = new TelegramConnector({} as any, preview as any);
 
@@ -671,7 +672,7 @@ describe('TelegramConnector.getPosts', () => {
     const preview = {
       fetchPage: jest.fn().mockImplementation(() => {
         id -= 2;
-        return Promise.resolve(page([id + 1, id], '2026-09-03T10:00:00+00:00'));
+        return Promise.resolve(page([id, id + 1], '2026-09-03T10:00:00+00:00'));
       }),
     };
     const connector = new TelegramConnector({} as any, preview as any);
@@ -746,7 +747,10 @@ export class TelegramConnector implements SocialConnector {
       const oldest = parsed.reduce((a, b) => (a.publishedAt <= b.publishedAt ? a : b));
       if (oldest.publishedAt < sinceDate) break;
 
-      const nextBefore = parsed[parsed.length - 1].externalPostId;
+      // The preview renders oldest-first, so the next page is requested with the
+      // OLDEST id on this one. Using the last element would ask for posts older
+      // than the newest one here, returning the same page forever.
+      const nextBefore = oldest.externalPostId;
       if (nextBefore === before) break;
       before = nextBefore;
     }
@@ -1179,6 +1183,8 @@ export function PeriodSelector({ value, onChange }: PeriodSelectorProps) {
 
 `StatTiles.tsx` renders six tiles with these exact Russian labels: Подписчики, Просмотры, Реакции, Средние просмотры, Средние реакции, ER. Format numbers with `new Intl.NumberFormat('ru-RU')` (which renders 4000 as `4 000`), percentages as `X,X%`, and `—` for null. Label the follower-based figure so it is not mistaken for a point-in-time number: `ER к подписчикам` with the note that it uses the current subscriber count, and `ERR к просмотрам` for the reach figure.
 
+**The existing test in `AccountDetailPage.test.tsx` mocks a response with no `summary`.** Update that mock to include one, or the page will read fields off `undefined`. Run the whole frontend suite, not just the new file.
+
 In `AccountDetailPage.tsx`, hold `const [days, setDays] = useState(30)`, derive `from` from it inside `load`, add `days` to the `useCallback` dependencies, and render `<PeriodSelector>` and `<StatTiles>` above the trend chart.
 
 - [ ] **Step 5: Run tests to verify they pass**
@@ -1208,7 +1214,7 @@ git commit -m "Show an account's totals and averages for a chosen period"
 
 **Interfaces:**
 - Consumes: the `posts` array from the detail response, each carrying `id, type, publishedAt, caption, thumbnailUrl, permalink, views, likes, er, erViews`.
-- Produces: `type PostSort = 'views' | 'reactions' | 'er' | 'date'`; `<PostSortSelect value onChange />`; `<PostList posts onOpen={(post) => void} />`.
+- Produces: `export type PostSort = 'views' | 'reactions' | 'er' | 'date'` and `export interface PostItem { id: string; type: string; caption: string | null; publishedAt: string; thumbnailUrl: string | null; permalink: string; views: number | null; likes: number; er: number | null; erViews: number | null }`, both exported from `PostList.tsx` — Task 11 imports them. Plus `<PostSortSelect value onChange />` and `<PostList posts sort onOpen />`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1305,6 +1311,8 @@ Images load directly from `<img src>`: these are public CDN URLs and must **not*
 `PostSortSelect.tsx` offers Просмотры / Реакции / ER / Дата, defaulting to Просмотры.
 
 `PostTypeFilter.tsx` replaces its `TYPES` array with the three that can occur, labelled in Russian: `image` → Изображение, `video` → Видео, `post` → Текст.
+
+**`PostList` gains required props, so every existing render of it breaks.** Update the pre-existing assertions in `AccountDetailPage.test.tsx` accordingly and run the whole frontend suite.
 
 In `AccountDetailPage.tsx`, hold `const [sort, setSort] = useState<PostSort>('views')`, render `<PostSortSelect>` next to the type filter, and pass `sort` through to `<PostList>`.
 
@@ -1473,10 +1481,11 @@ Add a section to `docs/operations.md` covering: posts come from `t.me/s/<channel
 ```bash
 git add docs/operations.md
 git commit -m "Document where post data comes from"
-git push origin master
 ```
 
-Then give the user the redeploy sequence, including the new migration:
+**Do not push, and do not merge.** This work is on the `telegram-post-analytics` branch;
+integration is handled separately once the whole-branch review is clean. For reference, the
+redeploy sequence that will run after the merge, including the new migration, is:
 
 ```bash
 cd /opt/smm-dashboard/app && git pull && docker compose -f docker-compose.prod.yml up -d --build --remove-orphans

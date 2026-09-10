@@ -1,11 +1,23 @@
+import { Logger } from '@nestjs/common';
 import { AccountPlatform, Account } from '../../db/entities/account.entity';
 import { AccountInfo, AccountStats, AvatarImage, ConnectorPost, SocialConnector } from '../connector.interface';
 import { TelegramApiClient } from './telegram-api.client';
+import { TelegramPreviewClient } from './telegram-preview.client';
+import { parsePreviewPage, PreviewUnavailableError } from './telegram-preview.parser';
+
+const MAX_PAGES = 25;
+const PAGE_DELAY_MS = 300;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class TelegramConnector implements SocialConnector {
   platform = AccountPlatform.TELEGRAM;
+  private readonly logger = new Logger(TelegramConnector.name);
 
-  constructor(private client: TelegramApiClient) {}
+  constructor(
+    private client: TelegramApiClient,
+    private preview: TelegramPreviewClient,
+  ) {}
 
   async getAccountInfo(account: Account): Promise<AccountInfo> {
     const chat = await this.client.getChat(account.externalId);
@@ -21,9 +33,91 @@ export class TelegramConnector implements SocialConnector {
     return { followersCount: count, followingCount: null, postsCount: 0 };
   }
 
-  async getPosts(_account: Account, _sinceDate: Date): Promise<ConnectorPost[]> {
-    // Telegram Bot API cannot pull post history or views; posts are
-    // ingested live via the webhook in Task 10 instead.
-    return [];
+  /**
+   * The Bot API cannot read post history or view counts at all, so posts come from
+   * the public preview page instead. Pages are walked newest-first, each request
+   * asking for messages older than the oldest one seen so far.
+   */
+  async getPosts(account: Account, sinceDate: Date): Promise<ConnectorPost[]> {
+    const channel = account.externalId;
+    const collected: ConnectorPost[] = [];
+    const seenIds = new Set<string>();
+    let before: string | undefined;
+    // Stays true unless the loop below breaks for a reason other than exhausting
+    // MAX_PAGES: reaching sinceDate, the end of the channel's history, or a
+    // stuck cursor. If it's still true once the loop ends, the walk was cut off
+    // by the page cap while there was more (possibly in-window) history left.
+    let hitPageCap = true;
+
+    for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
+      if (pageNumber > 0) await delay(PAGE_DELAY_MS);
+
+      let parsed;
+      try {
+        const html = await this.preview.fetchPage(channel, before);
+        parsed = parsePreviewPage(html, channel.replace(/^@/, ''));
+      } catch (err) {
+        // The first page throwing PreviewUnavailableError means the channel's preview
+        // is unreadable altogether (disabled, or Telegram changed its markup) — that
+        // must still fail loudly so the sync job is marked failed and BullMQ retries.
+        // The SAME error on a later page just means we've walked past the start of
+        // the channel's history, which is a normal way for the walk to end, not a
+        // failure — stop and return what was already collected. Any other error
+        // (network, timeout, ...) always propagates, on any page.
+        if (pageNumber > 0 && err instanceof PreviewUnavailableError) {
+          hitPageCap = false;
+          break;
+        }
+        throw err;
+      }
+
+      // The last page of a channel's history can be requested again with the same
+      // cursor (or, in tests, a mock that keeps handing back the same fixture) —
+      // skip posts already collected so the walk stays idempotent either way.
+      for (const post of parsed) {
+        if (seenIds.has(post.externalPostId)) continue;
+        seenIds.add(post.externalPostId);
+        collected.push({
+          externalPostId: post.externalPostId,
+          type: post.type,
+          publishedAt: post.publishedAt,
+          permalink: post.permalink,
+          thumbnailUrl: post.thumbnailUrl,
+          caption: post.caption,
+          likes: post.reactions,
+          comments: 0,
+          shares: 0,
+          views: post.views,
+          reach: null,
+        });
+      }
+
+      const oldest = parsed.reduce((a, b) => (a.publishedAt <= b.publishedAt ? a : b));
+      if (oldest.publishedAt < sinceDate) {
+        hitPageCap = false;
+        break;
+      }
+
+      // The preview renders oldest-first, so the next page is requested with the
+      // OLDEST id on this one. Using the last element would ask for posts older
+      // than the newest one here, returning the same page forever.
+      const nextBefore = oldest.externalPostId;
+      if (nextBefore === before) {
+        hitPageCap = false;
+        break;
+      }
+      before = nextBefore;
+    }
+
+    if (hitPageCap) {
+      // A channel posting often enough to fill all MAX_PAGES before the walk
+      // reaches sinceDate loses the older part of its history window silently
+      // unless this is logged — there is no other signal that it happened.
+      this.logger.warn(
+        `Hit the ${MAX_PAGES}-page cap for ${channel} before reaching the requested history window — older posts in that window were not collected.`,
+      );
+    }
+
+    return collected;
   }
 }

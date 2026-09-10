@@ -56,6 +56,31 @@ describe('SyncProcessor', () => {
     );
   });
 
+  it('upserts posts with erViews computed against views, not reach', async () => {
+    const posts = [{
+      externalPostId: 'p1', type: PostType.POST, publishedAt: new Date(), permalink: null,
+      thumbnailUrl: null, caption: 'hi', likes: 10, comments: 0, shares: 0, views: 200, reach: null,
+    }];
+    const { processor, postsRepo } = buildProcessor({ getPosts: jest.fn().mockResolvedValue(posts) });
+
+    await processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any);
+
+    expect(postsRepo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ externalPostId: 'p1', erViews: 5 }),
+      ['accountId', 'externalPostId'],
+    );
+  });
+
+  it('fetches posts from a 90-day window', async () => {
+    const getPosts = jest.fn().mockResolvedValue([]);
+    const { processor } = buildProcessor({ getPosts });
+
+    await processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any);
+
+    const since = getPosts.mock.calls[0][1] as Date;
+    expect((Date.now() - since.getTime()) / 86_400_000).toBeCloseTo(90, 0);
+  });
+
   // A job that is on its last attempt. BullMQ counts attemptsMade from 0 during the
   // first execution, so this is attempt 3 of 3.
   function finalAttempt() {
@@ -126,6 +151,32 @@ describe('SyncProcessor', () => {
     const { processor } = buildProcessor({ syncJobsUpdate });
 
     await expect(processor.process(finalAttempt())).rejects.toThrow('db is still down');
+  });
+
+  it('still writes the day\'s follower snapshot, with avgEr null, when getPosts fails', async () => {
+    const { processor, snapshotsRepo } = buildProcessor({
+      getPosts: jest.fn().mockRejectedValue(new Error('t.me timed out')),
+    });
+
+    await expect(processor.process(finalAttempt())).rejects.toThrow('t.me timed out');
+
+    expect(snapshotsRepo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 'acc-1', followersCount: 100, avgEr: null }),
+      ['accountId', 'date'],
+    );
+  });
+
+  it('still fails the job when getPosts fails, even though the snapshot was written', async () => {
+    const { processor, syncJobsRepo } = buildProcessor({
+      getPosts: jest.fn().mockRejectedValue(new Error('t.me timed out')),
+    });
+
+    await expect(processor.process(finalAttempt())).rejects.toThrow('t.me timed out');
+
+    expect(syncJobsRepo.update).toHaveBeenCalledWith(
+      'job-1',
+      expect.objectContaining({ status: SyncStatus.FAILED, errorMessage: 't.me timed out' }),
+    );
   });
 
   it('treats a job with no retry options as its own final attempt', async () => {

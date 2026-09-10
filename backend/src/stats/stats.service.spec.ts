@@ -170,3 +170,75 @@ describe('StatsService.getAccountDetail for a missing account', () => {
     expect(postsRepo.find).not.toHaveBeenCalled();
   });
 });
+
+describe('StatsService.getAccountDetail summary', () => {
+  function serviceWith(posts: any[], followersCount = 1000) {
+    const accountsRepo = { findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1' }) } as any;
+    const snapshotsRepo = {
+      find: jest.fn().mockResolvedValue([{ date: '2026-09-01', followersCount }]),
+    } as any;
+    const postsRepo = { find: jest.fn().mockResolvedValue(posts) } as any;
+    return new StatsService(accountsRepo, snapshotsRepo, postsRepo);
+  }
+
+  const period = { from: '2026-09-01', to: '2026-09-30' };
+
+  it('totals and averages views and reactions over the period', async () => {
+    const service = serviceWith([
+      { views: 1000, likes: 50 },
+      { views: 3000, likes: 150 },
+    ]);
+
+    const { summary } = await service.getAccountDetail('acc-1', period);
+
+    expect(summary.postsCount).toBe(2);
+    expect(summary.totalViews).toBe(4000);
+    expect(summary.totalReactions).toBe(200);
+    expect(summary.avgViews).toBe(2000);
+    expect(summary.avgReactions).toBe(100);
+  });
+
+  it('takes followers from the latest snapshot', async () => {
+    const service = serviceWith([{ views: 10, likes: 1 }], 4321);
+    const { summary } = await service.getAccountDetail('acc-1', period);
+    expect(summary.followersCount).toBe(4321);
+  });
+
+  // Weighted, not the mean of per-post ERs: a post with 12 views and 3 reactions
+  // is 25%, and averaging it with everything else says nothing about the channel.
+  it('computes ER from the totals, so small posts cannot skew it', async () => {
+    const service = serviceWith([
+      { views: 12, likes: 3 },
+      { views: 10_000, likes: 100 },
+    ]);
+
+    const { summary } = await service.getAccountDetail('acc-1', period);
+
+    expect(summary.erViews).toBeCloseTo((103 / 10_012) * 100, 6);
+  });
+
+  it('reports ER against followers as well', async () => {
+    const service = serviceWith([{ views: 1000, likes: 50 }], 1000);
+    const { summary } = await service.getAccountDetail('acc-1', period);
+    expect(summary.erFollowers).toBeCloseTo(5, 6);
+  });
+
+  it('returns zeros and null ER for a period with no posts, not NaN', async () => {
+    const service = serviceWith([]);
+
+    const { summary } = await service.getAccountDetail('acc-1', period);
+
+    expect(summary.postsCount).toBe(0);
+    expect(summary.totalViews).toBe(0);
+    expect(summary.avgViews).toBe(0);
+    expect(summary.erViews).toBeNull();
+    expect(summary.erFollowers).toBeNull();
+  });
+
+  it('treats a post with unknown views as contributing no views', async () => {
+    const service = serviceWith([{ views: null, likes: 5 }]);
+    const { summary } = await service.getAccountDetail('acc-1', period);
+    expect(summary.totalViews).toBe(0);
+    expect(summary.totalReactions).toBe(5);
+  });
+});

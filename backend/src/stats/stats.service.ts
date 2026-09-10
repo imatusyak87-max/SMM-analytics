@@ -10,6 +10,42 @@ interface Period {
   to: string;
 }
 
+export interface AccountSummary {
+  followersCount: number | null;
+  postsCount: number;
+  totalViews: number;
+  totalReactions: number;
+  avgViews: number;
+  avgReactions: number;
+  erViews: number | null;
+  erFollowers: number | null;
+}
+
+/**
+ * Computed from the rows getAccountDetail already loads and returns, so this adds
+ * no query and no rows. ER is weighted — totals over totals — because the mean of
+ * per-post ERs lets a post with a dozen views dominate the channel's figure.
+ */
+function summarise(posts: Post[], followersCount: number | null): AccountSummary {
+  const totalViews = posts.reduce((sum, post) => sum + (post.views ?? 0), 0);
+  const totalReactions = posts.reduce((sum, post) => sum + post.likes, 0);
+  const postsCount = posts.length;
+
+  return {
+    followersCount,
+    postsCount,
+    totalViews,
+    totalReactions,
+    avgViews: postsCount > 0 ? totalViews / postsCount : 0,
+    avgReactions: postsCount > 0 ? totalReactions / postsCount : 0,
+    erViews: totalViews > 0 ? (totalReactions / totalViews) * 100 : null,
+    erFollowers:
+      followersCount && followersCount > 0 && postsCount > 0
+        ? (totalReactions / postsCount / followersCount) * 100
+        : null,
+  };
+}
+
 /**
  * Builds the inclusive upper bound for a date-only `to` string when querying a
  * timestamptz column (e.g. `publishedAt`). `new Date('2026-08-13')` parses to
@@ -41,11 +77,14 @@ export class StatsService {
       order: { publishedAt: 'DESC' },
     });
 
+    const latestSnapshot = trend.length > 0 ? trend[trend.length - 1] : null;
+
     return {
       account,
-      latestSnapshot: trend.length > 0 ? trend[trend.length - 1] : null,
+      latestSnapshot,
       trend,
       posts,
+      summary: summarise(posts, latestSnapshot?.followersCount ?? null),
     };
   }
 

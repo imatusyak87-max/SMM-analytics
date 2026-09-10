@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { TelegramConnector } from './telegram.connector';
 import { AccountPlatform, AccountType } from '../../db/entities/account.entity';
 import { PostType } from '../../db/entities/post.entity';
@@ -145,6 +146,36 @@ describe('TelegramConnector.getPosts', () => {
     const connector = new TelegramConnector({} as any, preview as any);
 
     await expect(connector.getPosts(account, new Date('2026-01-01'))).rejects.toThrow(PreviewUnavailableError);
+  });
+
+  it('warns when the page cap is hit before the walk reaches sinceDate, naming the channel', async () => {
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    let id = 10_000;
+    const preview = {
+      fetchPage: jest.fn().mockImplementation(() => {
+        id -= 2;
+        return Promise.resolve(page([id, id + 1], '2026-09-03T10:00:00+00:00'));
+      }),
+    };
+    const connector = new TelegramConnector({} as any, preview as any);
+
+    await connector.getPosts(account, new Date('2026-01-01'));
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('@testchannel'));
+    warnSpy.mockRestore();
+  }, 10_000);
+
+  it('does not warn when the walk ends because it reached the date boundary, not the page cap', async () => {
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const preview = {
+      fetchPage: jest.fn().mockResolvedValue(page([49, 50], '2020-01-01T10:00:00+00:00')),
+    };
+    const connector = new TelegramConnector({} as any, preview as any);
+
+    await connector.getPosts(account, new Date('2026-08-15'));
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it('still rejects when a later page throws a generic (non-preview) error', async () => {

@@ -1,0 +1,99 @@
+/*
+ * Stat tiles: the page's metric idiom. Reuse these proportions for any metric
+ * shown on this page (post grid, post modal):
+ *   label  12px / 500 / var(--text)
+ *   value  var(--mono) / 600 / var(--text-h), tabular figures
+ *   note   12px / var(--text)
+ *   tile   1px var(--border), 10px radius, 16px 18px padding, 16px grid gap
+ * Colour comes only from tokens, so dark mode follows index.css automatically.
+ */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.engagement,
+.audience {
+  grid-column: span 4;
+}
+
+.volume {
+  grid-column: span 3;
+}
+
+/* The headline Telegram figure: tinted so it reads first, at a larger size. */
+.featured {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.value {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.featured .value {
+  font-size: 30px;
+}
+
+.note {
+  margin: auto 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+@media (max-width: 1024px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .engagement,
+  .volume {
+    grid-column: span 1;
+  }
+
+  .audience {
+    grid-column: span 2;
+  }
+
+  .tile {
+    padding: 14px 16px;
+  }
+
+  .value {
+    font-size: 20px;
+  }
+
+  .featured .value {
+    font-size: 26px;
+  }
+}

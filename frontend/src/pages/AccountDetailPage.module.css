@@ -11,41 +11,42 @@
 
 .header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
   flex-wrap: wrap;
 }
 
 .heading {
-  margin: 0 0 12px;
+  margin: 0;
   font-family: var(--heading);
   font-size: 22px;
   font-weight: 600;
   color: var(--text-h);
 }
 
-.stats {
-  display: flex;
-  gap: 24px;
-}
-
-.stat {
+/* Period selector and the tiles it drives, kept visually as one unit. */
+.overview {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 16px;
 }
 
-.statLabel {
-  font-size: 12px;
-  color: var(--text);
+.tilesRegion {
+  align-self: stretch;
+  transition: opacity 0.2s ease;
 }
 
-.statValue {
-  font-family: var(--mono);
-  font-size: 19px;
-  font-weight: 600;
-  color: var(--text-h);
+/* While a new period loads, the old figures stay in place but read as stale. */
+.tilesRegion[aria-busy='true'] {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tilesRegion {
+    transition: none;
+  }
 }
 
 .toolbar {

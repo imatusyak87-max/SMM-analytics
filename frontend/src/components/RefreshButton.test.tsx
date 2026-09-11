@@ -33,6 +33,41 @@ describe('RefreshButton', () => {
     expect(onSynced).toHaveBeenCalled();
   });
 
+  it('explains in Russian that Telegram hides the channel posts when that is why the sync failed', async () => {
+    vi.useFakeTimers();
+    (apiClient.post as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });
+    (apiClient.get as any).mockResolvedValue({
+      data: {
+        id: 'job-1',
+        status: 'failed',
+        errorMessage:
+          'No posts found on the preview page for ehinaceya — the channel may have disabled its web preview, or Telegram changed the page markup.',
+      },
+    });
+    render(<RefreshButton accountId="acc-1" />);
+
+    fireEvent.click(screen.getByText('Обновить'));
+    await vi.advanceTimersByTimeAsync(2500);
+    vi.useRealTimers();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Telegram не показывает посты этого канала');
+  });
+
+  it('shows the stored error text of a failed sync it has no translation for', async () => {
+    vi.useFakeTimers();
+    (apiClient.post as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });
+    (apiClient.get as any).mockResolvedValue({
+      data: { id: 'job-1', status: 'failed', errorMessage: 'Account acc-1 not found' },
+    });
+    render(<RefreshButton accountId="acc-1" />);
+
+    fireEvent.click(screen.getByText('Обновить'));
+    await vi.advanceTimersByTimeAsync(2500);
+    vi.useRealTimers();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Account acc-1 not found');
+  });
+
   it('shows the job status once the sync has been queued', async () => {
     (apiClient.post as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });
     (apiClient.get as any).mockResolvedValue({ data: { id: 'job-1', status: 'pending' } });

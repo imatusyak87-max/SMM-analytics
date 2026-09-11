@@ -8,6 +8,14 @@ function statusClassName(status: string): string {
   return styles.status;
 }
 
+/** The job stores the backend's English error; known causes get a Russian explanation. */
+function describeSyncFailure(errorMessage: string | null | undefined): string {
+  if (errorMessage?.startsWith('No posts found on the preview page')) {
+    return 'Telegram не показывает посты этого канала: у него отключён веб-просмотр';
+  }
+  return errorMessage ?? 'Обновление не удалось';
+}
+
 interface RefreshButtonProps {
   accountId: string;
   onSynced?: () => void;
@@ -49,6 +57,7 @@ export function RefreshButton({ accountId, onSynced }: RefreshButtonProps) {
             clearInterval(thisPoll);
             if (poll.current === thisPoll) poll.current = null;
             if (updated.status === 'success') onSynced?.();
+            else setError(describeSyncFailure(updated.errorMessage));
           }
         } catch {
           clearInterval(thisPoll);

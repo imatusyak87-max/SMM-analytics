@@ -1,5 +1,6 @@
 import styles from './PostList.module.css';
 import { formatCount, formatPercent } from '../format';
+import { isRoundVideo } from '../postType';
 
 export type PostSort = 'views' | 'reactions' | 'er' | 'date';
 
@@ -44,7 +45,11 @@ export function PostList({ posts, onOpen }: PostListProps) {
             }}
           >
             {post.thumbnailUrl && (
-              <img className={styles.thumb} src={post.thumbnailUrl} alt="" />
+              <img
+                className={isRoundVideo(post) ? `${styles.thumb} ${styles.round}` : styles.thumb}
+                src={post.thumbnailUrl}
+                alt=""
+              />
             )}
             {post.caption && <span className={styles.caption}>{post.caption}</span>}
             <div className={styles.metrics}>

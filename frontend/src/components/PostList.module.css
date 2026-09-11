@@ -54,6 +54,14 @@
   background: var(--code-bg);
 }
 
+/* A round video message is a circle in Telegram too. */
+.round {
+  width: 60%;
+  aspect-ratio: 1;
+  align-self: center;
+  border-radius: 50%;
+}
+
 .caption {
   font-size: 14px;
   line-height: 1.4;

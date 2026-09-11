@@ -3,6 +3,7 @@ import styles from './PostTypeFilter.module.css';
 const TYPES: Array<{ value: string; label: string }> = [
   { value: 'image', label: 'Изображение' },
   { value: 'video', label: 'Видео' },
+  { value: 'round_video', label: 'Кружочки' },
   { value: 'post', label: 'Текст' },
 ];
 

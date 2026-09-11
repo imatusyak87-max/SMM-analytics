@@ -1,5 +1,6 @@
 import styles from './PostTable.module.css';
 import { formatCount, formatPercent } from '../format';
+import { isRoundVideo } from '../postType';
 import type { PostItem } from './PostList';
 
 const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
@@ -53,8 +54,16 @@ export function PostTable({ posts, total, onOpen }: PostTableProps) {
                       handler of its own: its click bubbles to the row, so onOpen
                       runs once. */}
                   <button type="button" className={styles.post}>
-                    {post.thumbnailUrl && <img className={styles.thumb} src={post.thumbnailUrl} alt="" />}
-                    <span className={styles.caption}>{post.caption ?? 'Без текста'}</span>
+                    {post.thumbnailUrl && (
+                      <img
+                        className={isRoundVideo(post) ? `${styles.thumb} ${styles.round}` : styles.thumb}
+                        src={post.thumbnailUrl}
+                        alt=""
+                      />
+                    )}
+                    <span className={styles.caption}>
+                      {post.caption ?? (isRoundVideo(post) ? 'Кружочек' : 'Без текста')}
+                    </span>
                   </button>
                 </td>
                 <td className={styles.num}>{formatCount(post.views)}</td>

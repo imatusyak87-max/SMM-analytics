@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AccountDetailPage } from './AccountDetailPage';
@@ -179,6 +179,85 @@ describe('AccountDetailPage', () => {
     await waitFor(() => {
       const tableCalls = callsTo('/posts').filter((params) => params.size === 25);
       expect(tableCalls.at(-1)).toMatchObject({ page: 1, sort: 'er' });
+    });
+  });
+
+  it('goes back to page 1 when the type filter changes while the table is open', async () => {
+    mockApi({ posts: () => ({ total: 37, items: [post('p1', 'Hello')] }) });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Показать все посты (37)' }));
+    fireEvent.change(await screen.findByLabelText('Показывать'), { target: { value: '25' } });
+    await waitFor(() => expect(lastCallTo('/posts')).toMatchObject({ page: 1, size: 25 }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Страница 2' }));
+    await waitFor(() => expect(lastCallTo('/posts')).toMatchObject({ page: 2, size: 25 }));
+
+    fireEvent.change(screen.getByLabelText('Тип поста'), { target: { value: 'video' } });
+
+    await waitFor(() => {
+      const tableCalls = callsTo('/posts').filter((params) => params.size === 25);
+      expect(tableCalls.at(-1)).toMatchObject({ page: 1, type: 'video' });
+    });
+  });
+
+  it('goes back to page 1 when the period changes while the table is open', async () => {
+    mockApi({ posts: () => ({ total: 37, items: [post('p1', 'Hello')] }) });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Показать все посты (37)' }));
+    fireEvent.change(await screen.findByLabelText('Показывать'), { target: { value: '25' } });
+    await waitFor(() => expect(lastCallTo('/posts')).toMatchObject({ page: 1, size: 25 }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Страница 2' }));
+    await waitFor(() => expect(lastCallTo('/posts')).toMatchObject({ page: 2, size: 25 }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Прошлый месяц' }));
+
+    await waitFor(() => {
+      const tableCalls = callsTo('/posts').filter((params) => params.size === 25);
+      expect(tableCalls.at(-1)).toMatchObject({ page: 1, from: '2026-08-01', to: '2026-08-31' });
+    });
+  });
+
+  it('returns the table to page 1 after a successful resync', async () => {
+    // The interval RefreshButton polls on is a real timer; fake it too (alongside
+    // Date) so the poll's first tick can be advanced instead of waiting 2s for real.
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date('2026-09-11T12:00:00Z'));
+
+    get.mockImplementation((url: string) => {
+      if (url.endsWith('/detail')) return Promise.resolve({ data: detail() });
+      if (url.endsWith('/posts')) {
+        return Promise.resolve({ data: { total: 37, items: [post('p1', 'Hello')] } });
+      }
+      if (url.endsWith('/sync-jobs/job-1')) {
+        return Promise.resolve({ data: { id: 'job-1', status: 'success' } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    (apiClient.post as any).mockResolvedValue({ data: { id: 'job-1', status: 'running' } });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Показать все посты (37)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Страница 2' }));
+    await waitFor(() => expect(lastCallTo('/posts')).toMatchObject({ page: 2, size: 10 }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/accounts/acc-1/sync'));
+
+    // Advances past the poll's 2s interval so the sync-jobs GET fires and resolves.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    await waitFor(() => {
+      const tableCalls = callsTo('/posts').filter((params) => params.size === 10);
+      expect(tableCalls.at(-1)).toMatchObject({ page: 1 });
     });
   });
 

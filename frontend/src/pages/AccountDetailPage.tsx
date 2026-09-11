@@ -94,7 +94,13 @@ export function AccountDetailPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h2 className={styles.heading}>{account.name}</h2>
-        <RefreshButton accountId={account.id} onSynced={() => setReloadKey((key) => key + 1)} />
+        <RefreshButton
+          accountId={account.id}
+          onSynced={() => {
+            setReloadKey((key) => key + 1);
+            setTablePage(1);
+          }}
+        />
       </div>
       <section className={styles.overview} aria-label="Сводка за период">
         <PeriodPicker value={period} onChange={changePeriod} />

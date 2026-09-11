@@ -23,7 +23,10 @@ function backgroundUrl(style: string | undefined): string | null {
   return match ? match[1] : null;
 }
 
-export function parsePreviewPage(html: string, channel: string): ParsedPreviewPost[] {
+export function parsePreviewPage(
+  html: string,
+  channel: string,
+): ParsedPreviewPost[] {
   const $ = cheerio.load(html);
   const posts: ParsedPreviewPost[] = [];
 
@@ -34,8 +37,12 @@ export function parsePreviewPage(html: string, channel: string): ParsedPreviewPo
     const datetime = message.find('time[datetime]').attr('datetime');
     if (!externalPostId || !datetime) return;
 
-    const photo = backgroundUrl(message.find('.tgme_widget_message_photo_wrap').attr('style'));
-    const video = backgroundUrl(message.find('.tgme_widget_message_video_thumb').attr('style'));
+    const photo = backgroundUrl(
+      message.find('.tgme_widget_message_photo_wrap').attr('style'),
+    );
+    const video = backgroundUrl(
+      message.find('.tgme_widget_message_video_thumb').attr('style'),
+    );
 
     let type = PostType.POST;
     if (video) type = PostType.VIDEO;
@@ -44,12 +51,17 @@ export function parsePreviewPage(html: string, channel: string): ParsedPreviewPo
     let reactions = 0;
     // Paid reactions count Stars sent, not people reacting, so one donor can add
     // tens of thousands to a post. Excluding them keeps reactions a measure of engagement.
-    message.find('.tgme_reaction:not(.tgme_reaction_paid)').each((_i, reaction) => {
-      // Only the span's own text is the count. Its child element is the emoji,
-      // and a standard emoji renders as text ("🔥"), which would spoil the number.
-      const count = $(reaction).contents().filter((_j, node) => node.type === 'text').text();
-      reactions += parseCompactNumber(count) ?? 0;
-    });
+    message
+      .find('.tgme_reaction:not(.tgme_reaction_paid)')
+      .each((_i, reaction) => {
+        // Only the span's own text is the count. Its child element is the emoji,
+        // and a standard emoji renders as text ("🔥"), which would spoil the number.
+        const count = $(reaction)
+          .contents()
+          .filter((_j, node) => node.type === 'text')
+          .text();
+        reactions += parseCompactNumber(count) ?? 0;
+      });
 
     const messageText = message.find('.tgme_widget_message_text').first();
     // .text() drops <br/> entirely, running consecutive lines together — replace
@@ -62,7 +74,9 @@ export function parsePreviewPage(html: string, channel: string): ParsedPreviewPo
       publishedAt: new Date(datetime),
       caption: caption.length > 0 ? caption : null,
       thumbnailUrl: video ?? photo,
-      views: parseCompactNumber(message.find('.tgme_widget_message_views').first().text()),
+      views: parseCompactNumber(
+        message.find('.tgme_widget_message_views').first().text(),
+      ),
       reactions,
       type,
       permalink: `https://t.me/${channel}/${externalPostId}`,

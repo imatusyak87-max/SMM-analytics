@@ -13,13 +13,19 @@ describe('TelegramPreviewClient', () => {
     const html = await new TelegramPreviewClient().fetchPage('testchannel');
 
     expect(html).toBe('<html>page</html>');
-    expect(mockedGet).toHaveBeenCalledWith('https://t.me/s/testchannel', expect.anything());
+    expect(mockedGet).toHaveBeenCalledWith(
+      'https://t.me/s/testchannel',
+      expect.anything(),
+    );
   });
 
   it('strips a leading @ from the handle', async () => {
     mockedGet.mockResolvedValue({ data: '' });
     await new TelegramPreviewClient().fetchPage('@testchannel');
-    expect(mockedGet).toHaveBeenCalledWith('https://t.me/s/testchannel', expect.anything());
+    expect(mockedGet).toHaveBeenCalledWith(
+      'https://t.me/s/testchannel',
+      expect.anything(),
+    );
   });
 
   it('asks for older posts with the before parameter', async () => {

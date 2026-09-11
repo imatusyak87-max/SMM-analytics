@@ -1,9 +1,18 @@
 import { Logger } from '@nestjs/common';
 import { AccountPlatform, Account } from '../../db/entities/account.entity';
-import { AccountInfo, AccountStats, AvatarImage, ConnectorPost, SocialConnector } from '../connector.interface';
+import {
+  AccountInfo,
+  AccountStats,
+  AvatarImage,
+  ConnectorPost,
+  SocialConnector,
+} from '../connector.interface';
 import { TelegramApiClient } from './telegram-api.client';
 import { TelegramPreviewClient } from './telegram-preview.client';
-import { parsePreviewPage, PreviewUnavailableError } from './telegram-preview.parser';
+import {
+  parsePreviewPage,
+  PreviewUnavailableError,
+} from './telegram-preview.parser';
 
 const MAX_PAGES = 25;
 const PAGE_DELAY_MS = 300;
@@ -92,7 +101,9 @@ export class TelegramConnector implements SocialConnector {
         });
       }
 
-      const oldest = parsed.reduce((a, b) => (a.publishedAt <= b.publishedAt ? a : b));
+      const oldest = parsed.reduce((a, b) =>
+        a.publishedAt <= b.publishedAt ? a : b,
+      );
       if (oldest.publishedAt < sinceDate) {
         hitPageCap = false;
         break;

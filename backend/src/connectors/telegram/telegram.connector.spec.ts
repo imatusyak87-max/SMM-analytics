@@ -17,7 +17,10 @@ describe('TelegramConnector', () => {
   };
 
   it('getAccountStats maps member count to followersCount', async () => {
-    const client = { getChatMemberCount: jest.fn().mockResolvedValue(1234), getChat: jest.fn() } as any;
+    const client = {
+      getChatMemberCount: jest.fn().mockResolvedValue(1234),
+      getChat: jest.fn(),
+    } as any;
     const connector = new TelegramConnector(client, {} as any);
 
     const stats = await connector.getAccountStats(account);
@@ -28,7 +31,9 @@ describe('TelegramConnector', () => {
 
   it('getAccountInfo maps chat title and photo', async () => {
     const client = {
-      getChat: jest.fn().mockResolvedValue({ title: 'Test Channel', photoUrl: 'file123' }),
+      getChat: jest
+        .fn()
+        .mockResolvedValue({ title: 'Test Channel', photoUrl: 'file123' }),
       getChatMemberCount: jest.fn(),
     } as any;
     const connector = new TelegramConnector(client, {} as any);
@@ -41,7 +46,12 @@ describe('TelegramConnector', () => {
 
   it('getAvatar downloads the photo the file reference points at', async () => {
     const client = {
-      downloadFile: jest.fn().mockResolvedValue({ data: Buffer.from('bytes'), contentType: 'image/jpeg' }),
+      downloadFile: jest
+        .fn()
+        .mockResolvedValue({
+          data: Buffer.from('bytes'),
+          contentType: 'image/jpeg',
+        }),
     } as any;
     const connector = new TelegramConnector(client, {} as any);
 
@@ -71,7 +81,11 @@ describe('TelegramConnector.getPosts', () => {
   const account = { externalId: '@testchannel' } as any;
 
   it('returns the posts on the first page', async () => {
-    const preview = { fetchPage: jest.fn().mockResolvedValue(page([101, 102, 103], '2026-09-03T10:00:00+00:00')) };
+    const preview = {
+      fetchPage: jest
+        .fn()
+        .mockResolvedValue(page([101, 102, 103], '2026-09-03T10:00:00+00:00')),
+    };
     const connector = new TelegramConnector({} as any, preview as any);
 
     const posts = await connector.getPosts(account, new Date('2026-09-01'));
@@ -93,14 +107,20 @@ describe('TelegramConnector.getPosts', () => {
 
     const posts = await connector.getPosts(account, new Date('2026-08-15'));
 
-    expect(preview.fetchPage).toHaveBeenNthCalledWith(1, '@testchannel', undefined);
+    expect(preview.fetchPage).toHaveBeenNthCalledWith(
+      1,
+      '@testchannel',
+      undefined,
+    );
     expect(preview.fetchPage).toHaveBeenNthCalledWith(2, '@testchannel', '102');
     expect(posts).toHaveLength(4);
   });
 
   it('stops once a page is older than the window, instead of walking the whole channel', async () => {
     const preview = {
-      fetchPage: jest.fn().mockResolvedValue(page([49, 50], '2020-01-01T10:00:00+00:00')),
+      fetchPage: jest
+        .fn()
+        .mockResolvedValue(page([49, 50], '2020-01-01T10:00:00+00:00')),
     };
     const connector = new TelegramConnector({} as any, preview as any);
 
@@ -128,8 +148,12 @@ describe('TelegramConnector.getPosts', () => {
     const preview = {
       fetchPage: jest
         .fn()
-        .mockResolvedValueOnce(page([101, 102, 103], '2026-09-03T10:00:00+00:00'))
-        .mockRejectedValueOnce(new PreviewUnavailableError('no posts before 101')),
+        .mockResolvedValueOnce(
+          page([101, 102, 103], '2026-09-03T10:00:00+00:00'),
+        )
+        .mockRejectedValueOnce(
+          new PreviewUnavailableError('no posts before 101'),
+        ),
     };
     const connector = new TelegramConnector({} as any, preview as any);
 
@@ -141,15 +165,23 @@ describe('TelegramConnector.getPosts', () => {
 
   it('still rejects when the very first page throws PreviewUnavailableError', async () => {
     const preview = {
-      fetchPage: jest.fn().mockRejectedValue(new PreviewUnavailableError('channel disabled its preview')),
+      fetchPage: jest
+        .fn()
+        .mockRejectedValue(
+          new PreviewUnavailableError('channel disabled its preview'),
+        ),
     };
     const connector = new TelegramConnector({} as any, preview as any);
 
-    await expect(connector.getPosts(account, new Date('2026-01-01'))).rejects.toThrow(PreviewUnavailableError);
+    await expect(
+      connector.getPosts(account, new Date('2026-01-01')),
+    ).rejects.toThrow(PreviewUnavailableError);
   });
 
   it('warns when the page cap is hit before the walk reaches sinceDate, naming the channel', async () => {
-    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     let id = 10_000;
     const preview = {
       fetchPage: jest.fn().mockImplementation(() => {
@@ -161,14 +193,20 @@ describe('TelegramConnector.getPosts', () => {
 
     await connector.getPosts(account, new Date('2026-01-01'));
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('@testchannel'));
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('@testchannel'),
+    );
     warnSpy.mockRestore();
   }, 10_000);
 
   it('does not warn when the walk ends because it reached the date boundary, not the page cap', async () => {
-    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     const preview = {
-      fetchPage: jest.fn().mockResolvedValue(page([49, 50], '2020-01-01T10:00:00+00:00')),
+      fetchPage: jest
+        .fn()
+        .mockResolvedValue(page([49, 50], '2020-01-01T10:00:00+00:00')),
     };
     const connector = new TelegramConnector({} as any, preview as any);
 
@@ -182,11 +220,15 @@ describe('TelegramConnector.getPosts', () => {
     const preview = {
       fetchPage: jest
         .fn()
-        .mockResolvedValueOnce(page([101, 102, 103], '2026-09-03T10:00:00+00:00'))
+        .mockResolvedValueOnce(
+          page([101, 102, 103], '2026-09-03T10:00:00+00:00'),
+        )
         .mockRejectedValueOnce(new Error('network')),
     };
     const connector = new TelegramConnector({} as any, preview as any);
 
-    await expect(connector.getPosts(account, new Date('2026-01-01'))).rejects.toThrow('network');
+    await expect(
+      connector.getPosts(account, new Date('2026-01-01')),
+    ).rejects.toThrow('network');
   });
 });

@@ -68,3 +68,76 @@
   color: var(--text);
   font-size: 15px;
 }
+
+.coverage {
+  font-size: 14px;
+  color: var(--text);
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent-border);
+  background: var(--code-bg);
+  border-radius: 0 6px 6px 0;
+}
+
+.posts {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.postsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.subheading {
+  margin: 0;
+  font-family: var(--heading);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.postsRegion {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: opacity 0.2s ease;
+}
+
+/* While a new page or sort loads, the old rows stay in place but read as stale. */
+.postsRegion[aria-busy='true'] {
+  opacity: 0.55;
+}
+
+.reveal {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.reveal:hover {
+  border-color: var(--accent-border);
+}
+
+.reveal:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .postsRegion,
+  .reveal {
+    transition: none;
+  }
+}

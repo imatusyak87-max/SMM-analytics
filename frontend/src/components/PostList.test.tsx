@@ -10,70 +10,52 @@ const posts = [
 
 describe('PostList', () => {
   it('shows the snippet, image and metrics for each post', () => {
-    render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
-    const firstCaption = screen.getByText('Первый');
-    expect(firstCaption).toBeInTheDocument();
-    const firstCard = firstCaption.closest('button')!;
+    render(<PostList posts={posts} onOpen={() => {}} />);
+    const firstCard = screen.getByText('Первый').closest('button')!;
     expect(firstCard.querySelector('img')).toHaveAttribute('src', 'https://cdn/p1');
     expect(screen.getByText('900')).toBeInTheDocument();
   });
 
   it('marks each post image decorative, since its caption is already shown as visible text', () => {
-    const { container } = render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
+    const { container } = render(<PostList posts={posts} onOpen={() => {}} />);
     const images = container.querySelectorAll('img');
     expect(images.length).toBeGreaterThan(0);
     images.forEach((img) => expect(img).toHaveAttribute('alt', ''));
   });
 
-  it('sorts by views by default, highest first', () => {
-    render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
-    const items = screen.getAllByRole('listitem');
-    expect(within(items[0]).getByText('Второй')).toBeInTheDocument();
-  });
+  // The server sorts. A second, client-side sort would be a second source of truth
+  // about the order — and could only ever agree with the first or contradict it.
+  it('renders posts in the order given', () => {
+    const { rerender } = render(<PostList posts={posts} onOpen={() => {}} />);
+    expect(within(screen.getAllByRole('listitem')[0]).getByText('Первый')).toBeInTheDocument();
 
-  it('sorts by reactions when asked', () => {
-    render(<PostList posts={posts} sort="reactions" onOpen={() => {}} />);
-    const items = screen.getAllByRole('listitem');
-    expect(within(items[0]).getByText('Первый')).toBeInTheDocument();
-  });
-
-  it('sorts by ER against views when asked', () => {
-    render(<PostList posts={posts} sort="er" onOpen={() => {}} />);
-    const items = screen.getAllByRole('listitem');
-    expect(within(items[0]).getByText('Первый')).toBeInTheDocument();
-  });
-
-  it('sorts by date, newest first, when asked', () => {
-    render(<PostList posts={posts} sort="date" onOpen={() => {}} />);
-    const items = screen.getAllByRole('listitem');
-    expect(within(items[0]).getByText('Второй')).toBeInTheDocument();
+    rerender(<PostList posts={[...posts].reverse()} onOpen={() => {}} />);
+    expect(within(screen.getAllByRole('listitem')[0]).getByText('Второй')).toBeInTheDocument();
   });
 
   it('opens the post that was clicked', () => {
     const onOpen = vi.fn();
-    render(<PostList posts={posts} sort="views" onOpen={onOpen} />);
+    render(<PostList posts={posts} onOpen={onOpen} />);
     fireEvent.click(screen.getByText('Первый'));
     expect(onOpen).toHaveBeenCalledWith(posts[0]);
   });
 
   it('focuses the card that was clicked, so the modal can return focus to it on close', () => {
-    render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
+    render(<PostList posts={posts} onOpen={() => {}} />);
     const card = screen.getByText('Первый').closest('button')!;
     fireEvent.click(card);
     expect(card).toHaveFocus();
   });
 
   it('shows ER against views (erViews), not ER against followers (er), on each card', () => {
-    render(<PostList posts={posts} sort="views" onOpen={() => {}} />);
-    const items = screen.getAllByRole('listitem');
-    const p1Item = items.find((item) => within(item).queryByText('Первый'));
-    const p1 = within(p1Item!);
+    render(<PostList posts={posts} onOpen={() => {}} />);
+    const p1 = within(screen.getAllByRole('listitem')[0]);
     expect(p1.getByText(formatPercent(posts[0].erViews))).toBeInTheDocument();
     expect(p1.queryByText(formatPercent(posts[0].er))).not.toBeInTheDocument();
   });
 
   it('explains an empty list instead of showing nothing', () => {
-    render(<PostList posts={[]} sort="views" onOpen={() => {}} />);
+    render(<PostList posts={[]} onOpen={() => {}} />);
     expect(screen.getByText(/Постов за этот период нет/)).toBeInTheDocument();
   });
 });

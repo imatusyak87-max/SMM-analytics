@@ -94,4 +94,40 @@ describe('parsePreviewPage', () => {
       parsePreviewPage(fixture('preview-unavailable.html'), 'testchannel'),
     ).toThrow(PreviewUnavailableError);
   });
+
+  it('marks ordinary posts as not part of an album', () => {
+    expect(posts().map((p) => p.grouped)).toEqual([false, false, false]);
+  });
+});
+
+// A channel that disabled its web preview still serves each post's embed page
+// (t.me/<channel>/<id>?embed=1). These fixtures are real pages from @ehinaceya.
+describe('parsePreviewPage on a single-post embed page', () => {
+  it('reads the one post the embed shows', () => {
+    const [post] = parsePreviewPage(fixture('embed-post.html'), 'ehinaceya');
+
+    expect(post.externalPostId).toBe('842');
+    expect(post.publishedAt.toISOString()).toBe('2026-09-09T17:32:30.000Z');
+    expect(post.views).toBe(145);
+    expect(post.grouped).toBe(false);
+  });
+
+  // Every part of an album has its own id and embed page, each repeating the
+  // album's views and reactions. The walk must know a page is an album part to
+  // count the album once.
+  it('marks a post that is one part of an album', () => {
+    const [post] = parsePreviewPage(
+      fixture('embed-album-part.html'),
+      'ehinaceya',
+    );
+
+    expect(post.externalPostId).toBe('826');
+    expect(post.grouped).toBe(true);
+  });
+
+  it('throws for a deleted or not-yet-published post, whose embed says "Post not found"', () => {
+    expect(() =>
+      parsePreviewPage(fixture('embed-not-found.html'), 'ehinaceya'),
+    ).toThrow(PreviewUnavailableError);
+  });
 });

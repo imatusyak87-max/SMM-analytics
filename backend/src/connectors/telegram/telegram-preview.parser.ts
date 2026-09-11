@@ -11,6 +11,8 @@ export interface ParsedPreviewPost {
   reactions: number;
   type: PostType;
   permalink: string;
+  /** One part of an album. The preview page shows an album once; embed pages show each part. */
+  grouped: boolean;
 }
 
 /** The page loaded but held no posts: markup changed, or the channel hid its preview. */
@@ -21,6 +23,20 @@ const BACKGROUND_URL = /background-image:url\('([^']+)'\)/;
 function backgroundUrl(style: string | undefined): string | null {
   const match = style ? BACKGROUND_URL.exec(style) : null;
   return match ? match[1] : null;
+}
+
+/**
+ * data-view is base64 JSON such as {"c":-123,"p":"825g",...}. Telegram writes the
+ * post id as a string with a trailing "g" when the post is part of an album.
+ */
+function isAlbumPart(dataView: string | undefined): boolean {
+  if (!dataView) return false;
+  try {
+    const { p } = JSON.parse(Buffer.from(dataView, 'base64').toString('utf-8'));
+    return typeof p === 'string' && p.endsWith('g');
+  } catch {
+    return false;
+  }
 }
 
 export function parsePreviewPage(
@@ -80,6 +96,7 @@ export function parsePreviewPage(
       reactions,
       type,
       permalink: `https://t.me/${channel}/${externalPostId}`,
+      grouped: isAlbumPart(message.attr('data-view')),
     });
   });
 

@@ -36,4 +36,19 @@ describe('TelegramPreviewClient', () => {
       expect.anything(),
     );
   });
+
+  it('fetches the embed page of a single post', async () => {
+    mockedGet.mockResolvedValue({ data: '<html>post</html>' });
+
+    const html = await new TelegramPreviewClient().fetchEmbed(
+      '@testchannel',
+      '842',
+    );
+
+    expect(html).toBe('<html>post</html>');
+    expect(mockedGet).toHaveBeenCalledWith(
+      'https://t.me/testchannel/842?embed=1',
+      expect.anything(),
+    );
+  });
 });

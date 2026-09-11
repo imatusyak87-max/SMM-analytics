@@ -13,35 +13,57 @@ function renderPicker(value: SelectedPeriod = last30) {
   return onChange;
 }
 
+function trigger() {
+  return screen.getByRole('button', { name: /Выбрать даты/ });
+}
+
 function openCalendar() {
-  fireEvent.click(screen.getByRole('button', { name: /Выбрать даты/ }));
+  fireEvent.click(trigger());
   return screen.getByRole('dialog', { name: 'Выбор периода' });
 }
 
-describe('PeriodPicker', () => {
-  it('offers every preset and marks the active one', () => {
-    renderPicker();
-    const group = screen.getByRole('group', { name: 'Период' });
-    expect(within(group).getAllByRole('button')).toHaveLength(8);
-    expect(screen.getByRole('button', { name: 'Последние 30 дней' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Прошлый месяц' })).toHaveAttribute('aria-pressed', 'false');
-  });
+function presetGroup(dialog: HTMLElement) {
+  return within(within(dialog).getByRole('group', { name: 'Быстрый выбор' }));
+}
 
-  it('reports a preset as its date range', () => {
-    const onChange = renderPicker();
-    fireEvent.click(screen.getByRole('button', { name: 'Прошлый квартал' }));
-    expect(onChange).toHaveBeenCalledWith({ preset: 'lastQuarter', from: '2026-04-01', to: '2026-06-30' });
+describe('PeriodPicker', () => {
+  it('shows only the date button until the calendar opens, named after the preset', () => {
+    renderPicker();
+    expect(screen.queryByRole('group')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(trigger()).toHaveTextContent('Последние 30 дней');
   });
 
   it('shows the current range on the calendar button', () => {
     renderPicker();
-    expect(screen.getByRole('button', { name: /Выбрать даты/ })).toHaveTextContent('13.08.2026 – 11.09.2026');
+    expect(trigger()).toHaveTextContent('13.08.2026 – 11.09.2026');
   });
 
-  it('marks no preset active for a range picked on the calendar', () => {
+  it('lists the presets beside the calendar, marking the current one', () => {
+    renderPicker();
+    const presets = presetGroup(openCalendar());
+
+    expect(presets.getAllByRole('button')).toHaveLength(8);
+    expect(presets.getByRole('button', { name: 'Последние 30 дней' })).toHaveAttribute('aria-pressed', 'true');
+    expect(presets.getByRole('button', { name: 'Прошлый месяц' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('applies a preset from the calendar at once', () => {
+    const onChange = renderPicker();
+    const presets = presetGroup(openCalendar());
+
+    fireEvent.click(presets.getByRole('button', { name: 'Прошлый квартал' }));
+
+    expect(onChange).toHaveBeenCalledWith({ preset: 'lastQuarter', from: '2026-04-01', to: '2026-06-30' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+  });
+
+  it('marks no preset for a range picked on the calendar', () => {
     renderPicker({ preset: null, from: '2026-08-01', to: '2026-08-10' });
-    const group = screen.getByRole('group', { name: 'Период' });
-    within(group)
+    expect(trigger()).toHaveTextContent(/^01\.08\.2026 – 10\.08\.2026$/);
+
+    presetGroup(openCalendar())
       .getAllByRole('button')
       .forEach((button) => expect(button).toHaveAttribute('aria-pressed', 'false'));
   });
@@ -57,7 +79,20 @@ describe('PeriodPicker', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
     expect(onChange).toHaveBeenCalledWith({ preset: null, from: '2026-08-01', to: '2026-08-10' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Выбрать даты/ })).toHaveFocus();
+    expect(trigger()).toHaveFocus();
+  });
+
+  it('drops the preset mark once a day is picked by hand', () => {
+    const onChange = renderPicker();
+    const dialog = openCalendar();
+
+    fireEvent.click(within(dialog).getAllByText('3')[0]);
+
+    presetGroup(dialog)
+      .getAllByRole('button')
+      .forEach((button) => expect(button).toHaveAttribute('aria-pressed', 'false'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
+    expect(onChange).toHaveBeenCalledWith({ preset: null, from: '2026-08-03', to: '2026-08-03' });
   });
 
   it('orders the range whichever day is clicked first', () => {
@@ -94,46 +129,6 @@ describe('PeriodPicker', () => {
     expect(onChange).toHaveBeenCalledWith({ preset: null, from: '2026-08-05', to: '2026-08-05' });
   });
 
-  it('lists the presets beside the calendar, marking the current one', () => {
-    renderPicker();
-    const dialog = openCalendar();
-    const quick = within(dialog).getByRole('group', { name: 'Быстрый выбор' });
-
-    expect(within(quick).getAllByRole('button')).toHaveLength(8);
-    expect(within(quick).getByRole('button', { name: 'Последние 30 дней' })).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  it('previews a preset from the calendar and applies it only on «Применить»', () => {
-    const onChange = renderPicker();
-    const dialog = openCalendar();
-    const quick = within(dialog).getByRole('group', { name: 'Быстрый выбор' });
-
-    fireEvent.click(within(quick).getByRole('button', { name: 'Прошлый год' }));
-    expect(onChange).not.toHaveBeenCalled();
-    // The calendar jumps to the preset, so its end is in view.
-    expect(within(dialog).getByText(/декабрь 2025/i)).toBeInTheDocument();
-    expect(within(quick).getByRole('button', { name: 'Прошлый год' })).toHaveAttribute('aria-pressed', 'true');
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
-    expect(onChange).toHaveBeenCalledWith({ preset: 'lastYear', from: '2025-01-01', to: '2025-12-31' });
-  });
-
-  it('drops the preset once a day is picked by hand', () => {
-    const onChange = renderPicker();
-    const dialog = openCalendar();
-    const quick = within(dialog).getByRole('group', { name: 'Быстрый выбор' });
-
-    // August 2026 ends the range, so the calendar now shows July and August; [0] is 3 July.
-    fireEvent.click(within(quick).getByRole('button', { name: 'Прошлый месяц' }));
-    fireEvent.click(within(dialog).getAllByText('3')[0]);
-
-    within(quick)
-      .getAllByRole('button')
-      .forEach((button) => expect(button).toHaveAttribute('aria-pressed', 'false'));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
-    expect(onChange).toHaveBeenCalledWith({ preset: null, from: '2026-07-03', to: '2026-07-03' });
-  });
-
   it('shows the chosen range and its length while picking', () => {
     renderPicker();
     const dialog = openCalendar();
@@ -151,7 +146,7 @@ describe('PeriodPicker', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Выбрать даты/ })).toHaveFocus();
+    expect(trigger()).toHaveFocus();
   });
 
   it('closes on «Отмена» without applying', () => {
@@ -162,7 +157,7 @@ describe('PeriodPicker', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Выбрать даты/ })).toHaveFocus();
+    expect(trigger()).toHaveFocus();
   });
 
   it('closes on an outside click without applying or moving focus', () => {
@@ -173,6 +168,6 @@ describe('PeriodPicker', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Выбрать даты/ })).not.toHaveFocus();
+    expect(trigger()).not.toHaveFocus();
   });
 });

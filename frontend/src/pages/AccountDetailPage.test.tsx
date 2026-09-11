@@ -113,7 +113,8 @@ describe('AccountDetailPage', () => {
     mockApi();
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Прошлый месяц' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Выбрать даты/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Прошлый месяц' }));
 
     await waitFor(() => expect(lastCallTo('/detail')).toEqual({ from: '2026-08-01', to: '2026-08-31' }));
     expect(lastCallTo('/posts')).toMatchObject({ from: '2026-08-01', to: '2026-08-31' });
@@ -212,6 +213,7 @@ describe('AccountDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Страница 2' }));
     await waitFor(() => expect(lastCallTo('/posts')).toMatchObject({ page: 2, size: 25 }));
 
+    fireEvent.click(screen.getByRole('button', { name: /Выбрать даты/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Прошлый месяц' }));
 
     await waitFor(() => {

@@ -1,66 +1,9 @@
 /*
- * Presets reuse the segmented-control idiom PostSortSelect shares (recessed
- * --code-bg track; the chosen segment lifts onto --bg with an accent outline).
- * Eight options wrap onto further lines on narrow screens instead of overflowing.
+ * One button names the period; presets and the calendar live together in the
+ * popover it opens.
  */
 .bar {
-  /* The popover hangs off the whole bar, so its preset column sits under the presets. */
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
-.presets {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--code-bg);
-}
-
-.option {
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1.2;
-  white-space: nowrap;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 6px 12px;
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.1s ease;
-}
-
-.option:hover {
-  color: var(--text-h);
-}
-
-.option:focus-visible {
-  outline: 2px solid var(--accent-border);
-  outline-offset: 1px;
-}
-
-.option:active {
-  transform: scale(0.97);
-}
-
-.active {
-  composes: option;
-  color: var(--text-h);
-  background: var(--bg);
-  border-color: var(--accent-border);
-  cursor: default;
 }
 
 .calendarButton {
@@ -77,7 +20,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 9px 14px 9px 12px;
+  padding: 9px 10px 9px 12px;
   cursor: pointer;
   transition:
     color 0.15s ease,
@@ -85,7 +28,8 @@
     transform 0.1s ease;
 }
 
-.calendarButton:hover {
+.calendarButton:hover,
+.calendarButton[aria-expanded='true'] {
   color: var(--text-h);
   border-color: var(--accent-border);
 }
@@ -99,22 +43,38 @@
   transform: scale(0.97);
 }
 
-/* A custom range is the active choice, so the button takes the selected look. */
-.calendarActive {
-  composes: calendarButton;
-  color: var(--text-h);
-  background: var(--accent-bg);
-  border-color: var(--accent-border);
-}
-
 .icon {
   flex: none;
   width: 16px;
   height: 16px;
+  color: var(--accent);
 }
 
-.calendarActive .icon {
-  color: var(--accent);
+.chevron {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  transition: transform 0.15s ease;
+}
+
+.calendarButton[aria-expanded='true'] .chevron {
+  transform: rotate(180deg);
+}
+
+.presetName {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.dates {
+  color: inherit;
+}
+
+/* Next to a preset name the dates read as its detail, set off by a hairline. */
+.datesAfterName {
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
 }
 
 /* Preset column on the left, two compact months side by side on the right. */
@@ -395,11 +355,15 @@
   outline-offset: 1px;
 }
 
-/* Too narrow for the column beside the calendar: presets become a scrolling row above one month. */
+/*
+ * Too narrow for the column beside the calendar: presets become a scrolling row
+ * above one month, and the popover spans the page's content width (its 24px side
+ * padding) rather than the button's.
+ */
 @media (max-width: 760px) {
   .popover {
-    right: 0;
     grid-template-columns: minmax(0, 1fr);
+    width: calc(100vw - 48px);
     max-width: none;
   }
 
@@ -425,13 +389,25 @@
   }
 }
 
+/* A phone can't fit the preset name and the dates on one line; the dates carry the meaning. */
+@media (max-width: 420px) {
+  .presetName {
+    display: none;
+  }
+
+  .datesAfterName {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .popover {
     animation: none;
   }
 
-  .option,
   .calendarButton,
+  .chevron,
   .quickOption,
   .secondary,
   .primary,
@@ -439,7 +415,6 @@
     transition: none;
   }
 
-  .option:active,
   .calendarButton:active,
   .secondary:active,
   .primary:active {

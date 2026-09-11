@@ -7,7 +7,6 @@ import {
   PRESETS,
   formatPeriod,
   fromIsoDate,
-  presetRange,
   selectPreset,
   toIsoDate,
   type PresetId,
@@ -58,10 +57,18 @@ function CalendarIcon() {
   );
 }
 
+function ChevronIcon() {
+  return (
+    <svg className={styles.chevron} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPickerProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | undefined>();
-  // The preset behind the draft, until a day is picked by hand.
+  // The applied preset stays marked in the column until a day is picked by hand.
   const [draftPreset, setDraftPreset] = useState<PresetId | null>(null);
   const [months, setMonths] = useState(2);
   const [month, setMonth] = useState<Date>(today);
@@ -102,14 +109,11 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
     setOpen(true);
   }
 
-  // A preset inside the dialog only previews: like a hand-picked range, it
-  // takes effect on «Применить».
+  // Presets live only in this column now, so one click applies them — the
+  // common case stays two clicks. Hand-picked ranges still wait for «Применить».
   function pickPreset(preset: PresetId) {
-    const range = presetRange(preset, today);
-    const to = fromIsoDate(range.to);
-    setDraft({ from: fromIsoDate(range.from), to });
-    setDraftPreset(preset);
-    setMonth(firstMonth(to, months));
+    onChange(selectPreset(preset, today));
+    close(true);
   }
 
   // The first click after opening starts a new range rather than stretching the
@@ -135,95 +139,83 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
     close(true);
   }
 
-  const label = formatPeriod(value);
+  const dates = formatPeriod(value);
+  const presetName = PRESETS.find((preset) => preset.id === value.preset)?.label;
   // A lone first click applies as a one-day period, so it reads as one.
   const draftEnd = draft?.to ?? draft?.from;
 
   return (
-    <div className={styles.bar}>
-      <div className={styles.presets} role="group" aria-label="Период">
-        {PRESETS.map((preset) => (
-          <button
-            key={preset.id}
-            type="button"
-            className={preset.id === value.preset ? styles.active : styles.option}
-            aria-pressed={preset.id === value.preset}
-            onClick={() => onChange(selectPreset(preset.id, today))}
-          >
-            {preset.label}
-          </button>
-        ))}
-      </div>
-      <div ref={wrapRef}>
-        <button
-          ref={triggerRef}
-          type="button"
-          className={value.preset === null ? styles.calendarActive : styles.calendarButton}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-label={`Выбрать даты: ${label}`}
-          onClick={() => (open ? setOpen(false) : openCalendar())}
-        >
-          <CalendarIcon />
-          {label}
-        </button>
-        {open && (
-          <div className={styles.popover} role="dialog" aria-label="Выбор периода">
-            <div className={styles.quick} role="group" aria-label="Быстрый выбор">
-              {PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className={preset.id === draftPreset ? styles.quickActive : styles.quickOption}
-                  aria-pressed={preset.id === draftPreset}
-                  onClick={() => pickPreset(preset.id)}
-                >
-                  {preset.label}
+    <div className={styles.bar} ref={wrapRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={styles.calendarButton}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Выбрать даты: ${presetName ? `${presetName}, ` : ''}${dates}`}
+        onClick={() => (open ? setOpen(false) : openCalendar())}
+      >
+        <CalendarIcon />
+        {presetName && <span className={styles.presetName}>{presetName}</span>}
+        <span className={presetName ? styles.datesAfterName : styles.dates}>{dates}</span>
+        <ChevronIcon />
+      </button>
+      {open && (
+        <div className={styles.popover} role="dialog" aria-label="Выбор периода">
+          <div className={styles.quick} role="group" aria-label="Быстрый выбор">
+            {PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={preset.id === draftPreset ? styles.quickActive : styles.quickOption}
+                aria-pressed={preset.id === draftPreset}
+                onClick={() => pickPreset(preset.id)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <div className={styles.main}>
+            <DayPicker
+              mode="range"
+              locale={ru}
+              weekStartsOn={1}
+              numberOfMonths={months}
+              month={month}
+              onMonthChange={setMonth}
+              endMonth={today}
+              selected={draft}
+              onSelect={pickDay}
+              disabled={{ after: today }}
+            />
+            <div className={styles.footer}>
+              <p className={styles.readout} aria-live="polite">
+                {draft?.from && draftEnd && (
+                  <>
+                    <span className={styles.range}>
+                      {formatPeriod({ from: toIsoDate(draft.from), to: toIsoDate(draftEnd) })}
+                    </span>
+                    <span className={styles.length}>{daysLabel(draft.from, draftEnd)}</span>
+                  </>
+                )}
+              </p>
+              <div className={styles.actions}>
+                <button type="button" className={styles.secondary} onClick={() => close(true)}>
+                  Отмена
                 </button>
-              ))}
-            </div>
-            <div className={styles.main}>
-              <DayPicker
-                mode="range"
-                locale={ru}
-                weekStartsOn={1}
-                numberOfMonths={months}
-                month={month}
-                onMonthChange={setMonth}
-                endMonth={today}
-                selected={draft}
-                onSelect={pickDay}
-                disabled={{ after: today }}
-              />
-              <div className={styles.footer}>
-                <p className={styles.readout} aria-live="polite">
-                  {draft?.from && draftEnd && (
-                    <>
-                      <span className={styles.range}>
-                        {formatPeriod({ from: toIsoDate(draft.from), to: toIsoDate(draftEnd) })}
-                      </span>
-                      <span className={styles.length}>{daysLabel(draft.from, draftEnd)}</span>
-                    </>
-                  )}
-                </p>
-                <div className={styles.actions}>
-                  <button type="button" className={styles.secondary} onClick={() => close(true)}>
-                    Отмена
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.primary}
-                    disabled={!draft?.from}
-                    onClick={apply}
-                  >
-                    Применить
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className={styles.primary}
+                  disabled={!draft?.from}
+                  onClick={apply}
+                >
+                  Применить
+                </button>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

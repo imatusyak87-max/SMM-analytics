@@ -9,6 +9,7 @@ import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post } from '../db/entities/post.entity';
 import { SyncJob, SyncStatus } from '../db/entities/sync-job.entity';
 import { calculateEr, calculateErByViews } from './er-calculator';
+import { POST_HISTORY_DAYS } from './history-window';
 
 interface SyncJobData {
   syncJobId: string;
@@ -46,7 +47,7 @@ export class SyncProcessor extends WorkerHost {
       const connector = this.registry.get(account.platform);
       const stats = await connector.getAccountStats(account);
       const since = new Date();
-      since.setDate(since.getDate() - 90);
+      since.setDate(since.getDate() - POST_HISTORY_DAYS);
       const today = new Date().toISOString().slice(0, 10);
 
       let erSum = 0;

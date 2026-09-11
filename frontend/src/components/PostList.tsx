@@ -19,27 +19,18 @@ export interface PostItem {
 
 interface PostListProps {
   posts: PostItem[];
-  sort: PostSort;
   onOpen: (post: PostItem) => void;
 }
 
-const COMPARATORS: Record<PostSort, (a: PostItem, b: PostItem) => number> = {
-  views: (a, b) => (b.views ?? 0) - (a.views ?? 0),
-  reactions: (a, b) => b.likes - a.likes,
-  er: (a, b) => (b.erViews ?? 0) - (a.erViews ?? 0),
-  date: (a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt),
-};
-
-export function PostList({ posts, sort, onOpen }: PostListProps) {
+/** Renders posts in the order given: the server sorts, so there is one ordering, not two. */
+export function PostList({ posts, onOpen }: PostListProps) {
   if (posts.length === 0) {
     return <p className={styles.empty}>Постов за этот период нет.</p>;
   }
 
-  const sorted = [...posts].sort(COMPARATORS[sort]);
-
   return (
     <ul className={styles.list}>
-      {sorted.map((post) => (
+      {posts.map((post) => (
         <li key={post.id} className={styles.item}>
           <button
             type="button"

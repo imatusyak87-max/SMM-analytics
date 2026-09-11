@@ -1,5 +1,5 @@
 /*
- * Same segmented-control idiom as PeriodSelector.module.css (recessed
+ * Same segmented-control idiom as PeriodPicker.module.css (recessed
  * --code-bg track, selected segment lifted onto --bg with an accent outline),
  * per the stat tiles' reusable-styles note: one visual idiom for the page's
  * segmented controls, not a second one for sorting.

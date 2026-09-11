@@ -4,6 +4,8 @@ import { Between, Repository } from 'typeorm';
 import { Account } from '../db/entities/account.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post, PostType } from '../db/entities/post.entity';
+import type { PostSortKey } from './dto/post-filter.dto';
+import { POST_HISTORY_DAYS } from '../sync/history-window';
 
 interface Period {
   from: string;
@@ -21,15 +23,40 @@ export interface AccountSummary {
   erFollowers: number | null;
 }
 
+export interface PostsPageQuery extends Period {
+  type?: PostType;
+  sort: PostSortKey;
+  page: number;
+  size: number;
+}
+
+export interface PostsPage {
+  total: number;
+  items: Post[];
+}
+
+/** The UI's sort names mapped to the columns they order by, in one place. */
+const SORT_COLUMNS: Record<PostSortKey, string> = {
+  views: 'post.views',
+  reactions: 'post.likes',
+  er: 'post.erViews',
+  date: 'post.publishedAt',
+};
+
+const DAY_MS = 86_400_000;
+
+export interface PostTotals {
+  postsCount: number;
+  totalViews: number;
+  totalReactions: number;
+}
+
 /**
- * Computed from the rows getAccountDetail already loads and returns, so this adds
- * no query and no rows. ER is weighted — totals over totals — because the mean of
- * per-post ERs lets a post with a dozen views dominate the channel's figure.
+ * ER is weighted — totals over totals — because the mean of per-post ERs lets a
+ * post with a dozen views dominate the channel's figure.
  */
-function summarise(posts: Post[], followersCount: number | null): AccountSummary {
-  const totalViews = posts.reduce((sum, post) => sum + (post.views ?? 0), 0);
-  const totalReactions = posts.reduce((sum, post) => sum + post.likes, 0);
-  const postsCount = posts.length;
+export function summarise(totals: PostTotals, followersCount: number | null): AccountSummary {
+  const { postsCount, totalViews, totalReactions } = totals;
 
   return {
     followersCount,
@@ -44,6 +71,10 @@ function summarise(posts: Post[], followersCount: number | null): AccountSummary
         ? (totalReactions / postsCount / followersCount) * 100
         : null,
   };
+}
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }
 
 /**
@@ -72,10 +103,11 @@ export class StatsService {
       where: { accountId, date: Between(period.from, period.to) },
       order: { date: 'ASC' },
     });
-    const posts = await this.postsRepo.find({
-      where: { accountId, publishedAt: Between(new Date(period.from), endOfDayUtc(period.to)) },
-      order: { publishedAt: 'DESC' },
+    const firstSnapshot = await this.snapshotsRepo.findOne({
+      where: { accountId },
+      order: { date: 'ASC' },
     });
+    const totals = await this.getPostTotals(accountId, period);
 
     const latestSnapshot = trend.length > 0 ? trend[trend.length - 1] : null;
 
@@ -83,19 +115,59 @@ export class StatsService {
       account,
       latestSnapshot,
       trend,
-      posts,
-      summary: summarise(posts, latestSnapshot?.followersCount ?? null),
+      summary: summarise(totals, latestSnapshot?.followersCount ?? null),
+      coverage: {
+        postsFrom: isoDate(new Date(account.createdAt.getTime() - POST_HISTORY_DAYS * DAY_MS)),
+        followersFrom: firstSnapshot?.date ?? isoDate(account.createdAt),
+      },
     };
   }
 
-  async getTopPosts(accountId: string, filter: Period & { type?: PostType }, limit: number) {
-    const where: any = { accountId, publishedAt: Between(new Date(filter.from), endOfDayUtc(filter.to)) };
-    if (filter.type) where.type = filter.type;
+  /**
+   * Counts and sums in SQL. The period's rows are no longer loaded for the browser,
+   * so loading them only to add them up would fetch a whole period to return three
+   * numbers.
+   */
+  private async getPostTotals(accountId: string, period: Period): Promise<PostTotals> {
+    const raw = await this.postsRepo
+      .createQueryBuilder('post')
+      .select('COUNT(*)', 'postsCount')
+      .addSelect('COALESCE(SUM(post.views), 0)', 'totalViews')
+      .addSelect('COALESCE(SUM(post.likes), 0)', 'totalReactions')
+      .where('post.accountId = :accountId', { accountId })
+      .andWhere('post.publishedAt BETWEEN :from AND :to', {
+        from: new Date(period.from),
+        to: endOfDayUtc(period.to),
+      })
+      .getRawOne<{ postsCount: string; totalViews: string; totalReactions: string }>();
 
-    const posts = await this.postsRepo.find({ where });
-    return posts
-      .sort((a, b) => b.likes + b.comments + b.shares - (a.likes + a.comments + a.shares))
-      .slice(0, limit);
+    // Postgres returns COUNT and SUM as bigint, which the driver hands back as strings.
+    return {
+      postsCount: Number(raw?.postsCount ?? 0),
+      totalViews: Number(raw?.totalViews ?? 0),
+      totalReactions: Number(raw?.totalReactions ?? 0),
+    };
+  }
+
+  async getPostsPage(accountId: string, query: PostsPageQuery): Promise<PostsPage> {
+    const qb = this.postsRepo
+      .createQueryBuilder('post')
+      .where('post.accountId = :accountId', { accountId })
+      .andWhere('post.publishedAt BETWEEN :from AND :to', {
+        from: new Date(query.from),
+        to: endOfDayUtc(query.to),
+      });
+    if (query.type) qb.andWhere('post.type = :type', { type: query.type });
+
+    const [items, total] = await qb
+      .orderBy(SORT_COLUMNS[query.sort], 'DESC', 'NULLS LAST')
+      .addOrderBy('post.publishedAt', 'DESC')
+      .addOrderBy('post.id', 'ASC')
+      .offset((query.page - 1) * query.size)
+      .limit(query.size)
+      .getManyAndCount();
+
+    return { total, items };
   }
 
   async getOverview() {

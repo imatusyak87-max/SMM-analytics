@@ -1,7 +1,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(8, 6, 13, 0.45);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -55,7 +55,7 @@
 .error {
   margin: 10px 0 0;
   font-size: 13px;
-  color: #d92d20;
+  color: var(--danger);
 }
 
 .resolving {
@@ -139,7 +139,7 @@
 }
 
 .submit {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border: 1px solid var(--accent);
 }
@@ -152,5 +152,5 @@
 .duplicate {
   margin: 6px 0 0;
   font-size: 13px;
-  color: var(--danger, #c0392b);
+  color: var(--danger);
 }

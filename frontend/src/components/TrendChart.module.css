@@ -1,33 +1,20 @@
+/*
+ * The app has one dark theme, so the chart has one set of series colours: the
+ * former dark set, with the purple seventh series swapped for the brand lime.
+ */
 .chart {
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --series-3: #1baf7a;
-  --series-4: #eda100;
-  --series-5: #e87ba4;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
   --series-6: #008300;
-  --series-7: #4a3aa7;
-  --series-8: #e34948;
+  --series-7: #ccff00;
+  --series-8: #e66767;
 
-  --chart-muted: #898781;
-  --chart-grid: #e1e0d9;
-  --chart-axis: #c3c2b7;
+  --chart-muted: #8a8a8a;
+  --chart-grid: #1f1f1f;
+  --chart-axis: #333333;
 
   width: 100%;
-}
-
-@media (prefers-color-scheme: dark) {
-  .chart {
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --series-4: #c98500;
-    --series-5: #d55181;
-    --series-6: #008300;
-    --series-7: #9085e9;
-    --series-8: #e66767;
-
-    --chart-muted: #898781;
-    --chart-grid: #2c2c2a;
-    --chart-axis: #383835;
-  }
 }

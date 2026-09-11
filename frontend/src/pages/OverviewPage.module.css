@@ -26,7 +26,7 @@
   padding: 9px 18px;
   font-size: 14px;
   font-weight: 500;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: 8px;

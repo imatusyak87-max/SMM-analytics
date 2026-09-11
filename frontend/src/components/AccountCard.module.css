@@ -43,8 +43,8 @@
 
 .delete:hover,
 .delete:focus-visible {
-  color: #d92d20;
-  background: rgba(217, 45, 32, 0.1);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
   outline: none;
 }
 

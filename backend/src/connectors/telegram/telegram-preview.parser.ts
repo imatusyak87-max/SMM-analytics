@@ -59,9 +59,14 @@ export function parsePreviewPage(
     const video = backgroundUrl(
       message.find('.tgme_widget_message_video_thumb').attr('style'),
     );
+    // A round video message keeps its preview image in an element of its own.
+    const roundVideo = backgroundUrl(
+      message.find('.tgme_widget_message_roundvideo_thumb').attr('style'),
+    );
 
     let type = PostType.POST;
-    if (video) type = PostType.VIDEO;
+    if (roundVideo) type = PostType.ROUND_VIDEO;
+    else if (video) type = PostType.VIDEO;
     else if (photo) type = PostType.IMAGE;
 
     let reactions = 0;
@@ -89,7 +94,7 @@ export function parsePreviewPage(
       externalPostId,
       publishedAt: new Date(datetime),
       caption: caption.length > 0 ? caption : null,
-      thumbnailUrl: video ?? photo,
+      thumbnailUrl: roundVideo ?? video ?? photo,
       views: parseCompactNumber(
         message.find('.tgme_widget_message_views').first().text(),
       ),

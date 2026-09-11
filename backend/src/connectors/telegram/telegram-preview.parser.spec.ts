@@ -100,6 +100,25 @@ describe('parsePreviewPage', () => {
   });
 });
 
+// A round video message («кружочек») has no text, and its preview image is in an
+// element of its own rather than the photo or video one. A real post from
+// @korableva_prohealth.
+describe('parsePreviewPage on a round video message', () => {
+  it('types it as a round video, with its preview image as the thumbnail', () => {
+    const [post] = parsePreviewPage(
+      fixture('preview-roundvideo.html'),
+      'korableva_prohealth',
+    );
+
+    expect(post.externalPostId).toBe('19343');
+    expect(post.type).toBe(PostType.ROUND_VIDEO);
+    expect(post.thumbnailUrl).toMatch(
+      /^https:\/\/cdn4\.telesco\.pe\/file\/TBYUQt2_/,
+    );
+    expect(post.views).toBe(766);
+  });
+});
+
 // A channel that disabled its web preview still serves each post's embed page
 // (t.me/<channel>/<id>?embed=1). These fixtures are real pages from @ehinaceya.
 describe('parsePreviewPage on a single-post embed page', () => {

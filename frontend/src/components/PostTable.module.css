@@ -101,6 +101,11 @@
   background: var(--code-bg);
 }
 
+/* A round video message is a circle in Telegram too. */
+.round {
+  border-radius: 50%;
+}
+
 .caption {
   overflow: hidden;
   text-overflow: ellipsis;

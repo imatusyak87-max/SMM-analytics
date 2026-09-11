@@ -51,6 +51,19 @@ describe('PostTable', () => {
     expect(row.getAllByText('—')).toHaveLength(3);
   });
 
+  // A round video message never has text of its own, so «Без текста» would
+  // describe every one of them without saying what the post actually is.
+  it('names a round video message instead of saying it has no text', () => {
+    const roundVideo = {
+      ...posts[1], id: 'p3', type: 'round_video', thumbnailUrl: 'https://cdn/p3',
+    };
+    render(<PostTable posts={[roundVideo]} total={1} onOpen={noop} />);
+    const row = within(bodyRow(0));
+
+    expect(row.getByText('Кружочек')).toBeInTheDocument();
+    expect(row.queryByText('Без текста')).not.toBeInTheDocument();
+  });
+
   it('opens the post whose row is clicked, and focuses its button for the modal to return to', () => {
     const onOpen = vi.fn();
     render(<PostTable posts={posts} total={2} onOpen={onOpen} />);

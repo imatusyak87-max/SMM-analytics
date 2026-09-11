@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import styles from './PostModal.module.css';
 import { formatCount, formatPercent } from '../format';
+import { isRoundVideo } from '../postType';
 import type { PostItem } from './PostList';
 
 interface PostModalProps {
@@ -52,7 +53,11 @@ export function PostModal({ post, onClose }: PostModalProps) {
           ×
         </button>
         {post.thumbnailUrl && (
-          <img className={styles.image} src={post.thumbnailUrl} alt="" />
+          <img
+            className={isRoundVideo(post) ? `${styles.image} ${styles.round}` : styles.image}
+            src={post.thumbnailUrl}
+            alt=""
+          />
         )}
         <time className={styles.date} dateTime={post.publishedAt}>
           {dateTimeFormat.format(new Date(post.publishedAt))}

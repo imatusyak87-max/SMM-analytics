@@ -6,6 +6,8 @@ export enum PostType {
   REEL = 'reel',
   CAROUSEL = 'carousel',
   VIDEO = 'video',
+  /** Telegram's round video message («кружочек»). */
+  ROUND_VIDEO = 'round_video',
   SHORT = 'short',
   STORY = 'story',
 }

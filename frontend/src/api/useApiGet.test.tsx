@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useApiGet } from './useApiGet';
 import { apiClient } from './client';
@@ -59,8 +59,12 @@ describe('useApiGet', () => {
     });
     rerender({ enabled: false });
 
-    slow.resolve({ data: 'late' });
-    await new Promise((r) => setTimeout(r, 0));
+    // Resolve inside act so React commits any state write before we assert —
+    // otherwise a late write would be invisible and the test would pass either way.
+    await act(async () => {
+      slow.resolve({ data: 'late' });
+      await slow.promise;
+    });
     expect(result.current.data).toBeNull();
   });
 

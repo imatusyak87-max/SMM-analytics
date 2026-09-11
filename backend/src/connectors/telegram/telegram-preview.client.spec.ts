@@ -13,13 +13,19 @@ describe('TelegramPreviewClient', () => {
     const html = await new TelegramPreviewClient().fetchPage('testchannel');
 
     expect(html).toBe('<html>page</html>');
-    expect(mockedGet).toHaveBeenCalledWith('https://t.me/s/testchannel', expect.anything());
+    expect(mockedGet).toHaveBeenCalledWith(
+      'https://t.me/s/testchannel',
+      expect.anything(),
+    );
   });
 
   it('strips a leading @ from the handle', async () => {
     mockedGet.mockResolvedValue({ data: '' });
     await new TelegramPreviewClient().fetchPage('@testchannel');
-    expect(mockedGet).toHaveBeenCalledWith('https://t.me/s/testchannel', expect.anything());
+    expect(mockedGet).toHaveBeenCalledWith(
+      'https://t.me/s/testchannel',
+      expect.anything(),
+    );
   });
 
   it('asks for older posts with the before parameter', async () => {
@@ -27,6 +33,21 @@ describe('TelegramPreviewClient', () => {
     await new TelegramPreviewClient().fetchPage('testchannel', '101');
     expect(mockedGet).toHaveBeenCalledWith(
       'https://t.me/s/testchannel?before=101',
+      expect.anything(),
+    );
+  });
+
+  it('fetches the embed page of a single post', async () => {
+    mockedGet.mockResolvedValue({ data: '<html>post</html>' });
+
+    const html = await new TelegramPreviewClient().fetchEmbed(
+      '@testchannel',
+      '842',
+    );
+
+    expect(html).toBe('<html>post</html>');
+    expect(mockedGet).toHaveBeenCalledWith(
+      'https://t.me/testchannel/842?embed=1',
       expect.anything(),
     );
   });

@@ -1,20 +1,26 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PostType } from '../../db/entities/post.entity';
-import { parsePreviewPage, PreviewUnavailableError } from './telegram-preview.parser';
+import {
+  parsePreviewPage,
+  PreviewUnavailableError,
+} from './telegram-preview.parser';
 
 const fixture = (name: string) =>
   readFileSync(join(__dirname, '__fixtures__', name), 'utf-8');
 
 describe('parsePreviewPage', () => {
-  const posts = () => parsePreviewPage(fixture('preview-page.html'), 'testchannel');
+  const posts = () =>
+    parsePreviewPage(fixture('preview-page.html'), 'testchannel');
 
   it('reads every post on the page, newest last as rendered', () => {
     expect(posts().map((p) => p.externalPostId)).toEqual(['101', '102', '103']);
   });
 
   it('reads the exact publication time, not just the date', () => {
-    expect(posts()[1].publishedAt.toISOString()).toBe('2026-09-02T12:30:45.000Z');
+    expect(posts()[1].publishedAt.toISOString()).toBe(
+      '2026-09-02T12:30:45.000Z',
+    );
   });
 
   it('reads text, views and the summed reaction counts', () => {
@@ -60,12 +66,20 @@ describe('parsePreviewPage', () => {
   });
 
   it('types a post by its media: photos are IMAGE, video is VIDEO, neither is POST', () => {
-    expect(posts().map((p) => p.type)).toEqual([PostType.POST, PostType.IMAGE, PostType.VIDEO]);
+    expect(posts().map((p) => p.type)).toEqual([
+      PostType.POST,
+      PostType.IMAGE,
+      PostType.VIDEO,
+    ]);
   });
 
   it('takes the image from a photo post and the thumbnail from a video', () => {
-    expect(posts()[1].thumbnailUrl).toBe('https://cdn4.telesco.pe/file/photo102');
-    expect(posts()[2].thumbnailUrl).toBe('https://cdn4.telesco.pe/file/video103');
+    expect(posts()[1].thumbnailUrl).toBe(
+      'https://cdn4.telesco.pe/file/photo102',
+    );
+    expect(posts()[2].thumbnailUrl).toBe(
+      'https://cdn4.telesco.pe/file/video103',
+    );
     expect(posts()[0].thumbnailUrl).toBeNull();
   });
 
@@ -76,8 +90,44 @@ describe('parsePreviewPage', () => {
   // A page with no posts means the markup changed or the channel hid its preview.
   // Returning [] would be indistinguishable from a channel that simply went quiet.
   it('throws rather than returning nothing when the page holds no posts', () => {
-    expect(() => parsePreviewPage(fixture('preview-unavailable.html'), 'testchannel')).toThrow(
-      PreviewUnavailableError,
+    expect(() =>
+      parsePreviewPage(fixture('preview-unavailable.html'), 'testchannel'),
+    ).toThrow(PreviewUnavailableError);
+  });
+
+  it('marks ordinary posts as not part of an album', () => {
+    expect(posts().map((p) => p.grouped)).toEqual([false, false, false]);
+  });
+});
+
+// A channel that disabled its web preview still serves each post's embed page
+// (t.me/<channel>/<id>?embed=1). These fixtures are real pages from @ehinaceya.
+describe('parsePreviewPage on a single-post embed page', () => {
+  it('reads the one post the embed shows', () => {
+    const [post] = parsePreviewPage(fixture('embed-post.html'), 'ehinaceya');
+
+    expect(post.externalPostId).toBe('842');
+    expect(post.publishedAt.toISOString()).toBe('2026-09-09T17:32:30.000Z');
+    expect(post.views).toBe(145);
+    expect(post.grouped).toBe(false);
+  });
+
+  // Every part of an album has its own id and embed page, each repeating the
+  // album's views and reactions. The walk must know a page is an album part to
+  // count the album once.
+  it('marks a post that is one part of an album', () => {
+    const [post] = parsePreviewPage(
+      fixture('embed-album-part.html'),
+      'ehinaceya',
     );
+
+    expect(post.externalPostId).toBe('826');
+    expect(post.grouped).toBe(true);
+  });
+
+  it('throws for a deleted or not-yet-published post, whose embed says "Post not found"', () => {
+    expect(() =>
+      parsePreviewPage(fixture('embed-not-found.html'), 'ehinaceya'),
+    ).toThrow(PreviewUnavailableError);
   });
 });

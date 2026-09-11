@@ -278,10 +278,20 @@ current page, not the newest.
 
 Two limits are inherent to this source, not bugs:
 
-- **A channel that has disabled its web preview cannot be tracked for posts.**
-  `t.me/s/<channel>` returns a page with no post blocks for such a channel,
-  and `parsePreviewPage` throws `PreviewUnavailableError` rather than
-  reporting zero posts silently.
+- **A channel that has disabled its web preview is read one post at a time.**
+  `t.me/s/<channel>` redirects such a channel to its card page, which has no
+  post blocks, so `parsePreviewPage` throws `PreviewUnavailableError` on the
+  first page rather than reporting zero posts silently. `TelegramConnector.getPosts`
+  then falls back to each post's embed page, `t.me/<channel>/<id>?embed=1`,
+  which Telegram still serves: it finds the newest post id by probing, walks
+  down id by id until it leaves the history window, skips deleted ids (their
+  embed says "Post not found"), and counts an album once, under its lowest id,
+  as the preview page would. That is one request per post, capped at 300 per
+  sync — a busy channel over a long window is cut short with a logged warning.
+  The sync fails only when no embed page exists either. Such channels usually
+  also restrict saving content, and their embeds then say "Please open Telegram
+  to view this post" instead of showing it: views, reactions and dates still
+  come through, but captions and thumbnails do not.
 - **View counts above 1000 are rounded by Telegram** in the page markup itself
   (e.g. `24.2M`, `3.38M`) — `parseCompactNumber` decodes the suffix, but the
   precision loss happens upstream, before the HTML is even generated. This is
@@ -369,14 +379,15 @@ exits non-zero only on an actual break, never on end-of-history — see below.
 
 `parsePreviewPage` never returns an empty array: per its own source, whenever it finds zero post
 blocks it throws `PreviewUnavailableError` instead (see "A channel that has disabled its web
-preview cannot be tracked for posts" above). So "zero posts" is never something this script
+preview is read one post at a time" above). So "zero posts" is never something this script
 prints — it is something that surfaces as a caught exception, and which exception, on which page,
 is what tells break apart from ordinary end-of-history:
 
 - **`PAGE 1 BROKEN` (`PreviewUnavailableError` on the *first* page)** is a real break: either the
-  markup changed, or the channel disabled its web preview. `TelegramConnector.getPosts` treats
-  this the same way — a first-page `PreviewUnavailableError` is rethrown and fails the sync job —
-  so this script's exit code matches production behavior. Exits non-zero.
+  markup changed, or the channel disabled its web preview. `durov` keeps its preview enabled, so
+  here it means the markup changed. Production does not fail on it straight away:
+  `TelegramConnector.getPosts` falls back to per-post embed pages and fails the sync job only if
+  those yield nothing either. This script does not try that fallback. Exits non-zero.
 - **`PAGE 2 END OF HISTORY` (`PreviewUnavailableError` on a *later* page)** is normal, not a
   failure: it means the channel's whole history fit on the pages already walked.
   `TelegramConnector.getPosts` treats this identically — a later-page `PreviewUnavailableError`

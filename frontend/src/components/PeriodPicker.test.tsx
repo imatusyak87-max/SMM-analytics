@@ -94,6 +94,54 @@ describe('PeriodPicker', () => {
     expect(onChange).toHaveBeenCalledWith({ preset: null, from: '2026-08-05', to: '2026-08-05' });
   });
 
+  it('lists the presets beside the calendar, marking the current one', () => {
+    renderPicker();
+    const dialog = openCalendar();
+    const quick = within(dialog).getByRole('group', { name: 'Быстрый выбор' });
+
+    expect(within(quick).getAllByRole('button')).toHaveLength(8);
+    expect(within(quick).getByRole('button', { name: 'Последние 30 дней' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('previews a preset from the calendar and applies it only on «Применить»', () => {
+    const onChange = renderPicker();
+    const dialog = openCalendar();
+    const quick = within(dialog).getByRole('group', { name: 'Быстрый выбор' });
+
+    fireEvent.click(within(quick).getByRole('button', { name: 'Прошлый год' }));
+    expect(onChange).not.toHaveBeenCalled();
+    // The calendar jumps to the preset, so its end is in view.
+    expect(within(dialog).getByText(/декабрь 2025/i)).toBeInTheDocument();
+    expect(within(quick).getByRole('button', { name: 'Прошлый год' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
+    expect(onChange).toHaveBeenCalledWith({ preset: 'lastYear', from: '2025-01-01', to: '2025-12-31' });
+  });
+
+  it('drops the preset once a day is picked by hand', () => {
+    const onChange = renderPicker();
+    const dialog = openCalendar();
+    const quick = within(dialog).getByRole('group', { name: 'Быстрый выбор' });
+
+    // August 2026 ends the range, so the calendar now shows July and August; [0] is 3 July.
+    fireEvent.click(within(quick).getByRole('button', { name: 'Прошлый месяц' }));
+    fireEvent.click(within(dialog).getAllByText('3')[0]);
+
+    within(quick)
+      .getAllByRole('button')
+      .forEach((button) => expect(button).toHaveAttribute('aria-pressed', 'false'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
+    expect(onChange).toHaveBeenCalledWith({ preset: null, from: '2026-07-03', to: '2026-07-03' });
+  });
+
+  it('shows the chosen range and its length while picking', () => {
+    renderPicker();
+    const dialog = openCalendar();
+
+    expect(within(dialog).getByText('13.08.2026 – 11.09.2026')).toBeInTheDocument();
+    expect(within(dialog).getByText('30 дней')).toBeInTheDocument();
+  });
+
   it('closes on Escape without applying', () => {
     const onChange = renderPicker();
     const dialog = openCalendar();

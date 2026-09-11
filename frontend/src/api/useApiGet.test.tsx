@@ -50,6 +50,20 @@ describe('useApiGet', () => {
     expect(result.current.data).toBe('page 2');
   });
 
+  it('ignores a response that arrives after the hook is disabled', async () => {
+    const slow = deferred<any>();
+    get.mockReturnValueOnce(slow.promise);
+
+    const { result, rerender } = renderHook(({ enabled }) => useApiGet('/x', {}, { enabled }), {
+      initialProps: { enabled: true },
+    });
+    rerender({ enabled: false });
+
+    slow.resolve({ data: 'late' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(result.current.data).toBeNull();
+  });
+
   it('does not refetch when the params are equal but a new object', async () => {
     get.mockResolvedValue({ data: 1 });
 

@@ -26,8 +26,10 @@ export function useApiGet<T>(
   const paramsKey = JSON.stringify(params);
 
   useEffect(() => {
-    if (!enabled) return;
+    // Taken before the enabled check, so disabling the hook also invalidates a
+    // request already in flight.
     const request = ++latest.current;
+    if (!enabled) return;
     setState((current) => ({ ...current, pending: true }));
     apiClient
       .get(url, { params: JSON.parse(paramsKey) })

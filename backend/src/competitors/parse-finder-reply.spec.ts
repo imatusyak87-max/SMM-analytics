@@ -60,4 +60,26 @@ describe('parseFinderReply', () => {
       'Модель вернула ответ без каналов',
     );
   });
+
+  it('parses JSON followed by prose containing a closing brace', () => {
+    expect(parseFinderReply(reply + '\nНадеюсь, помог :}').candidates).toHaveLength(2);
+  });
+
+  it('parses a reply whose reason value contains a brace and escaped quote', () => {
+    const withBraceInReason = JSON.stringify({
+      niche: 'Тест',
+      competitors: [
+        { handle: 'test_channel', reason: 'Формат {новости} и "цитаты"', fit: 7 },
+      ],
+    });
+    const result = parseFinderReply(withBraceInReason);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0].reason).toBe('Формат {новости} и "цитаты"');
+  });
+
+  it('throws when text has opening brace but no matching close', () => {
+    expect(() => parseFinderReply('{"niche":"Тест","competitors":[')).toThrow(
+      'Модель вернула ответ без каналов',
+    );
+  });
 });

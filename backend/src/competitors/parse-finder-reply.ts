@@ -22,8 +22,35 @@ export function normalizeHandle(raw: string): string | null {
 /** The model may wrap its JSON in prose or a code fence, so take the outermost object. */
 function extractJson(text: string): unknown {
   const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end <= start) throw new Error('Модель вернула ответ без каналов');
+  if (start === -1) throw new Error('Модель вернула ответ без каналов');
+
+  // Brace-depth scan: track depth while ignoring braces inside string literals and respecting escapes
+  let depth = 0;
+  let inString = false;
+  let end = -1;
+
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    const prevChar = i > 0 ? text[i - 1] : '';
+
+    // Check if this quote is escaped
+    if (char === '"' && prevChar !== '\\') {
+      inString = !inString;
+    } else if (!inString) {
+      if (char === '{') {
+        depth++;
+      } else if (char === '}') {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (end === -1) throw new Error('Модель вернула ответ без каналов');
+
   try {
     return JSON.parse(text.slice(start, end + 1));
   } catch {

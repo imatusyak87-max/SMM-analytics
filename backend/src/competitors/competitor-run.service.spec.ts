@@ -60,7 +60,29 @@ describe('CompetitorRunService', () => {
     await expect(service.createManual('acc-1')).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
-  it('createForNewAccount enqueues once and never again for that account', async () => {
+  it('createForNewAccount enqueues for a fresh account', async () => {
+    const { service, runsRepo, queue } = makeService();
+
+    const run = await service.createForNewAccount('acc-1');
+
+    expect(runsRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: 'acc-1',
+        trigger: CompetitorRunTrigger.ACCOUNT_ADDED,
+        status: CompetitorRunStatus.PENDING,
+        llmProvider: 'gemini',
+        llmModel: 'gemini-2.5-flash',
+      }),
+    );
+    expect(queue.add).toHaveBeenCalledWith(
+      'find-competitors',
+      { runId: 'run-1', accountId: 'acc-1' },
+      expect.objectContaining({ attempts: 2, backoff: { type: 'exponential', delay: 60000 } }),
+    );
+    expect(run.id).toBe('run-1');
+  });
+
+  it('createForNewAccount does not enqueue when the account already has a run', async () => {
     const { service, queue } = makeService({
       runs: {
         findOne: jest.fn().mockResolvedValue(null),

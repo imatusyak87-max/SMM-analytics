@@ -382,17 +382,64 @@ export function normalizeHandle(raw: string): string | null {
   return HANDLE.test(cleaned) ? cleaned : null;
 }
 
-/** The model may wrap its JSON in prose or a code fence, so take the outermost object. */
+/**
+ * The model may wrap its JSON in prose or a code fence, so take the outermost
+ * object. Scan brace depth from the first '{' to ITS matching '}' — taking the
+ * last '}' in the text instead would swallow any brace in trailing prose (':}'
+ * in a sign-off, a brace in an explanation) and reject a usable reply. Braces
+ * inside string literals do not count, and a quote only ends a string when an
+ * even number of backslashes precedes it, so a value ending in a literal
+ * backslash cannot desynchronize the scan.
+ */
 function extractJson(text: string): unknown {
   const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end <= start) throw new Error('Модель вернула ответ без каналов');
+  if (start === -1) throw new Error('Модель вернула ответ без каналов');
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let end = -1;
+
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+
+    if (inString) {
+      if (char === '\\') {
+        escaped = !escaped;
+      } else if (char === '"' && !escaped) {
+        inString = false;
+      } else {
+        escaped = false;
+      }
+    } else if (char === '"') {
+      inString = true;
+      escaped = false;
+    } else if (char === '{') {
+      depth++;
+    } else if (char === '}') {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+
+  if (end === -1) throw new Error('Модель вернула ответ без каналов');
   try {
     return JSON.parse(text.slice(start, end + 1));
   } catch {
     throw new Error('Модель вернула ответ без каналов');
   }
 }
+```
+
+Task 2's tests must also cover what the naive version got wrong: JSON followed by
+prose containing `:}`, a `reason` holding a brace and an escaped quote, a `reason`
+ending in a literal backslash (build it with `JSON.stringify`, not hand-written
+escapes), and an unterminated object still raising the Russian error.
+
+```ts
 
 export function parseFinderReply(text: string): ParsedReply {
   const parsed = extractJson(text) as { niche?: unknown; competitors?: unknown };

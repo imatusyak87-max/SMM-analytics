@@ -79,7 +79,8 @@ describe('CompetitorRunService', () => {
       { runId: 'run-1', accountId: 'acc-1' },
       expect.objectContaining({ attempts: 2, backoff: { type: 'exponential', delay: 60000 } }),
     );
-    expect(run.id).toBe('run-1');
+    expect(run).not.toBeNull();
+    expect(run?.id).toBe('run-1');
   });
 
   it('createForNewAccount does not enqueue when the account already has a run', async () => {

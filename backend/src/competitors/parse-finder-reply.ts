@@ -27,17 +27,28 @@ function extractJson(text: string): unknown {
   // Brace-depth scan: track depth while ignoring braces inside string literals and respecting escapes
   let depth = 0;
   let inString = false;
+  let escaped = false;
   let end = -1;
 
   for (let i = start; i < text.length; i++) {
     const char = text[i];
-    const prevChar = i > 0 ? text[i - 1] : '';
 
-    // Check if this quote is escaped
-    if (char === '"' && prevChar !== '\\') {
-      inString = !inString;
-    } else if (!inString) {
-      if (char === '{') {
+    if (inString) {
+      // Track escape sequences: toggle escaped on each backslash, reset on other chars
+      if (char === '\\') {
+        escaped = !escaped;
+      } else if (char === '"' && !escaped) {
+        // Only toggle inString if the quote is not escaped (even # of preceding backslashes)
+        inString = false;
+      } else {
+        escaped = false;
+      }
+    } else {
+      // Not in string
+      if (char === '"') {
+        inString = true;
+        escaped = false;
+      } else if (char === '{') {
         depth++;
       } else if (char === '}') {
         depth--;

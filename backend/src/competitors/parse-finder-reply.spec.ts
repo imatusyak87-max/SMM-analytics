@@ -82,4 +82,15 @@ describe('parseFinderReply', () => {
       'Модель вернула ответ без каналов',
     );
   });
+
+  it('parses a reply whose reason ends in a literal backslash', () => {
+    const withBackslash = JSON.stringify({
+      niche: 'Тест',
+      competitors: [{ handle: 'ok_channel', reason: 'Путь C:\\', fit: 5 }],
+    });
+
+    const result = parseFinderReply(`${withBackslash}\nГотово :}`);
+
+    expect(result.candidates).toEqual([{ handle: 'ok_channel', reason: 'Путь C:\\', fit: 5 }]);
+  });
 });

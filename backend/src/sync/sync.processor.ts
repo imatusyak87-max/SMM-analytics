@@ -10,6 +10,7 @@ import { Post } from '../db/entities/post.entity';
 import { SyncJob, SyncStatus } from '../db/entities/sync-job.entity';
 import { calculateEr, calculateErByViews } from './er-calculator';
 import { POST_HISTORY_DAYS } from './history-window';
+import { CompetitorRunService } from '../competitors/competitor-run.service';
 
 interface SyncJobData {
   syncJobId: string;
@@ -31,6 +32,7 @@ export class SyncProcessor extends WorkerHost {
     @InjectRepository(AccountSnapshot) private snapshotsRepo: Repository<AccountSnapshot>,
     @InjectRepository(Post) private postsRepo: Repository<Post>,
     @InjectRepository(SyncJob) private syncJobsRepo: Repository<SyncJob>,
+    private competitorRuns: CompetitorRunService,
   ) {
     super();
   }
@@ -104,6 +106,7 @@ export class SyncProcessor extends WorkerHost {
       );
 
       await this.syncJobsRepo.update(syncJobId, { status: SyncStatus.SUCCESS, finishedAt: new Date() });
+      await this.startCompetitorDiscovery(accountId);
     } catch (error) {
       // Only the last attempt is a real failure — marking earlier ones FAILED would
       // show the user a failure that a retry is about to fix.
@@ -122,11 +125,26 @@ export class SyncProcessor extends WorkerHost {
             (updateError as Error).stack,
           );
         }
+
+        await this.startCompetitorDiscovery(accountId);
       }
 
       // BullMQ decides retry and backoff from a rejected promise; swallowing here
       // marked every failed job successful.
       throw error;
+    }
+  }
+
+  /**
+   * Discovery needs captions, which exist only after a sync. The guard inside
+   * createForNewAccount is "this account has no run yet", so the nightly sync
+   * never re-runs it. Queueing must never turn a finished sync into a failed one.
+   */
+  private async startCompetitorDiscovery(accountId: string): Promise<void> {
+    try {
+      await this.competitorRuns.createForNewAccount(accountId);
+    } catch (error) {
+      this.logger.warn(`Could not queue competitor discovery for ${accountId}: ${(error as Error).message}`);
     }
   }
 }

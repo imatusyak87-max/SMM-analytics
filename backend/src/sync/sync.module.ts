@@ -10,12 +10,14 @@ import { SyncProcessor } from './sync.processor';
 import { SyncScheduler } from './sync.scheduler';
 import { SyncController } from './sync.controller';
 import { ConnectorsModule } from '../connectors/connectors.module';
+import { CompetitorsModule } from '../competitors/competitors.module';
 
 @Module({
   imports: [
     BullModule.registerQueue({ name: 'sync' }),
     TypeOrmModule.forFeature([Account, AccountSnapshot, Post, SyncJob]),
     ConnectorsModule,
+    CompetitorsModule,
   ],
   controllers: [SyncController],
   providers: [SyncJobService, SyncProcessor, SyncScheduler],

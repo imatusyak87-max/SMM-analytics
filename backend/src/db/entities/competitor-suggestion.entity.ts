@@ -7,7 +7,7 @@ export class CompetitorSuggestion {
   @PrimaryGeneratedColumn('uuid') id: string;
   @Column('uuid') runId: string;
   @Column('uuid') accountId: string;
-  /** Lowercased handle without '@', matching Account.externalId. */
+  /** Lowercased handle WITHOUT '@'. Account.externalId stores the '@'-prefixed form, so comparisons must add it. */
   @Column({ type: 'varchar', length: 64 }) externalId: string;
   @Column({ type: 'varchar', length: 256 }) name: string;
   @Column({ type: 'int' }) followersCount: number;

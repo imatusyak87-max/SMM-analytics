@@ -31,7 +31,10 @@ export class CompetitorVerifier {
       if (seen.has(candidate.handle)) continue;
       seen.add(candidate.handle);
 
-      const draft = { platform: AccountPlatform.TELEGRAM, externalId: candidate.handle } as Account;
+      // Candidate handles are bare (see parse-finder-reply.ts), but the Telegram Bot
+      // API and Account.externalId both expect a leading '@' — re-add it only for
+      // this call; VerifiedCandidate.handle stays bare.
+      const draft = { platform: AccountPlatform.TELEGRAM, externalId: `@${candidate.handle}` } as Account;
       try {
         const info = await connector.getAccountInfo(draft);
         const stats = await connector.getAccountStats(draft);

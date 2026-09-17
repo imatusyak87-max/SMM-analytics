@@ -25,6 +25,14 @@ describe('CompetitorVerifier', () => {
     expect(result).toEqual([
       { handle: 'rival', name: 'Конкурент', followersCount: 4200, reason: 'Та же тема', fit: 8 },
     ]);
+    // Account.externalId is stored WITH a leading '@' (see parseAccountLink), and the
+    // Telegram Bot API requires it — the bare handle from the model must be re-prefixed.
+    expect(connector.getAccountInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ externalId: '@rival' }),
+    );
+    expect(connector.getAccountStats).toHaveBeenCalledWith(
+      expect.objectContaining({ externalId: '@rival' }),
+    );
   });
 
   it('drops handles Telegram does not resolve', async () => {
@@ -59,5 +67,20 @@ describe('CompetitorVerifier', () => {
     );
 
     expect(result.map((c) => c.handle)).toEqual(['rival']);
+  });
+
+  it('drops a candidate entirely when stats cannot be fetched, even if info resolved', async () => {
+    const connector = {
+      getAccountInfo: jest.fn().mockResolvedValue({ name: 'Конкурент', description: null, avatarUrl: null }),
+      getAccountStats: jest.fn().mockRejectedValue(new Error('429')),
+    };
+    const registry = { get: jest.fn().mockReturnValue(connector) } as any;
+
+    const result = await new CompetitorVerifier(registry).verify(
+      [{ handle: 'rival', reason: 'Та же тема', fit: 8 }],
+      profile,
+    );
+
+    expect(result).toEqual([]);
   });
 });

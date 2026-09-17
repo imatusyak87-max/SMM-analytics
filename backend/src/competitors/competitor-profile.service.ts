@@ -35,7 +35,11 @@ export class CompetitorProfileService {
     });
 
     return {
-      handle: account.externalId,
+      // Account.externalId is stored WITH a leading '@' (see parseAccountLink), but
+      // ChannelProfile.handle and RankedCandidate.handle are bare everywhere else in
+      // this feature — normalise here so self-exclusion in the verifier compares
+      // like with like.
+      handle: account.externalId.replace(/^@/, '').toLowerCase(),
       title: info.name ?? account.name,
       followersCount,
       description: info.description ?? null,

@@ -2,7 +2,7 @@ import { CompetitorProfileService } from './competitor-profile.service';
 import { AccountPlatform } from '../db/entities/account.entity';
 
 describe('CompetitorProfileService', () => {
-  const account = { id: 'acc-1', platform: AccountPlatform.TELEGRAM, externalId: 'mychannel', name: 'Мой канал' } as any;
+  const account = { id: 'acc-1', platform: AccountPlatform.TELEGRAM, externalId: '@mychannel', name: 'Мой канал' } as any;
 
   it('builds a profile from the connector info and the 30 newest captions', async () => {
     const connector = {

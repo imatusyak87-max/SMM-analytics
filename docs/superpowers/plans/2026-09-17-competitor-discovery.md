@@ -18,6 +18,7 @@
 - **Model:** `gemini-2.5-flash`, with the `google_search` tool. Grounding is free only on 2.5 models, so do not "upgrade" this string.
 - **Provider seam:** the worker must depend only on the `CompetitorFinder` interface, never on `GeminiFinder` directly.
 - **Never trust model output.** Every handle is verified through the Bot API before it is stored; follower counts always come from Telegram, never from the model.
+- **Two handle formats exist — never conflate them.** `Account.externalId` is stored WITH a leading `@`, lowercased (`accounts/parse-account-link.ts:67`), and the Telegram connector passes it straight to the Bot API, which rejects a bare username. Candidate handles from `parse-finder-reply.ts` are BARE and lowercased. The rule: handles stay bare everywhere inside the competitors module (`ChannelProfile.handle`, `RankedCandidate.handle`, `CompetitorSuggestion.externalId`, t.me links), and the `@` is re-added only when calling the Bot API or when comparing against `Account.externalId`. Test fixtures must use the realistic `@`-prefixed form for accounts — self-consistent bare fixtures hide this bug.
 - **Tests never touch the network.** axios is mocked in every test.
 - **Frontend tests use `vi.clearAllMocks()` in `beforeEach`, never `mockReset`** — `mockReset` breaks `mockRejectedValue` in this suite.
 - **CSS:** reuse the existing CSS-module patterns and custom properties from neighbouring components (e.g. `PostList.module.css`). Do not hardcode brand colours.
@@ -1080,7 +1081,8 @@ export class CompetitorProfileService {
     });
 
     return {
-      handle: account.externalId,
+      // Account.externalId is stored '@handle'; inside this module handles are bare.
+      handle: account.externalId.replace(/^@/, '').toLowerCase(),
       title: info.name ?? account.name,
       followersCount,
       description: info.description ?? null,
@@ -1126,7 +1128,8 @@ export class CompetitorVerifier {
       if (seen.has(candidate.handle)) continue;
       seen.add(candidate.handle);
 
-      const draft = { platform: AccountPlatform.TELEGRAM, externalId: candidate.handle } as Account;
+      // The Bot API needs the '@'; a bare username is rejected as "chat not found".
+      const draft = { platform: AccountPlatform.TELEGRAM, externalId: `@${candidate.handle}` } as Account;
       try {
         const info = await connector.getAccountInfo(draft);
         const stats = await connector.getAccountStats(draft);
@@ -1678,7 +1681,8 @@ describe('CompetitorsService.getFor', () => {
       ]),
     } as any;
     const accountsRepo = {
-      find: jest.fn().mockResolvedValue([{ id: 'acc-9', externalId: 'rival', platform: AccountPlatform.TELEGRAM }]),
+      // Realistic: accounts store the '@'-prefixed handle, suggestions store it bare.
+      find: jest.fn().mockResolvedValue([{ id: 'acc-9', externalId: '@rival', platform: AccountPlatform.TELEGRAM }]),
     } as any;
 
     const result = await new CompetitorsService(runs, suggestionsRepo, accountsRepo).getFor('acc-1');
@@ -1740,14 +1744,17 @@ export class CompetitorsService {
     });
 
     // Computed, never stored: a suggestion added later must show as tracked
-    // without rewriting rows.
-    const handles = suggestions.map((s) => s.externalId);
-    const tracked = handles.length
+    // without rewriting rows. Suggestions hold bare handles while accounts hold
+    // '@handle', so the '@' goes on for the lookup and comes back off for the map.
+    const stored = suggestions.map((s) => `@${s.externalId}`);
+    const tracked = stored.length
       ? await this.accountsRepo.find({
-          where: { platform: AccountPlatform.TELEGRAM, externalId: In(handles) },
+          where: { platform: AccountPlatform.TELEGRAM, externalId: In(stored) },
         })
       : [];
-    const byHandle = new Map(tracked.map((account) => [account.externalId, account.id]));
+    const byHandle = new Map(
+      tracked.map((account) => [account.externalId.replace(/^@/, ''), account.id]),
+    );
 
     return {
       enabled: this.runs.isEnabled(),

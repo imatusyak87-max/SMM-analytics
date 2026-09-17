@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AccountPlatform, AccountType } from '../db/entities/account.entity';
+import { CompetitorRun } from '../db/entities/competitor-run.entity';
+import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
 
 function makeRepo(saved: unknown = { id: '1' }, existing: unknown = null) {
   return {
@@ -51,6 +53,8 @@ describe('AccountsService', () => {
         (call: unknown[]) => (call[0] as { name: string }).name,
       );
       expect(deletedTables).toEqual([
+        'CompetitorSuggestion',
+        'CompetitorRun',
         'Post',
         'AccountSnapshot',
         'SyncJob',
@@ -70,6 +74,20 @@ describe('AccountsService', () => {
         NotFoundException,
       );
       expect(em.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes competitor runs and suggestions along with the account', async () => {
+      const em = { delete: jest.fn() };
+      const repo = {
+        findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1' }),
+        manager: { transaction: jest.fn(async (cb: any) => cb(em)) },
+      } as any;
+      const service = new AccountsService(repo, {} as any, {} as any);
+
+      await service.remove('acc-1');
+
+      expect(em.delete).toHaveBeenCalledWith(CompetitorSuggestion, { accountId: 'acc-1' });
+      expect(em.delete).toHaveBeenCalledWith(CompetitorRun, { accountId: 'acc-1' });
     });
   });
 

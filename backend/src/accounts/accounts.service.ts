@@ -12,6 +12,8 @@ import { AccountCredential } from '../db/entities/account-credential.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post } from '../db/entities/post.entity';
 import { SyncJob } from '../db/entities/sync-job.entity';
+import { CompetitorRun } from '../db/entities/competitor-run.entity';
+import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
 import { ConnectorRegistry } from '../connectors/connector-registry.service';
 import { AccountInfo, AccountStats, AvatarImage, SocialConnector } from '../connectors/connector.interface';
 import { SyncJobService } from '../sync/sync-job.service';
@@ -153,6 +155,8 @@ export class AccountsService {
   async remove(id: string) {
     await this.findOne(id);
     await this.repo.manager.transaction(async (em) => {
+      await em.delete(CompetitorSuggestion, { accountId: id });
+      await em.delete(CompetitorRun, { accountId: id });
       await em.delete(Post, { accountId: id });
       await em.delete(AccountSnapshot, { accountId: id });
       await em.delete(SyncJob, { accountId: id });

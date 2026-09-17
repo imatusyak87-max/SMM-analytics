@@ -33,7 +33,7 @@ describe('TelegramConnector', () => {
     const client = {
       getChat: jest
         .fn()
-        .mockResolvedValue({ title: 'Test Channel', photoUrl: 'file123' }),
+        .mockResolvedValue({ title: 'Test Channel', photoUrl: 'file123', description: 'About the channel' }),
       getChatMemberCount: jest.fn(),
     } as any;
     const connector = new TelegramConnector(client, {} as any);
@@ -42,6 +42,7 @@ describe('TelegramConnector', () => {
 
     expect(info.name).toBe('Test Channel');
     expect(info.avatarUrl).toBe('file123');
+    expect(info.description).toBe('About the channel');
   });
 
   it('getAvatar downloads the photo the file reference points at', async () => {

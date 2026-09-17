@@ -28,10 +28,15 @@ export class TelegramApiClient {
     return this.call<number>('getChatMemberCount', { chat_id: chatId });
   }
 
-  async getChat(chatId: string): Promise<{ title: string; photoUrl: string | null }> {
-    const result = await this.call<{ title: string; photo?: { big_file_id: string } }>('getChat', {
-      chat_id: chatId,
-    });
-    return { title: result.title, photoUrl: result.photo ? result.photo.big_file_id : null };
+  async getChat(chatId: string): Promise<{ title: string; description: string | null; photoUrl: string | null }> {
+    const result = await this.call<{ title: string; description?: string; photo?: { big_file_id: string } }>(
+      'getChat',
+      { chat_id: chatId },
+    );
+    return {
+      title: result.title,
+      description: result.description ?? null,
+      photoUrl: result.photo ? result.photo.big_file_id : null,
+    };
   }
 }

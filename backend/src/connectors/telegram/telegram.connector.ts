@@ -59,7 +59,7 @@ export class TelegramConnector implements SocialConnector {
 
   async getAccountInfo(account: Account): Promise<AccountInfo> {
     const chat = await this.client.getChat(account.externalId);
-    return { name: chat.title, avatarUrl: chat.photoUrl };
+    return { name: chat.title, avatarUrl: chat.photoUrl, description: chat.description };
   }
 
   async getAvatar(fileRef: string): Promise<AvatarImage> {

@@ -1571,25 +1571,29 @@ export class CompetitorsProcessor extends WorkerHost {
         .slice(0, KEEP);
 
       // Replaced only once a run has produced something: a failed run must leave
-      // the previous list intact.
-      await this.suggestionsRepo.delete({ accountId });
-      if (ranked.length > 0) {
-        await this.suggestionsRepo.save(
-          ranked.map((candidate, index) =>
-            this.suggestionsRepo.create({
-              runId,
-              accountId,
-              externalId: candidate.handle,
-              name: candidate.name,
-              followersCount: candidate.followersCount,
-              reason: candidate.reason,
-              fit: candidate.fit,
-              score: candidate.score,
-              rank: index + 1,
-            }),
-          ),
-        );
-      }
+      // the previous list intact. Both writes go in one transaction, or a save
+      // that fails after the delete would wipe the old list and replace it with
+      // nothing — the same invariant, broken in a narrower window.
+      await this.suggestionsRepo.manager.transaction(async (em) => {
+        await em.delete(CompetitorSuggestion, { accountId });
+        if (ranked.length > 0) {
+          await em.save(
+            ranked.map((candidate, index) =>
+              em.create(CompetitorSuggestion, {
+                runId,
+                accountId,
+                externalId: candidate.handle,
+                name: candidate.name,
+                followersCount: candidate.followersCount,
+                reason: candidate.reason,
+                fit: candidate.fit,
+                score: candidate.score,
+                rank: index + 1,
+              }),
+            ),
+          );
+        }
+      });
 
       await this.runsRepo.update(runId, {
         status: CompetitorRunStatus.SUCCESS,

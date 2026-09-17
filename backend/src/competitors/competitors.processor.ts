@@ -60,25 +60,29 @@ export class CompetitorsProcessor extends WorkerHost {
         .slice(0, KEEP);
 
       // Replaced only once a run has produced something: a failed run must leave
-      // the previous list intact.
-      await this.suggestionsRepo.delete({ accountId });
-      if (ranked.length > 0) {
-        await this.suggestionsRepo.save(
-          ranked.map((candidate, index) =>
-            this.suggestionsRepo.create({
-              runId,
-              accountId,
-              externalId: candidate.handle,
-              name: candidate.name,
-              followersCount: candidate.followersCount,
-              reason: candidate.reason,
-              fit: candidate.fit,
-              score: candidate.score,
-              rank: index + 1,
-            }),
-          ),
-        );
-      }
+      // the previous list intact. Delete + save run in one transaction so a save
+      // failure (pool exhaustion, constraint violation, ...) after a successful
+      // delete cannot leave the account with zero suggestions.
+      await this.suggestionsRepo.manager.transaction(async (em) => {
+        await em.delete(CompetitorSuggestion, { accountId });
+        if (ranked.length > 0) {
+          await em.save(
+            ranked.map((candidate, index) =>
+              em.create(CompetitorSuggestion, {
+                runId,
+                accountId,
+                externalId: candidate.handle,
+                name: candidate.name,
+                followersCount: candidate.followersCount,
+                reason: candidate.reason,
+                fit: candidate.fit,
+                score: candidate.score,
+                rank: index + 1,
+              }),
+            ),
+          );
+        }
+      });
 
       await this.runsRepo.update(runId, {
         status: CompetitorRunStatus.SUCCESS,

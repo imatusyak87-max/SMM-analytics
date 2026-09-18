@@ -21,6 +21,9 @@ export class GeminiFinder implements CompetitorFinder {
   constructor(
     private apiKey: string,
     private model = 'gemini-3.6-flash',
+    // Free-tier models return 503 "high demand" at peak hours; it usually clears
+    // within seconds, so a couple of quick retries beat failing the whole run.
+    private retryDelaysMs: number[] = [5_000, 20_000],
   ) {}
 
   async suggest(profile: ChannelProfile): Promise<FinderResult> {
@@ -29,14 +32,18 @@ export class GeminiFinder implements CompetitorFinder {
     };
 
     let data: any;
-    try {
-      const response = await axios.post(`${ENDPOINT}/${this.model}:generateContent`, body, {
-        headers: { 'x-goog-api-key': this.apiKey, 'Content-Type': 'application/json' },
-        timeout: 120_000,
-      });
-      data = response.data;
-    } catch (error) {
-      throw translateError(error);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const response = await axios.post(`${ENDPOINT}/${this.model}:generateContent`, body, {
+          headers: { 'x-goog-api-key': this.apiKey, 'Content-Type': 'application/json' },
+          timeout: 120_000,
+        });
+        data = response.data;
+        break;
+      } catch (error) {
+        if (!isTransient(error) || attempt >= this.retryDelaysMs.length) throw translateError(error);
+        await new Promise((resolve) => setTimeout(resolve, this.retryDelaysMs[attempt]));
+      }
     }
 
     const text: string = (data?.candidates?.[0]?.content?.parts ?? [])
@@ -83,8 +90,15 @@ function buildPrompt(profile: ChannelProfile): string {
   ].join('\n');
 }
 
+/** Server-side hiccups (overload, gateway) that the same request may get past a moment later. */
+function isTransient(error: unknown): boolean {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status === 500 || status === 502 || status === 503 || status === 504;
+}
+
 function translateError(error: unknown): Error {
   const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 503) return new Error('Gemini перегружен, попробуйте через несколько минут');
   const message = String(
     (error as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? '',
   );

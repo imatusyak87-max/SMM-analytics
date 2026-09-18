@@ -139,4 +139,40 @@ describe('GeminiFinder', () => {
       'Gemini не ответил: getaddrinfo ENOTFOUND generativelanguage.googleapis.com',
     );
   });
+
+  describe('when Google is overloaded', () => {
+    // The production failure: "This model is currently experiencing high demand".
+    const overloaded = {
+      response: { status: 503, data: { error: { message: 'This model is currently experiencing high demand.' } } },
+    };
+    const noDelays = [0, 0];
+
+    it('retries and succeeds once the overload passes', async () => {
+      mockedPost
+        .mockRejectedValueOnce(overloaded)
+        .mockRejectedValueOnce(overloaded)
+        .mockResolvedValueOnce(reply('{"niche":"SMM","competitors":[{"handle":"@rival","reason":"Та же тема","fit":8}]}') as any);
+
+      const result = await new GeminiFinder('key-123', 'gemini-3.6-flash', noDelays).suggest(profile);
+
+      expect(result.niche).toBe('SMM');
+      expect(mockedPost).toHaveBeenCalledTimes(3);
+    });
+
+    it('gives up after the last retry with a plain Russian explanation', async () => {
+      mockedPost.mockRejectedValue(overloaded);
+
+      await expect(new GeminiFinder('key-123', 'gemini-3.6-flash', noDelays).suggest(profile)).rejects.toThrow(
+        'Gemini перегружен, попробуйте через несколько минут',
+      );
+      expect(mockedPost).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not retry errors that another attempt cannot fix', async () => {
+      mockedPost.mockRejectedValue({ response: { status: 403 } });
+
+      await expect(new GeminiFinder('key-123', 'gemini-3.6-flash', noDelays).suggest(profile)).rejects.toThrow();
+      expect(mockedPost).toHaveBeenCalledTimes(1);
+    });
+  });
 });

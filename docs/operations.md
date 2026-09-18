@@ -409,3 +409,16 @@ is what tells break apart from ordinary end-of-history:
 A real break (page 1, or a trailing assertion `false`) means the parser needs a fix and its
 fixtures need updating — that is real implementation work with its own review, not something to
 patch inline while running an operational check.
+
+## Подбор конкурентов
+
+- Requires `GEMINI_API_KEY` in `/opt/smm-dashboard/app/.env`. Without it the
+  feature is disabled and the rest of the app is unaffected.
+- Model: `gemini-2.5-flash` with Google Search grounding, free up to 500
+  grounded requests per day. One run per added channel uses one request.
+- A run happens automatically after a channel's first sync, and whenever
+  «Обновить конкурентов» is pressed.
+- Inspect runs:
+  `docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT \"createdAt\", status, niche, \"candidatesProposed\", \"candidatesVerified\", \"errorMessage\" FROM competitor_runs ORDER BY \"createdAt\" DESC LIMIT 10;"'`
+- A widening gap between `candidatesProposed` and `candidatesVerified` means the
+  model is inventing channels — the signal for switching `COMPETITOR_LLM`.

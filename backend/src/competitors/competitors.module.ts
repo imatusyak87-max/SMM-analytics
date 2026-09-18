@@ -15,7 +15,8 @@ import { CompetitorsProcessor } from './competitors.processor';
 import { CompetitorsController } from './competitors.controller';
 import { CompetitorsService } from './competitors.service';
 
-const GEMINI_MODEL = 'gemini-2.5-flash';
+// 2.5 models are closed to new Google projects; see gemini.finder.ts.
+const GEMINI_MODEL = 'gemini-3.6-flash';
 
 /**
  * The only implemented provider today. COMPETITOR_LLM exists so an operator can

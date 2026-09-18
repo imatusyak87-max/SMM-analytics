@@ -414,8 +414,17 @@ patch inline while running an operational check.
 
 - Requires `GEMINI_API_KEY` in `/opt/smm-dashboard/app/.env`. Without it the
   feature is disabled and the rest of the app is unaffected.
-- Model: `gemini-2.5-flash` with Google Search grounding, free up to 500
-  grounded requests per day. One run per added channel uses one request.
+- Model: `gemini-3.6-flash` on the free tier, **without** web search. It names
+  competitors from its own knowledge; every handle is then checked against the
+  Telegram Bot API, so invented channels never reach the page. Costs $0.
+  - Why not search: Google Search grounding was free only on 2.5 models, and
+    those are closed to new Google projects (a request returns 404 "no longer
+    available to new users"). On 3.x, grounding needs billing enabled on the
+    Google Cloud project — 5,000 free searches a month, then $14 per 1,000,
+    plus paid token rates. Enabling it means restoring the `google_search`
+    tool in `backend/src/competitors/gemini.finder.ts`.
+  - If a model is ever withdrawn again, the run row's `errorMessage` carries
+    Google's own explanation, e.g. `Gemini не ответил (HTTP 404): …`.
 - A run happens automatically after a channel's first sync, and whenever
   «Обновить конкурентов» is pressed.
 - A new `GEMINI_API_KEY` in `.env` only reaches the process when the backend

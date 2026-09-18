@@ -28,12 +28,16 @@ export class TelegramApiClient {
     return this.call<number>('getChatMemberCount', { chat_id: chatId });
   }
 
-  async getChat(chatId: string): Promise<{ title: string; description: string | null; photoUrl: string | null }> {
-    const result = await this.call<{ title: string; description?: string; photo?: { big_file_id: string } }>(
+  async getChat(
+    chatId: string,
+  ): Promise<{ type: string; title: string; description: string | null; photoUrl: string | null }> {
+    const result = await this.call<{ type: string; title: string; description?: string; photo?: { big_file_id: string } }>(
       'getChat',
       { chat_id: chatId },
     );
     return {
+      // 'channel', 'supergroup', 'group' or 'private' — a public @username can name any of them.
+      type: result.type,
       title: result.title,
       description: result.description ?? null,
       photoUrl: result.photo ? result.photo.big_file_id : null,

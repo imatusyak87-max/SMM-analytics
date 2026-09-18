@@ -102,6 +102,19 @@ describe('CompetitorVerifier', () => {
       return new CompetitorVerifier(registry).verify([{ handle: 'rival', reason: 'Та же тема', fit: 8 }], profile);
     }
 
+    it('drops a group (or any chat that is not a channel)', async () => {
+      const connector = connectorWith({});
+      connector.getAccountInfo.mockResolvedValue({
+        name: 'Доктор Вялов | Сергей Вялов',
+        description: null,
+        avatarUrl: null,
+        isChannel: false,
+      });
+
+      expect(await verifyWith(connector)).toEqual([]);
+      expect(connector.getLatestPostAt).not.toHaveBeenCalled();
+    });
+
     it('drops a channel whose description is a private-invite funnel', async () => {
       const connector = connectorWith({
         description: 'НАШ ЗАКРЫТЫЙ КАНАЛ\nhttps://t.me/+kAwyh79Pg8o3ZDNi\nРЕЗЕРВ https://t.me/+Aq-DRvpQywhkMzUy',

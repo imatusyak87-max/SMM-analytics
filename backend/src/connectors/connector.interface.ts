@@ -6,6 +6,8 @@ export interface AccountInfo {
   avatarUrl: string | null;
   /** The channel's "about" text, when the platform exposes one. */
   description: string | null;
+  /** False when the handle names a group or a person, not a channel; absent when the platform cannot tell. */
+  isChannel?: boolean;
 }
 
 export type LatestPost = Date | 'none' | null;

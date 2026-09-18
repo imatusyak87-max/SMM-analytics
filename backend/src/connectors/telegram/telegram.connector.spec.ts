@@ -35,7 +35,7 @@ describe('TelegramConnector', () => {
     const client = {
       getChat: jest
         .fn()
-        .mockResolvedValue({ title: 'Test Channel', photoUrl: 'file123', description: 'About the channel' }),
+        .mockResolvedValue({ type: 'channel', title: 'Test Channel', photoUrl: 'file123', description: 'About the channel' }),
       getChatMemberCount: jest.fn(),
     } as any;
     const connector = new TelegramConnector(client, {} as any);
@@ -45,6 +45,18 @@ describe('TelegramConnector', () => {
     expect(info.name).toBe('Test Channel');
     expect(info.avatarUrl).toBe('file123');
     expect(info.description).toBe('About the channel');
+    expect(info.isChannel).toBe(true);
+  });
+
+  it('getAccountInfo reports a group as not a channel', async () => {
+    // A group's public page says "44 members, 2 online" — the shape of a real
+    // spam pick (@Dr_Vyalov) that a channel check alone would have caught.
+    const client = {
+      getChat: jest.fn().mockResolvedValue({ type: 'supergroup', title: 'Доктор', photoUrl: null, description: null }),
+    } as any;
+    const connector = new TelegramConnector(client, {} as any);
+
+    expect((await connector.getAccountInfo(account)).isChannel).toBe(false);
   });
 
   it('getAvatar downloads the photo the file reference points at', async () => {

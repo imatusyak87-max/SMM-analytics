@@ -43,6 +43,12 @@ export class CompetitorVerifier {
       const draft = { platform: AccountPlatform.TELEGRAM, externalId: `@${candidate.handle}` } as Account;
       try {
         const info = await connector.getAccountInfo(draft);
+        // Groups have no public post page, so the activity check below would
+        // only ever call them "unknown" and keep them.
+        if (info.isChannel === false) {
+          this.logger.debug(`Dropping @${candidate.handle}: not a channel`);
+          continue;
+        }
         if (looksLikeSpam(info.description)) {
           this.logger.debug(`Dropping @${candidate.handle}: description looks like a spam funnel`);
           continue;

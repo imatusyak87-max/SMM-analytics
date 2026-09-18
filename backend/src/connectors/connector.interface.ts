@@ -8,6 +8,8 @@ export interface AccountInfo {
   description: string | null;
 }
 
+export type LatestPost = Date | 'none' | null;
+
 export interface AvatarImage {
   data: Buffer;
   contentType: string;
@@ -45,6 +47,9 @@ export interface SocialConnector {
   getAvatar(fileRef: string): Promise<AvatarImage>;
   getAccountStats(account: Account): Promise<AccountStats>;
   getPosts(account: Account, sinceDate: Date): Promise<ConnectorPost[]>;
-  /** When the account last posted, or null when the platform will not say. */
-  getLatestPostAt?(account: Account): Promise<Date | null>;
+  /**
+   * When the account last posted: a date, 'none' when it has no posts at all,
+   * or null when the platform will not say.
+   */
+  getLatestPostAt?(account: Account): Promise<LatestPost>;
 }

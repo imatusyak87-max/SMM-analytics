@@ -5,11 +5,13 @@ import {
   AccountStats,
   AvatarImage,
   ConnectorPost,
+  LatestPost,
   SocialConnector,
 } from '../connector.interface';
 import { TelegramApiClient } from './telegram-api.client';
 import { TelegramPreviewClient } from './telegram-preview.client';
 import {
+  isChannelPostList,
   parsePreviewPage,
   ParsedPreviewPost,
   PreviewUnavailableError,
@@ -67,18 +69,20 @@ export class TelegramConnector implements SocialConnector {
   }
 
   /**
-   * One preview page is enough: it shows the channel's newest posts. A hidden
-   * preview yields null (unknown), while network errors propagate so a caller
-   * can tell "we could not ask" apart from "the channel will not say".
+   * One preview page is enough: it shows the channel's newest posts. A page with
+   * no posts is either an empty channel ('none') or a hidden preview (null,
+   * unknown), told apart by whether the channel's post list is there at all.
+   * Network errors propagate so a caller can tell "we could not ask" apart from
+   * "the channel will not say".
    */
-  async getLatestPostAt(account: Account): Promise<Date | null> {
+  async getLatestPostAt(account: Account): Promise<LatestPost> {
     const channel = account.externalId;
     const html = await this.preview.fetchPage(channel);
     try {
       const posts = parsePreviewPage(html, channel.replace(/^@/, ''));
       return new Date(Math.max(...posts.map((post) => post.publishedAt.getTime())));
     } catch (err) {
-      if (err instanceof PreviewUnavailableError) return null;
+      if (err instanceof PreviewUnavailableError) return isChannelPostList(html) ? 'none' : null;
       throw err;
     }
   }

@@ -15,6 +15,15 @@ export interface ParsedPreviewPost {
   grouped: boolean;
 }
 
+/**
+ * Whether the page is a channel's post list (t.me/s/) rather than the generic
+ * channel page a hidden preview redirects to. Only the post list carries the
+ * channel header, so a post list with no posts means the channel is empty.
+ */
+export function isChannelPostList(html: string): boolean {
+  return cheerio.load(html)('.tgme_channel_info').length > 0;
+}
+
 /** The page loaded but held no posts: markup changed, or the channel hid its preview. */
 export class PreviewUnavailableError extends Error {}
 

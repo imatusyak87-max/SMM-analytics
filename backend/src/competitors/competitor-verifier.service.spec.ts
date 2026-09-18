@@ -129,6 +129,12 @@ describe('CompetitorVerifier', () => {
       expect((await verifyWith(connector)).map((c) => c.handle)).toEqual(['rival']);
     });
 
+    it('drops a channel that has no posts at all', async () => {
+      const connector = connectorWith({ latestPostAt: jest.fn().mockResolvedValue('none') });
+
+      expect(await verifyWith(connector)).toEqual([]);
+    });
+
     it('keeps a channel whose activity is unknown (web preview hidden)', async () => {
       const connector = connectorWith({ latestPostAt: jest.fn().mockResolvedValue(null) });
 

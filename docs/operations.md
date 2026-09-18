@@ -439,8 +439,10 @@ patch inline while running an operational check.
     links (`t.me/+…`, `t.me/joinchat/…`), or one alongside bait wording
     («закрытый», «резерв», «впускаем», «осталось N мест»…). Rules live in
     `spam-description.ts`.
-  - **Inactive channels** are dropped when the newest post on their public
-    page `t.me/s/<handle>` is older than 90 days. Channels that hide that page
+  - **Inactive and empty channels** are dropped when the newest post on their
+    public page `t.me/s/<handle>` is older than 90 days, or when that page shows
+    the channel's post list with no posts in it. Channels that hide the page
+    (it redirects to the generic `t.me/<handle>` page, with no channel header)
     are kept, since their activity is unknown.
 - The page shows at most 10 channels. When fewer than 5 pass the checks, the
   run asks Gemini again, listing the channels already checked, for up to 3

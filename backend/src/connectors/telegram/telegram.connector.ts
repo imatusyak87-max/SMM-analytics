@@ -66,6 +66,23 @@ export class TelegramConnector implements SocialConnector {
     return this.client.downloadFile(fileRef);
   }
 
+  /**
+   * One preview page is enough: it shows the channel's newest posts. A hidden
+   * preview yields null (unknown), while network errors propagate so a caller
+   * can tell "we could not ask" apart from "the channel will not say".
+   */
+  async getLatestPostAt(account: Account): Promise<Date | null> {
+    const channel = account.externalId;
+    const html = await this.preview.fetchPage(channel);
+    try {
+      const posts = parsePreviewPage(html, channel.replace(/^@/, ''));
+      return new Date(Math.max(...posts.map((post) => post.publishedAt.getTime())));
+    } catch (err) {
+      if (err instanceof PreviewUnavailableError) return null;
+      throw err;
+    }
+  }
+
   async getAccountStats(account: Account): Promise<AccountStats> {
     const count = await this.client.getChatMemberCount(account.externalId);
     return { followersCount: count, followingCount: null, postsCount: 0 };

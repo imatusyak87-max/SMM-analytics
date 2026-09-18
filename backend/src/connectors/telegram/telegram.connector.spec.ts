@@ -414,10 +414,22 @@ describe('TelegramConnector.getLatestPostAt', () => {
   });
 
   it('returns null when the channel hides its web preview', async () => {
-    const preview = { fetchPage: jest.fn().mockResolvedValue('<html><body></body></html>') } as any;
+    // t.me/s/ redirects to the generic channel page, which carries no post list at all.
+    const preview = { fetchPage: jest.fn().mockResolvedValue(fixture('preview-unavailable.html')) } as any;
     const connector = new TelegramConnector({} as any, preview);
 
     expect(await connector.getLatestPostAt(account)).toBeNull();
+  });
+
+  it("returns 'none' for a channel whose post list is shown but empty", async () => {
+    const empty = `<html><body>
+      <div class="tgme_channel_info"><div class="tgme_channel_info_header_title">Пустой канал</div></div>
+      <section class="tgme_channel_history js-message_history"></section>
+    </body></html>`;
+    const preview = { fetchPage: jest.fn().mockResolvedValue(empty) } as any;
+    const connector = new TelegramConnector({} as any, preview);
+
+    expect(await connector.getLatestPostAt(account)).toBe('none');
   });
 
   it('lets network errors through so the caller can tell them from a hidden preview', async () => {

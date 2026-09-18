@@ -49,7 +49,7 @@ export class CompetitorVerifier {
         }
         const stats = await connector.getAccountStats(draft);
         if (await this.isInactive(connector, draft)) {
-          this.logger.debug(`Dropping @${candidate.handle}: no posts in ${INACTIVE_AFTER_DAYS} days`);
+          this.logger.debug(`Dropping @${candidate.handle}: no posts at all, or none in ${INACTIVE_AFTER_DAYS} days`);
           continue;
         }
         verified.push({
@@ -68,13 +68,15 @@ export class CompetitorVerifier {
   }
 
   /**
-   * Only a known, old last post counts as inactive. A channel that hides its
-   * web preview, or a check that fails, is kept: unknown is not evidence.
+   * Inactive means no posts at all, or a last post older than the cutoff. A
+   * channel that hides its web preview, or a check that fails, is kept:
+   * unknown is not evidence.
    */
   private async isInactive(connector: SocialConnector, account: Account): Promise<boolean> {
     if (!connector.getLatestPostAt) return false;
     try {
       const latest = await connector.getLatestPostAt(account);
+      if (latest === 'none') return true;
       return latest !== null && Date.now() - latest.getTime() > INACTIVE_AFTER_DAYS * DAY_MS;
     } catch (error) {
       this.logger.debug(`Activity unknown for ${account.externalId}: ${(error as Error).message}`);

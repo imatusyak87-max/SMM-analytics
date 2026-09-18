@@ -35,6 +35,9 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
+  // A load() started before unmount can still resolve after it: its continuation
+  // must not arm a fresh interval for a component nothing will ever clear again.
+  const mounted = useRef(true);
 
   const stopPolling = useCallback(() => {
     if (poll.current) clearInterval(poll.current);
@@ -53,7 +56,7 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
     setData(payload);
     const stillRunning = payload.run?.status === 'pending' || payload.run?.status === 'running';
     if (stillRunning) {
-      if (!poll.current) {
+      if (mounted.current && !poll.current) {
         poll.current = setInterval(() => {
           load().catch(() => undefined);
         }, POLL_MS);
@@ -64,10 +67,20 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
     return payload;
   }, [accountId, stopPolling]);
 
+  // Separate from the data-loading effect below (and keyed only on the stable
+  // stopPolling) so this fires exactly once per real mount/unmount, not on
+  // every accountId-driven identity change of `load`.
+  useEffect(
+    () => () => {
+      mounted.current = false;
+      stopPolling();
+    },
+    [stopPolling],
+  );
+
   useEffect(() => {
     load().catch(() => setError('Не удалось загрузить конкурентов'));
-    return () => stopPolling();
-  }, [load, stopPolling]);
+  }, [load]);
 
   // Derived purely for rendering (disabling the button, showing the "in progress" note).
   const running = data?.run?.status === 'pending' || data?.run?.status === 'running';

@@ -119,4 +119,23 @@ describe('CompetitorsSection', () => {
     expect(await screen.findByRole('button', { name: 'Обновить конкурентов' })).toBeDisabled();
     expect(screen.getByText('Подбор конкурентов не настроен')).toBeInTheDocument();
   });
+
+  it('does not arm a poller after the component unmounts while the initial fetch is still in flight', async () => {
+    vi.useFakeTimers();
+    let resolveFirst: (value: { data: typeof payload }) => void;
+    (apiClient.get as any).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+
+    const { unmount } = renderSection();
+    unmount();
+
+    resolveFirst!({ data: { ...payload, run: { ...payload.run, status: 'running' }, suggestions: [] } });
+    await vi.advanceTimersByTimeAsync(15000);
+    vi.useRealTimers();
+
+    expect((apiClient.get as any).mock.calls.length).toBe(1);
+  });
 });

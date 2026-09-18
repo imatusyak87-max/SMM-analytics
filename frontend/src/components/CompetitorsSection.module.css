@@ -2,8 +2,11 @@
  * Competitor suggestions. Rows rather than the post grid: each row is a
  * decision (add or not), so it reads as a list, using PostList's card border,
  * radius and spacing idioms. --muted isn't a token in this theme (see
- * index.css); --text is the existing secondary/grey body colour, so it fills
- * that role here.
+ * index.css); --text is the existing secondary/grey body colour, used for
+ * secondary labels (handle, reason, niche, note), while --text-h is the
+ * bright heading colour PostList reserves for primary content (.caption,
+ * .metricValue) — used here for the section heading, channel name and
+ * follower count so they read as the primary line, not flattened to grey.
  */
 .section {
   margin-top: 24px;
@@ -20,6 +23,7 @@
 .heading {
   margin: 0;
   font-size: 16px;
+  color: var(--text-h);
 }
 
 .niche {
@@ -92,6 +96,7 @@
 
 .name {
   font-weight: 600;
+  color: var(--text-h);
 }
 
 .handle {
@@ -103,6 +108,7 @@
   font-family: var(--mono);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+  color: var(--text-h);
 }
 
 .reason {

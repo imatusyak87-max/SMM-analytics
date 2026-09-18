@@ -78,8 +78,10 @@ describe('CompetitorsProcessor', () => {
         niche: 'SMM',
         candidatesProposed: 2,
         candidatesVerified: 1,
-        inputTokens: 1200,
-        outputTokens: 300,
+        // One verified channel is below the minimum, so a second round is asked
+        // for; it offers nothing new, but its tokens were still spent.
+        inputTokens: 2400,
+        outputTokens: 600,
       }),
     );
   });
@@ -195,5 +197,96 @@ describe('CompetitorsProcessor', () => {
       'run-1',
       expect.objectContaining({ status: CompetitorRunStatus.FAILED, errorMessage: 'connection terminated' }),
     );
+  });
+  describe('topping up to at least 5 channels', () => {
+    const verified = (handle: string) => ({ handle, name: handle.toUpperCase(), followersCount: 5000, reason: 'r', fit: 8 });
+    const round = (handles: string[], tokens = 100) => ({
+      niche: 'SMM',
+      candidates: handles.map((handle) => ({ handle, reason: 'r', fit: 8 })),
+      provider: 'gemini',
+      model: 'gemini-3.6-flash',
+      inputTokens: tokens,
+      outputTokens: tokens,
+      costUsd: 0,
+    });
+
+    it('asks again, excluding channels already checked, until 5 pass', async () => {
+      const finder = {
+        suggest: jest
+          .fn()
+          .mockResolvedValueOnce(round(['a', 'b', 'c', 'x']))
+          .mockResolvedValueOnce(round(['a', 'd', 'e', 'f'])),
+      };
+      const verifier = {
+        verify: jest
+          .fn()
+          .mockResolvedValueOnce([verified('a'), verified('b'), verified('c')])
+          .mockResolvedValueOnce([verified('d'), verified('e'), verified('f')]),
+      };
+      const { processor, em, runsRepo } = makeProcessor({ finder, verifier });
+
+      await processor.process(job());
+
+      expect(finder.suggest).toHaveBeenCalledTimes(2);
+      expect(finder.suggest.mock.calls[1][1]).toEqual(['a', 'b', 'c', 'x']);
+      // 'a' was already checked in round one, so only the new handles are verified.
+      expect(verifier.verify.mock.calls[1][0].map((c: any) => c.handle)).toEqual(['d', 'e', 'f']);
+      expect((em.save.mock.calls[0][0] as any[]).map((row) => row.externalId).sort()).toEqual(
+        ['a', 'b', 'c', 'd', 'e', 'f'],
+      );
+      expect(runsRepo.update).toHaveBeenLastCalledWith(
+        'run-1',
+        expect.objectContaining({ candidatesProposed: 7, candidatesVerified: 6, inputTokens: 200, outputTokens: 200 }),
+      );
+    });
+
+    it('stops after 3 rounds and keeps whatever passed', async () => {
+      const finder = {
+        suggest: jest
+          .fn()
+          .mockResolvedValueOnce(round(['a']))
+          .mockResolvedValueOnce(round(['b']))
+          .mockResolvedValueOnce(round(['c']))
+          .mockResolvedValueOnce(round(['d'])),
+      };
+      const verifier = { verify: jest.fn(async (candidates: any[]) => candidates.map((c) => verified(c.handle))) };
+      const { processor, em } = makeProcessor({ finder, verifier });
+
+      await processor.process(job());
+
+      expect(finder.suggest).toHaveBeenCalledTimes(3);
+      expect(em.save.mock.calls[0][0]).toHaveLength(3);
+    });
+
+    it('stops early when the model has no new channels to offer', async () => {
+      const finder = { suggest: jest.fn().mockResolvedValue(round(['a', 'b'])) };
+      const verifier = { verify: jest.fn(async (candidates: any[]) => candidates.map((c) => verified(c.handle))) };
+      const { processor, em } = makeProcessor({ finder, verifier });
+
+      await processor.process(job());
+
+      expect(finder.suggest).toHaveBeenCalledTimes(2);
+      expect(verifier.verify).toHaveBeenCalledTimes(1);
+      expect(em.save.mock.calls[0][0]).toHaveLength(2);
+    });
+
+    it('keeps the first round when a top-up round fails', async () => {
+      const finder = {
+        suggest: jest
+          .fn()
+          .mockResolvedValueOnce(round(['a', 'b']))
+          .mockRejectedValueOnce(new Error('Gemini перегружен, попробуйте через несколько минут')),
+      };
+      const verifier = { verify: jest.fn(async (candidates: any[]) => candidates.map((c) => verified(c.handle))) };
+      const { processor, em, runsRepo } = makeProcessor({ finder, verifier });
+
+      await processor.process(job());
+
+      expect(em.save.mock.calls[0][0]).toHaveLength(2);
+      expect(runsRepo.update).toHaveBeenLastCalledWith(
+        'run-1',
+        expect.objectContaining({ status: CompetitorRunStatus.SUCCESS }),
+      );
+    });
   });
 });

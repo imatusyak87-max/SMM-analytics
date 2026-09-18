@@ -442,6 +442,11 @@ patch inline while running an operational check.
   - **Inactive channels** are dropped when the newest post on their public
     page `t.me/s/<handle>` is older than 90 days. Channels that hide that page
     are kept, since their activity is unknown.
+- The page shows at most 10 channels. When fewer than 5 pass the checks, the
+  run asks Gemini again, listing the channels already checked, for up to 3
+  rounds in total; it stops early if Gemini has nothing new. Five is a target,
+  not a guarantee: a narrow niche can still end with fewer. `candidatesProposed`
+  and the token counts cover all rounds.
 - A widening gap between `candidatesProposed` and `candidatesVerified` means the
   model is inventing channels — the signal for considering a different provider.
   The filters above also count against `candidatesVerified`.

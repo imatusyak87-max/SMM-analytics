@@ -6,9 +6,9 @@ import { Job } from 'bullmq';
 import { Account } from '../db/entities/account.entity';
 import { CompetitorRun, CompetitorRunStatus } from '../db/entities/competitor-run.entity';
 import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
-import { COMPETITOR_FINDER, type CompetitorFinder } from './competitor-finder';
+import { COMPETITOR_FINDER, type ChannelProfile, type CompetitorFinder } from './competitor-finder';
 import { CompetitorProfileService } from './competitor-profile.service';
-import { CompetitorVerifier } from './competitor-verifier.service';
+import { CompetitorVerifier, VerifiedCandidate } from './competitor-verifier.service';
 import { scoreCandidate } from './score';
 
 interface CompetitorJobData {
@@ -17,6 +17,9 @@ interface CompetitorJobData {
 }
 
 const KEEP = 10;
+/** Fewer verified channels than this triggers another round of suggestions. */
+const MIN_SHOWN = 5;
+const MAX_ROUNDS = 3;
 
 function isFinalAttempt(job: Job<CompetitorJobData>): boolean {
   const allowed = job.opts?.attempts ?? 1;
@@ -48,8 +51,7 @@ export class CompetitorsProcessor extends WorkerHost {
       if (!account) throw new Error(`Account ${accountId} not found`);
 
       const profile = await this.profiles.build(account);
-      const result = await this.finder.suggest(profile);
-      const verified = await this.verifier.verify(result.candidates, profile);
+      const { result, proposed, verified } = await this.findAndVerify(profile);
 
       const ranked = verified
         .map((candidate) => ({
@@ -92,7 +94,7 @@ export class CompetitorsProcessor extends WorkerHost {
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         costUsd: result.costUsd.toFixed(4),
-        candidatesProposed: result.candidates.length,
+        candidatesProposed: proposed,
         candidatesVerified: verified.length,
         finishedAt: new Date(),
       });
@@ -114,4 +116,43 @@ export class CompetitorsProcessor extends WorkerHost {
       throw error;
     }
   }
+
+  /**
+   * Verification drops invented, spam and abandoned channels, so one answer can
+   * leave too few. Ask again, naming what was already checked, until MIN_SHOWN
+   * pass, the model runs out of new channels, or MAX_ROUNDS is reached. Only the
+   * first round's failure fails the run; a failed top-up keeps what passed.
+   */
+  private async findAndVerify(profile: ChannelProfile) {
+    const first = await this.finder.suggest(profile);
+    const result = { ...first };
+    const checked = new Set<string>();
+    const verified: VerifiedCandidate[] = [];
+
+    let candidates = first.candidates;
+    for (let round = 1; ; round++) {
+      const fresh = candidates.filter((candidate) => !checked.has(candidate.handle));
+      if (fresh.length === 0) break;
+      fresh.forEach((candidate) => checked.add(candidate.handle));
+      verified.push(...(await this.verifier.verify(fresh, profile)));
+      if (verified.length >= MIN_SHOWN || round >= MAX_ROUNDS) break;
+
+      try {
+        const next = await this.finder.suggest(profile, [...checked]);
+        result.inputTokens = addTokens(result.inputTokens, next.inputTokens);
+        result.outputTokens = addTokens(result.outputTokens, next.outputTokens);
+        result.costUsd += next.costUsd;
+        candidates = next.candidates;
+      } catch (error) {
+        this.logger.warn(`Top-up round ${round + 1} failed, keeping ${verified.length}: ${(error as Error).message}`);
+        break;
+      }
+    }
+
+    return { result, proposed: checked.size, verified };
+  }
+}
+
+function addTokens(a: number | null, b: number | null): number | null {
+  return a === null && b === null ? null : (a ?? 0) + (b ?? 0);
 }

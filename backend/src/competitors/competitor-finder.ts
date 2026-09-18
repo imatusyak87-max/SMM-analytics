@@ -28,7 +28,8 @@ export interface FinderResult {
  * implementation, so Claude can replace Gemini without other changes.
  */
 export interface CompetitorFinder {
-  suggest(profile: ChannelProfile): Promise<FinderResult>;
+  /** `exclude` lists bare handles already checked in earlier rounds of the same run. */
+  suggest(profile: ChannelProfile, exclude?: string[]): Promise<FinderResult>;
 }
 
 export const COMPETITOR_FINDER = Symbol('COMPETITOR_FINDER');

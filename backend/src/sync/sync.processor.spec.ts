@@ -13,7 +13,9 @@ describe('SyncProcessor', () => {
     isActive: true,
   };
 
-  function buildProcessor(overrides: Partial<{ getAccountStats: any; getPosts: any; syncJobsUpdate: any }> = {}) {
+  function buildProcessor(
+    overrides: Partial<{ getAccountStats: any; getPosts: any; syncJobsUpdate: any; competitorRuns: any }> = {},
+  ) {
     const connector = {
       platform: AccountPlatform.TELEGRAM,
       getAccountInfo: jest.fn(),
@@ -25,8 +27,9 @@ describe('SyncProcessor', () => {
     const snapshotsRepo = { upsert: jest.fn() } as any;
     const postsRepo = { upsert: jest.fn() } as any;
     const syncJobsRepo = { update: overrides.syncJobsUpdate ?? jest.fn() } as any;
-    const processor = new SyncProcessor(registry, accountsRepo, snapshotsRepo, postsRepo, syncJobsRepo);
-    return { processor, syncJobsRepo, snapshotsRepo, postsRepo };
+    const competitorRuns = overrides.competitorRuns ?? { createForNewAccount: jest.fn().mockResolvedValue(null) };
+    const processor = new SyncProcessor(registry, accountsRepo, snapshotsRepo, postsRepo, syncJobsRepo, competitorRuns);
+    return { processor, syncJobsRepo, snapshotsRepo, postsRepo, competitorRuns };
   }
 
   it('on success, writes a snapshot and marks the job success', async () => {
@@ -192,5 +195,35 @@ describe('SyncProcessor', () => {
       'job-1',
       expect.objectContaining({ status: SyncStatus.FAILED }),
     );
+  });
+
+  it('starts competitor discovery after a successful sync', async () => {
+    const { processor, competitorRuns } = buildProcessor();
+
+    await processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any);
+
+    expect(competitorRuns.createForNewAccount).toHaveBeenCalledWith('acc-1');
+  });
+
+  it('starts competitor discovery even when the sync fails for good', async () => {
+    const { processor, competitorRuns } = buildProcessor({
+      getPosts: jest.fn().mockRejectedValue(new Error('No posts found on the preview page')),
+    });
+
+    await expect(
+      processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any),
+    ).rejects.toThrow();
+
+    expect(competitorRuns.createForNewAccount).toHaveBeenCalledWith('acc-1');
+  });
+
+  it('does not fail a sync when queueing competitor discovery throws', async () => {
+    const { processor } = buildProcessor({
+      competitorRuns: { createForNewAccount: jest.fn().mockRejectedValue(new Error('redis down')) },
+    });
+
+    await expect(
+      processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any),
+    ).resolves.toBeUndefined();
   });
 });

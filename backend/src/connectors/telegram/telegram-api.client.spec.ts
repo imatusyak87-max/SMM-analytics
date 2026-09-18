@@ -2,47 +2,54 @@ import axios from 'axios';
 import { TelegramApiClient } from './telegram-api.client';
 
 jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedGet = axios.get as jest.MockedFunction<typeof axios.get>;
 
 describe('TelegramApiClient', () => {
-  beforeEach(() => mockedAxios.get.mockReset());
+  beforeEach(() => jest.clearAllMocks());
 
   it('getChatMemberCount returns the member count from the Bot API response', async () => {
-    mockedAxios.get.mockResolvedValue({ data: { ok: true, result: 1234 } });
+    mockedGet.mockResolvedValue({ data: { ok: true, result: 1234 } });
     const client = new TelegramApiClient('fake-token');
 
     const count = await client.getChatMemberCount('@testchannel');
 
     expect(count).toBe(1234);
-    expect(mockedAxios.get).toHaveBeenCalledWith(
+    expect(mockedGet).toHaveBeenCalledWith(
       'https://api.telegram.org/botfake-token/getChatMemberCount',
       { params: { chat_id: '@testchannel' } },
     );
   });
 
-  it('getChat returns title and photo url when present', async () => {
-    mockedAxios.get.mockResolvedValue({
-      data: { ok: true, result: { title: 'Test Channel', photo: { big_file_id: 'abc' } } },
-    });
-    const client = new TelegramApiClient('fake-token');
+  it('returns the channel description alongside the title', async () => {
+    mockedGet.mockResolvedValue({
+      data: { ok: true, result: { title: 'Канал', description: 'Про маркетинг', photo: { big_file_id: 'f1' } } },
+    } as any);
 
-    const chat = await client.getChat('@testchannel');
+    const result = await new TelegramApiClient('token').getChat('@channel');
 
-    expect(chat.title).toBe('Test Channel');
+    expect(result).toEqual({ title: 'Канал', description: 'Про маркетинг', photoUrl: 'f1' });
+  });
+
+  it('returns null when the channel has no description', async () => {
+    mockedGet.mockResolvedValue({ data: { ok: true, result: { title: 'Канал' } } } as any);
+
+    const result = await new TelegramApiClient('token').getChat('@channel');
+
+    expect(result).toEqual({ title: 'Канал', description: null, photoUrl: null });
   });
 
   it('downloadFile resolves the file path then fetches the bytes', async () => {
-    mockedAxios.get
+    mockedGet
       .mockResolvedValueOnce({ data: { ok: true, result: { file_path: 'photos/file_1.jpg' } } })
       .mockResolvedValueOnce({ data: Buffer.from('image-bytes'), headers: { 'content-type': 'image/jpeg' } });
     const client = new TelegramApiClient('fake-token');
 
     const file = await client.downloadFile('abc');
 
-    expect(mockedAxios.get).toHaveBeenNthCalledWith(1, 'https://api.telegram.org/botfake-token/getFile', {
+    expect(mockedGet).toHaveBeenNthCalledWith(1, 'https://api.telegram.org/botfake-token/getFile', {
       params: { file_id: 'abc' },
     });
-    expect(mockedAxios.get).toHaveBeenNthCalledWith(
+    expect(mockedGet).toHaveBeenNthCalledWith(
       2,
       'https://api.telegram.org/file/botfake-token/photos/file_1.jpg',
       { responseType: 'arraybuffer' },
@@ -52,7 +59,7 @@ describe('TelegramApiClient', () => {
   });
 
   it('throws when the Bot API returns ok: false', async () => {
-    mockedAxios.get.mockResolvedValue({ data: { ok: false, description: 'Forbidden: bot is not a member' } });
+    mockedGet.mockResolvedValue({ data: { ok: false, description: 'Forbidden: bot is not a member' } });
     const client = new TelegramApiClient('fake-token');
 
     await expect(client.getChatMemberCount('@testchannel')).rejects.toThrow('Forbidden: bot is not a member');

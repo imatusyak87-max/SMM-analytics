@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AccountPlatform, AccountType } from '../db/entities/account.entity';
+import { CompetitorRun } from '../db/entities/competitor-run.entity';
+import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
 
 function makeRepo(saved: unknown = { id: '1' }, existing: unknown = null) {
   return {
@@ -51,6 +53,8 @@ describe('AccountsService', () => {
         (call: unknown[]) => (call[0] as { name: string }).name,
       );
       expect(deletedTables).toEqual([
+        'CompetitorSuggestion',
+        'CompetitorRun',
         'Post',
         'AccountSnapshot',
         'SyncJob',
@@ -71,13 +75,27 @@ describe('AccountsService', () => {
       );
       expect(em.delete).not.toHaveBeenCalled();
     });
+
+    it('deletes competitor runs and suggestions along with the account', async () => {
+      const em = { delete: jest.fn() };
+      const repo = {
+        findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1' }),
+        manager: { transaction: jest.fn(async (cb: any) => cb(em)) },
+      } as any;
+      const service = new AccountsService(repo, {} as any, {} as any);
+
+      await service.remove('acc-1');
+
+      expect(em.delete).toHaveBeenCalledWith(CompetitorSuggestion, { accountId: 'acc-1' });
+      expect(em.delete).toHaveBeenCalledWith(CompetitorRun, { accountId: 'acc-1' });
+    });
   });
 
   describe('preview', () => {
     it('resolves the channel without saving anything', async () => {
       const repo = makeRepo();
       const connector = {
-        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: 'file123' }),
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: 'file123', description: null }),
         getAccountStats: jest.fn().mockResolvedValue({ followersCount: 4321 }),
         getAvatar: jest.fn().mockResolvedValue({ data: Buffer.from('img'), contentType: 'image/jpeg' }),
       };
@@ -103,7 +121,7 @@ describe('AccountsService', () => {
     it('still previews when the channel has no photo', async () => {
       const repo = makeRepo();
       const connector = {
-        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null }),
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null, description: null }),
         getAccountStats: jest.fn().mockResolvedValue({ followersCount: 10 }),
         getAvatar: jest.fn(),
       };
@@ -122,7 +140,7 @@ describe('AccountsService', () => {
     it('reports that an already added channel is a duplicate', async () => {
       const repo = makeRepo({ id: '1' }, { id: 'existing', externalId: '@somechannel' });
       const connector = {
-        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null }),
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null, description: null }),
         getAccountStats: jest.fn().mockResolvedValue({ followersCount: 4321 }),
         getAvatar: jest.fn(),
       };
@@ -141,7 +159,7 @@ describe('AccountsService', () => {
     it('reports a channel that is not yet added as addable', async () => {
       const repo = makeRepo();
       const connector = {
-        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null }),
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null, description: null }),
         getAccountStats: jest.fn().mockResolvedValue({ followersCount: 4321 }),
         getAvatar: jest.fn(),
       };
@@ -159,7 +177,7 @@ describe('AccountsService', () => {
     it('still previews the channel when its avatar cannot be downloaded', async () => {
       const repo = makeRepo();
       const connector = {
-        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: 'file123' }),
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: 'file123', description: null }),
         getAccountStats: jest.fn().mockResolvedValue({ followersCount: 4321 }),
         getAvatar: jest.fn().mockRejectedValue(new Error('file download failed')),
       };
@@ -197,6 +215,7 @@ describe('AccountsService', () => {
           .mockResolvedValue({
             name: 'Some Channel',
             avatarUrl: 'https://cdn/photo.jpg',
+            description: null,
           }),
       };
       const service = new AccountsService(repo, {
@@ -226,7 +245,7 @@ describe('AccountsService', () => {
     it('queues a sync so the new account gets its stats without a manual refresh', async () => {
       const repo = makeRepo({ id: 'acc-9' });
       const connector = {
-        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null }),
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null, description: null }),
       };
       const syncJobs = { createManual: jest.fn() };
       const service = new AccountsService(
@@ -302,7 +321,7 @@ describe('AccountsService', () => {
   describe('createFromLink duplicate protection', () => {
     function serviceWith(repo: any, syncJobs = { createManual: jest.fn() }) {
       const connector = {
-        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null }),
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null, description: null }),
       };
       return {
         service: new AccountsService(repo, { get: jest.fn().mockReturnValue(connector) } as any, syncJobs as any),

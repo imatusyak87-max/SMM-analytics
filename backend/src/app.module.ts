@@ -9,6 +9,7 @@ import { AccountsModule } from './accounts/accounts.module';
 import { StatsModule } from './stats/stats.module';
 import { SyncModule } from './sync/sync.module';
 import { ConnectorsModule } from './connectors/connectors.module';
+import { CompetitorsModule } from './competitors/competitors.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ConnectorsModule } from './connectors/connectors.module';
     StatsModule,
     SyncModule,
     ConnectorsModule,
+    CompetitorsModule,
     BullModule.forRoot({ connection: { url: process.env.REDIS_URL } }),
     ScheduleModule.forRoot(),
   ],

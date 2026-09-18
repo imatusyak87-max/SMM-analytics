@@ -1,0 +1,146 @@
+/*
+ * Competitor suggestions. Rows rather than the post grid: each row is a
+ * decision (add or not), so it reads as a list, using PostList's card border,
+ * radius and spacing idioms. --muted isn't a token in this theme (see
+ * index.css); --text is the existing secondary/grey body colour, used for
+ * secondary labels (handle, reason, niche, note), while --text-h is the
+ * bright heading colour PostList reserves for primary content (.caption,
+ * .metricValue) — used here for the section heading, channel name and
+ * follower count so they read as the primary line, not flattened to grey.
+ */
+.section {
+  margin-top: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-h);
+}
+
+.niche {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.refresh {
+  margin-left: auto;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.refresh:hover:not(:disabled),
+.refresh:focus-visible:not(:disabled) {
+  border-color: var(--accent-border);
+  outline: none;
+}
+
+.refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.note,
+.error {
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.note {
+  color: var(--text);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.handle {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.followers {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+}
+
+.reason {
+  flex-basis: 100%;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.add,
+.tracked {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.add {
+  border: 1px solid var(--accent-border);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+
+.add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tracked {
+  border: 1px solid var(--border);
+  color: var(--text);
+}

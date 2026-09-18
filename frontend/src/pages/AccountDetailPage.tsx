@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApiGet } from '../api/useApiGet';
+import { CompetitorsSection } from '../components/CompetitorsSection';
 import { Pagination } from '../components/Pagination';
 import { PeriodPicker } from '../components/PeriodPicker';
 import { PostList, type PostItem, type PostSort } from '../components/PostList';
@@ -122,6 +123,7 @@ export function AccountDetailPage() {
           },
         ]}
       />
+      <CompetitorsSection accountId={account.id} />
       <section className={styles.posts} aria-labelledby="top-posts-heading">
         <div className={styles.postsHeader}>
           <h3 id="top-posts-heading" className={styles.subheading}>

@@ -4,6 +4,8 @@ import { PostType } from '../db/entities/post.entity';
 export interface AccountInfo {
   name: string;
   avatarUrl: string | null;
+  /** The channel's "about" text, when the platform exposes one. */
+  description: string | null;
 }
 
 export interface AvatarImage {

@@ -2,7 +2,9 @@ import { Logger } from '@nestjs/common';
 import { TelegramConnector } from './telegram.connector';
 import { AccountPlatform, AccountType } from '../../db/entities/account.entity';
 import { PostType } from '../../db/entities/post.entity';
-import { PreviewUnavailableError } from './telegram-preview.parser';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { PreviewUnavailableError, parsePreviewPage } from './telegram-preview.parser';
 
 describe('TelegramConnector', () => {
   const account = {
@@ -392,5 +394,36 @@ describe('TelegramConnector.getPosts', () => {
     await expect(
       connector.getPosts(account, new Date('2026-01-01')),
     ).rejects.toThrow('network');
+  });
+
+});
+
+describe('TelegramConnector.getLatestPostAt', () => {
+  const account = { externalId: '@testchannel' } as any;
+  const fixture = (name: string) => readFileSync(join(__dirname, '__fixtures__', name), 'utf-8');
+
+  it('returns the newest post date from the public preview page', async () => {
+    const html = fixture('preview-page.html');
+    const preview = { fetchPage: jest.fn().mockResolvedValue(html) } as any;
+    const connector = new TelegramConnector({} as any, preview);
+
+    const newest = Math.max(...parsePreviewPage(html, 'testchannel').map((p) => p.publishedAt.getTime()));
+
+    expect(await connector.getLatestPostAt(account)).toEqual(new Date(newest));
+    expect(preview.fetchPage).toHaveBeenCalledWith('@testchannel');
+  });
+
+  it('returns null when the channel hides its web preview', async () => {
+    const preview = { fetchPage: jest.fn().mockResolvedValue('<html><body></body></html>') } as any;
+    const connector = new TelegramConnector({} as any, preview);
+
+    expect(await connector.getLatestPostAt(account)).toBeNull();
+  });
+
+  it('lets network errors through so the caller can tell them from a hidden preview', async () => {
+    const preview = { fetchPage: jest.fn().mockRejectedValue(new Error('ETIMEDOUT')) } as any;
+    const connector = new TelegramConnector({} as any, preview);
+
+    await expect(connector.getLatestPostAt(account)).rejects.toThrow('ETIMEDOUT');
   });
 });

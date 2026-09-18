@@ -83,4 +83,62 @@ describe('CompetitorVerifier', () => {
 
     expect(result).toEqual([]);
   });
+
+  describe('quality filters', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    function connectorWith(overrides: { description?: string | null; latestPostAt?: jest.Mock }) {
+      return {
+        getAccountInfo: jest
+          .fn()
+          .mockResolvedValue({ name: 'Конкурент', description: overrides.description ?? null, avatarUrl: null }),
+        getAccountStats: jest.fn().mockResolvedValue({ followersCount: 4200 }),
+        getLatestPostAt: overrides.latestPostAt ?? jest.fn().mockResolvedValue(new Date()),
+      };
+    }
+
+    async function verifyWith(connector: object) {
+      const registry = { get: jest.fn().mockReturnValue(connector) } as any;
+      return new CompetitorVerifier(registry).verify([{ handle: 'rival', reason: 'Та же тема', fit: 8 }], profile);
+    }
+
+    it('drops a channel whose description is a private-invite funnel', async () => {
+      const connector = connectorWith({
+        description: 'НАШ ЗАКРЫТЫЙ КАНАЛ\nhttps://t.me/+kAwyh79Pg8o3ZDNi\nРЕЗЕРВ https://t.me/+Aq-DRvpQywhkMzUy',
+      });
+
+      expect(await verifyWith(connector)).toEqual([]);
+      // Spam is decided from the description alone — no need to fetch its posts.
+      expect(connector.getLatestPostAt).not.toHaveBeenCalled();
+    });
+
+    it('drops a channel whose newest post is older than 90 days', async () => {
+      const connector = connectorWith({
+        latestPostAt: jest.fn().mockResolvedValue(new Date(Date.now() - 91 * DAY_MS)),
+      });
+
+      expect(await verifyWith(connector)).toEqual([]);
+      expect(connector.getLatestPostAt).toHaveBeenCalledWith(expect.objectContaining({ externalId: '@rival' }));
+    });
+
+    it('keeps a channel that posted within the last 90 days', async () => {
+      const connector = connectorWith({
+        latestPostAt: jest.fn().mockResolvedValue(new Date(Date.now() - 89 * DAY_MS)),
+      });
+
+      expect((await verifyWith(connector)).map((c) => c.handle)).toEqual(['rival']);
+    });
+
+    it('keeps a channel whose activity is unknown (web preview hidden)', async () => {
+      const connector = connectorWith({ latestPostAt: jest.fn().mockResolvedValue(null) });
+
+      expect((await verifyWith(connector)).map((c) => c.handle)).toEqual(['rival']);
+    });
+
+    it('keeps a channel when the activity check itself fails', async () => {
+      const connector = connectorWith({ latestPostAt: jest.fn().mockRejectedValue(new Error('timeout')) });
+
+      expect((await verifyWith(connector)).map((c) => c.handle)).toEqual(['rival']);
+    });
+  });
 });

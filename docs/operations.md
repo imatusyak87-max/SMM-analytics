@@ -433,8 +433,18 @@ patch inline while running an operational check.
   reuses the old environment and the key change has no effect.
 - Inspect runs:
   `docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT \"createdAt\", status, niche, \"candidatesProposed\", \"candidatesVerified\", \"errorMessage\" FROM competitor_runs ORDER BY \"createdAt\" DESC LIMIT 10;"'`
+- Besides existing, a candidate must pass two filters
+  (`backend/src/competitors/competitor-verifier.service.ts`):
+  - **Spam funnels** are dropped: descriptions with two or more private invite
+    links (`t.me/+…`, `t.me/joinchat/…`), or one alongside bait wording
+    («закрытый», «резерв», «впускаем», «осталось N мест»…). Rules live in
+    `spam-description.ts`.
+  - **Inactive channels** are dropped when the newest post on their public
+    page `t.me/s/<handle>` is older than 90 days. Channels that hide that page
+    are kept, since their activity is unknown.
 - A widening gap between `candidatesProposed` and `candidatesVerified` means the
   model is inventing channels — the signal for considering a different provider.
+  The filters above also count against `candidatesVerified`.
 - `COMPETITOR_LLM` selects the provider (default, and currently the only
   implemented one, is `gemini`). Setting it to anything else — `claude`
   included, which has no adapter yet — makes the backend throw at startup

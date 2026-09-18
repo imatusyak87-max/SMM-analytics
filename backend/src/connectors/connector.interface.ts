@@ -45,4 +45,6 @@ export interface SocialConnector {
   getAvatar(fileRef: string): Promise<AvatarImage>;
   getAccountStats(account: Account): Promise<AccountStats>;
   getPosts(account: Account, sinceDate: Date): Promise<ConnectorPost[]>;
+  /** When the account last posted, or null when the platform will not say. */
+  getLatestPostAt?(account: Account): Promise<Date | null>;
 }

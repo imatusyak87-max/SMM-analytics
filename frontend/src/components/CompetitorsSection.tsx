@@ -16,11 +16,13 @@ interface Suggestion {
   trackedAccountId: string | null;
 }
 
+type RunStatus = 'pending' | 'running' | 'success' | 'failed';
+
 interface CompetitorsPayload {
   enabled: boolean;
   run: {
     id: string;
-    status: 'pending' | 'running' | 'success' | 'failed';
+    status: RunStatus;
     niche: string | null;
     errorMessage: string | null;
     finishedAt: string | null;
@@ -29,6 +31,11 @@ interface CompetitorsPayload {
 }
 
 const POLL_MS = 5000;
+
+/** «Подбираем…» covers both queue states; nothing else in the UI cares which one it is. */
+function isInProgress(status: RunStatus | undefined): boolean {
+  return status === 'pending' || status === 'running';
+}
 
 export function CompetitorsSection({ accountId }: { accountId: string }) {
   const [data, setData] = useState<CompetitorsPayload | null>(null);
@@ -63,7 +70,7 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
     // arriving after unmount, must neither render nor arm a poller.
     if (!mounted.current || gen !== generation.current) return payload;
     setData(payload);
-    const stillRunning = payload.run?.status === 'pending' || payload.run?.status === 'running';
+    const stillRunning = isInProgress(payload.run?.status);
     if (stillRunning) {
       if (!poll.current) {
         poll.current = setInterval(() => {
@@ -81,12 +88,15 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
     return () => stopPolling(); // fires on accountId change AND on unmount
   }, [load, stopPolling]);
 
-  useEffect(() => () => {
-    mounted.current = false;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
   }, []);
 
   // Derived purely for rendering (disabling the button, showing the "in progress" note).
-  const running = data?.run?.status === 'pending' || data?.run?.status === 'running';
+  const running = isInProgress(data?.run?.status);
 
   async function refresh() {
     setError(null);
@@ -138,9 +148,9 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
 
       {data && !data.enabled && <p className={styles.note}>Подбор конкурентов не настроен</p>}
       {running && <p className={styles.note}>Подбираем конкурентов… обычно 1–2 минуты</p>}
-      {(error || (failed && data?.run?.errorMessage)) && (
+      {(error || failed) && (
         <p className={styles.error} role="alert">
-          {error ?? data?.run?.errorMessage}
+          {error ?? 'Не удалось подобрать конкурентов'}
         </p>
       )}
 

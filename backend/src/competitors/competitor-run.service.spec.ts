@@ -54,6 +54,47 @@ describe('CompetitorRunService', () => {
     await expect(service.createManual('acc-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('does not let a stale PENDING row (older than the stale threshold) block a new run', async () => {
+    const findOne = jest.fn().mockResolvedValue(null);
+    const { service, runsRepo, queue } = makeService({
+      runs: {
+        findOne,
+        count: jest.fn(),
+        create: jest.fn((x) => x),
+        save: jest.fn().mockImplementation((x) => Promise.resolve({ id: 'run-1', ...x })),
+      },
+    });
+
+    const run = await service.createManual('acc-1');
+
+    // The lookup itself must exclude stale rows via a createdAt cutoff, not just
+    // happen to receive null from the mock — assert the query shape.
+    expect(findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          accountId: 'acc-1',
+          createdAt: expect.anything(),
+        }),
+      }),
+    );
+    expect(run.id).toBe('run-1');
+    expect(runsRepo.save).toHaveBeenCalled();
+    expect(queue.add).toHaveBeenCalled();
+  });
+
+  it('still blocks a second run while a recent PENDING row exists', async () => {
+    const { service } = makeService({
+      runs: {
+        findOne: jest.fn().mockResolvedValue({ id: 'run-0', status: CompetitorRunStatus.PENDING }),
+        count: jest.fn(),
+        create: jest.fn(),
+        save: jest.fn(),
+      },
+    });
+
+    await expect(service.createManual('acc-1')).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('refuses to run when no provider key is configured', async () => {
     const { service } = makeService({ enabled: false });
 

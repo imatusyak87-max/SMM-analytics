@@ -1,7 +1,7 @@
 import { ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
-import { In, Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 import { Queue } from 'bullmq';
 import {
   CompetitorRun,
@@ -11,6 +11,15 @@ import {
 
 /** One retry, widely spaced: provider hiccups are transient, but each run is a real call. */
 const RETRY_OPTIONS = { attempts: 2, backoff: { type: 'exponential' as const, delay: 60_000 } };
+
+/**
+ * A real run takes 1–2 minutes end to end. Redis has no volume in
+ * docker-compose.prod.yml, so a redeploy wipes the queue: a PENDING row
+ * enqueued but not yet picked up loses its job and never resolves. Anything
+ * older than this has certainly lost its job, not just run long — ignore it
+ * so it can never block a new run forever.
+ */
+const STALE_RUN_MS = 15 * 60_000;
 
 export const COMPETITOR_CONFIG = Symbol('COMPETITOR_CONFIG');
 
@@ -59,7 +68,11 @@ export class CompetitorRunService {
 
   private activeRun(accountId: string): Promise<CompetitorRun | null> {
     return this.runsRepo.findOne({
-      where: { accountId, status: In([CompetitorRunStatus.PENDING, CompetitorRunStatus.RUNNING]) },
+      where: {
+        accountId,
+        status: In([CompetitorRunStatus.PENDING, CompetitorRunStatus.RUNNING]),
+        createdAt: MoreThan(new Date(Date.now() - STALE_RUN_MS)),
+      },
     });
   }
 

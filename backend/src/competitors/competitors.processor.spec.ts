@@ -1,6 +1,7 @@
 import { CompetitorsProcessor } from './competitors.processor';
 import { CompetitorRunStatus } from '../db/entities/competitor-run.entity';
 import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
+import { scoreCandidate } from './score';
 
 const profile = {
   handle: 'mychannel',
@@ -118,6 +119,64 @@ describe('CompetitorsProcessor', () => {
       'run-1',
       expect.objectContaining({ status: CompetitorRunStatus.SUCCESS, candidatesVerified: 0 }),
     );
+  });
+
+  it('ranks by score descending and keeps only the best 10 of 12 verified candidates', async () => {
+    const ownFollowers = profile.followersCount;
+    const raw = [
+      { handle: 'a', name: 'A', followersCount: 4800, reason: 'r', fit: 9 },
+      { handle: 'b', name: 'B', followersCount: 100, reason: 'r', fit: 9 },
+      { handle: 'c', name: 'C', followersCount: 5200, reason: 'r', fit: 10 },
+      { handle: 'd', name: 'D', followersCount: 50000, reason: 'r', fit: 6 },
+      { handle: 'e', name: 'E', followersCount: 3000, reason: 'r', fit: 7 },
+      { handle: 'f', name: 'F', followersCount: 6000, reason: 'r', fit: 5 },
+      { handle: 'g', name: 'G', followersCount: 200000, reason: 'r', fit: 8 },
+      { handle: 'h', name: 'H', followersCount: 4500, reason: 'r', fit: 4 },
+      { handle: 'i', name: 'I', followersCount: 5100, reason: 'r', fit: 3 },
+      { handle: 'j', name: 'J', followersCount: 100000, reason: 'r', fit: 2 },
+      { handle: 'k', name: 'K', followersCount: 10, reason: 'r', fit: 10 },
+      { handle: 'l', name: 'L', followersCount: 4900, reason: 'r', fit: 1 },
+    ];
+
+    // Ground truth computed with the real scorer, not hand-derived numbers.
+    const byScoreDesc = raw
+      .map((c) => ({ ...c, score: scoreCandidate(c.fit, ownFollowers, c.followersCount) }))
+      .sort((x, y) => y.score - x.score);
+    const kept = byScoreDesc.slice(0, 10);
+    const dropped = byScoreDesc.slice(10);
+    expect(dropped).toHaveLength(2);
+
+    const { processor, em } = makeProcessor({
+      finder: {
+        suggest: jest.fn().mockResolvedValue({
+          niche: 'SMM',
+          candidates: raw.map(({ handle, reason, fit }) => ({ handle, reason, fit })),
+          provider: 'gemini',
+          model: 'gemini-2.5-flash',
+          inputTokens: 1,
+          outputTokens: 1,
+          costUsd: 0,
+        }),
+      },
+      verifier: { verify: jest.fn().mockResolvedValue(raw) },
+    });
+
+    await processor.process(job());
+
+    expect(em.save).toHaveBeenCalledTimes(1);
+    const saved = em.save.mock.calls[0][0] as Array<{ externalId: string; rank: number }>;
+
+    expect(saved).toHaveLength(10);
+    saved.forEach((row, index) => {
+      expect(row.rank).toBe(index + 1);
+      expect(row.externalId).toBe(kept[index].handle);
+    });
+    expect(saved[0].externalId).toBe(byScoreDesc[0].handle);
+
+    const savedHandles = saved.map((row) => row.externalId);
+    for (const worst of dropped) {
+      expect(savedHandles).not.toContain(worst.handle);
+    }
   });
 
   it('leaves the previous suggestions in place and fails the run when the save half of the transaction fails', async () => {

@@ -418,7 +418,28 @@ patch inline while running an operational check.
   grounded requests per day. One run per added channel uses one request.
 - A run happens automatically after a channel's first sync, and whenever
   «Обновить конкурентов» is pressed.
+- A new `GEMINI_API_KEY` in `.env` only reaches the process when the backend
+  container is **recreated** — `docker compose -f docker-compose.prod.yml up -d
+  --build` (part of the normal redeploy sequence above). A plain `restart`
+  reuses the old environment and the key change has no effect.
 - Inspect runs:
   `docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT \"createdAt\", status, niche, \"candidatesProposed\", \"candidatesVerified\", \"errorMessage\" FROM competitor_runs ORDER BY \"createdAt\" DESC LIMIT 10;"'`
 - A widening gap between `candidatesProposed` and `candidatesVerified` means the
-  model is inventing channels — the signal for switching `COMPETITOR_LLM`.
+  model is inventing channels — the signal for considering a different provider.
+- `COMPETITOR_LLM` selects the provider (default, and currently the only
+  implemented one, is `gemini`). Setting it to anything else — `claude`
+  included, which has no adapter yet — makes the backend throw at startup
+  naming the unsupported value, rather than silently keep running Gemini.
+  **Switching provider is not a config change**: it requires writing and
+  wiring a new `CompetitorFinder` adapter (see `competitor-finder.ts`) before
+  `COMPETITOR_LLM` can be pointed at it.
+- **Recovering a stranded run.** Redis has no volume in
+  `docker-compose.prod.yml`, so a redeploy wipes the queue. A run enqueued but
+  not yet picked up at that moment leaves a `pending` (or `running`) row whose
+  job no longer exists. The app treats such a row as stale on its own once it
+  is more than 15 minutes old (a real run takes 1–2 minutes) and lets a new
+  run start — nothing to do in the common case. If it needs fixing by hand
+  sooner than that:
+  ```bash
+  docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "UPDATE competitor_runs SET status='"'"'failed'"'"' WHERE status IN ('"'"'pending'"'"','"'"'running'"'"') AND \"createdAt\" < now() - interval '"'"'1 hour'"'"';"'
+  ```

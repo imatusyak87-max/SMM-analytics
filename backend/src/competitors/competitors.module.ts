@@ -17,6 +17,38 @@ import { CompetitorsService } from './competitors.service';
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
+/**
+ * The only implemented provider today. COMPETITOR_LLM exists so an operator can
+ * name a provider explicitly; anything other than "gemini" (including "claude",
+ * which has no adapter yet) must fail loudly at boot rather than silently keep
+ * running Gemini — that silent fallback is the bug this guards against.
+ */
+function assertSupportedProvider(provider: string): void {
+  if (provider !== 'gemini') {
+    throw new Error(
+      `Unsupported COMPETITOR_LLM provider "${provider}": only "gemini" is implemented. ` +
+        'Add an adapter for this provider before setting COMPETITOR_LLM to it.',
+    );
+  }
+}
+
+export function resolveCompetitorConfig(env: NodeJS.ProcessEnv): CompetitorConfig {
+  const provider = env.COMPETITOR_LLM ?? 'gemini';
+  assertSupportedProvider(provider);
+  return {
+    provider,
+    model: GEMINI_MODEL,
+    // With no key the feature switches itself off; everything else keeps working.
+    enabled: Boolean(env.GEMINI_API_KEY),
+  };
+}
+
+export function resolveCompetitorFinder(env: NodeJS.ProcessEnv) {
+  const provider = env.COMPETITOR_LLM ?? 'gemini';
+  assertSupportedProvider(provider);
+  return new GeminiFinder(env.GEMINI_API_KEY ?? '', GEMINI_MODEL);
+}
+
 @Module({
   imports: [
     BullModule.registerQueue({ name: 'competitors' }),
@@ -27,16 +59,11 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
   providers: [
     {
       provide: COMPETITOR_CONFIG,
-      useFactory: (): CompetitorConfig => ({
-        provider: 'gemini',
-        model: GEMINI_MODEL,
-        // With no key the feature switches itself off; everything else keeps working.
-        enabled: Boolean(process.env.GEMINI_API_KEY),
-      }),
+      useFactory: (): CompetitorConfig => resolveCompetitorConfig(process.env),
     },
     {
       provide: COMPETITOR_FINDER,
-      useFactory: () => new GeminiFinder(process.env.GEMINI_API_KEY ?? '', GEMINI_MODEL),
+      useFactory: () => resolveCompetitorFinder(process.env),
     },
     CompetitorRunService,
     CompetitorProfileService,

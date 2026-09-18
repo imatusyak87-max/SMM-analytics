@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CompetitorsSection } from './CompetitorsSection';
 import { apiClient } from '../api/client';
@@ -84,17 +85,22 @@ describe('CompetitorsSection', () => {
     expect(await screen.findByText('Не нашли похожих каналов')).toBeInTheDocument();
   });
 
-  it('explains a failed run and keeps the old suggestions visible', async () => {
+  it('shows the fixed Russian failure message and never the raw backend error', async () => {
     (apiClient.get as any).mockResolvedValue({
       data: {
         ...payload,
-        run: { ...payload.run, status: 'failed', errorMessage: 'Превышен лимит запросов, попробуйте позже' },
+        run: {
+          ...payload.run,
+          status: 'failed',
+          errorMessage: 'Gemini не ответил: timeout of 120000ms exceeded',
+        },
       },
     });
 
     renderSection();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Превышен лимит запросов');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось подобрать конкурентов');
+    expect(screen.queryByText(/timeout of 120000ms exceeded/)).not.toBeInTheDocument();
     expect(screen.getByText('Конкурент')).toBeInTheDocument();
   });
 
@@ -172,5 +178,19 @@ describe('CompetitorsSection', () => {
     for (const call of callsAfterSwitch) {
       expect(call[0]).toBe('/accounts/acc-2/competitors');
     }
+  });
+
+  it('still shows suggestions under StrictMode (mount -> cleanup -> mount)', async () => {
+    (apiClient.get as any).mockResolvedValue({ data: payload });
+
+    render(
+      <StrictMode>
+        <MemoryRouter>
+          <CompetitorsSection accountId="acc-1" />
+        </MemoryRouter>
+      </StrictMode>,
+    );
+
+    expect(await screen.findByText('Конкурент')).toBeInTheDocument();
   });
 });

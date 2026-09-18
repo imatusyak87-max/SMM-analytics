@@ -13,7 +13,7 @@ describe('competitor provider selection (COMPETITOR_LLM)', () => {
   it('behaves exactly as before when COMPETITOR_LLM=gemini is set explicitly', () => {
     const config = resolveCompetitorConfig({ COMPETITOR_LLM: 'gemini', GEMINI_API_KEY: 'key-1' });
     expect(config.provider).toBe('gemini');
-    expect(config.model).toBe('gemini-2.5-flash');
+    expect(config.model).toBe('gemini-3.6-flash');
     expect(config.enabled).toBe(true);
 
     const finder = resolveCompetitorFinder({ COMPETITOR_LLM: 'gemini', GEMINI_API_KEY: 'key-1' });

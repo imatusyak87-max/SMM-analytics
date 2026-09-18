@@ -7,23 +7,25 @@ const MAX_CAPTIONS = 30;
 const MAX_CAPTION_CHARS = 400;
 
 /**
- * Gemini 2.5 Flash with Google Search grounding: free up to 500 grounded
- * requests a day, which one run per added channel cannot approach. Grounding is
- * not free on 3.x models, so the model string is deliberate.
+ * Gemini 3.6 Flash on the free tier, answering from its own knowledge.
  *
- * Grounded generation cannot be combined with a strict response schema, so the
- * reply is parsed leniently instead of being constrained.
+ * Search grounding was the original plan, but it was free only on 2.5 models,
+ * and Google closed those to new projects ("no longer available to new users").
+ * On 3.x, grounding needs a paid project, so this runs without the search tool.
+ * The model therefore names channels from memory and some will not exist —
+ * verification against the Bot API downstream is what keeps them out.
+ *
+ * The reply is parsed leniently rather than constrained by a response schema.
  */
 export class GeminiFinder implements CompetitorFinder {
   constructor(
     private apiKey: string,
-    private model = 'gemini-2.5-flash',
+    private model = 'gemini-3.6-flash',
   ) {}
 
   async suggest(profile: ChannelProfile): Promise<FinderResult> {
     const body = {
       contents: [{ parts: [{ text: buildPrompt(profile) }] }],
-      tools: [{ google_search: {} }],
     };
 
     let data: any;
@@ -50,7 +52,7 @@ export class GeminiFinder implements CompetitorFinder {
       model: this.model,
       inputTokens: typeof usage.promptTokenCount === 'number' ? usage.promptTokenCount : null,
       outputTokens: typeof usage.candidatesTokenCount === 'number' ? usage.candidatesTokenCount : null,
-      // Free tier: tokens and grounded search are both free of charge.
+      // Free tier: tokens are free of charge, and no search tool is used.
       costUsd: 0,
     };
   }
@@ -70,8 +72,9 @@ function buildPrompt(profile: ChannelProfile): string {
     'Последние посты:',
     captions || '- нет постов',
     '',
-    'Найди через поиск до 20 русскоязычных Telegram-каналов той же тематики и',
-    'сопоставимого размера. Используй каталоги каналов и подборки «похожие каналы».',
+    'Назови до 20 русскоязычных Telegram-каналов той же тематики и сопоставимого',
+    'размера, которые ты знаешь. Указывай только каналы, в существовании которых',
+    'уверен: каждый будет проверен, так что лучше меньше, но реальных.',
     `Не включай сам канал @${profile.handle}. Указывай только публичные каналы с @-именем.`,
     '',
     'Ответь ТОЛЬКО JSON без пояснений:',
@@ -87,5 +90,13 @@ function translateError(error: unknown): Error {
   if (status === 429) return new Error('Превышен лимит запросов, попробуйте позже');
   if (/location is not supported/i.test(message)) return new Error('Gemini недоступен из региона сервера');
   if (status === 401 || status === 403) return new Error('Ключ Gemini отклонён');
+  // Keep Google's own explanation: it is the only place the real reason lives.
+  // A bare "status code 404" once hid "this model is no longer available to new
+  // users" and cost a manual investigation on the server.
+  if (status !== undefined) {
+    return new Error(
+      `Gemini не ответил (HTTP ${status}): ${message || (error as Error).message || 'неизвестная ошибка'}`,
+    );
+  }
   return new Error(`Gemini не ответил: ${(error as Error).message ?? 'неизвестная ошибка'}`);
 }

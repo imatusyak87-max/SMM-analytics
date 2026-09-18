@@ -31,6 +31,18 @@ Read from the code and verified against provider documentation on 2026-09-14/17.
 
 ## 3. Source chosen: Gemini with Google Search grounding
 
+> **Amended 2026-09-18 — grounding dropped.** In production, every run failed
+> with HTTP 404: *"This model models/gemini-2.5-flash is no longer available to
+> new users."* The same applies to `gemini-2.5-flash-lite`. Both still appear in
+> Google's model list and deprecation table, but are refused to newly created
+> projects — so the free grounding this section relies on is unavailable to this
+> deployment. On 3.x models grounding requires billing (5,000 free searches a
+> month, then $14 per 1,000, plus paid token rates). The owner chose the $0
+> option: **`gemini-3.6-flash` on the free tier, without the search tool**,
+> naming channels from its own knowledge. Verification (§4.3) becomes the main
+> defence against invented handles rather than a backstop. The text below is the
+> original reasoning, kept for the record.
+
 Google's pricing page (2026-09-11) lists **Gemini 2.5 Flash** as free of charge
 on the free tier, **including Google Search grounding, free up to 500 requests
 per day**. Grounding is *not* free on the newer 3.x models, so 2.5 Flash is the
@@ -120,7 +132,7 @@ interface CompetitorFinder {
 }
 ```
 
-`GeminiFinder` (`gemini-2.5-flash`, Google Search grounding) is implemented now.
+`GeminiFinder` (`gemini-3.6-flash`, no search tool — see the §3 amendment) is implemented now.
 `COMPETITOR_LLM` (`gemini` | `claude`, default `gemini`) selects the
 implementation. Adding `ClaudeFinder` (Sonnet 5 with its web search tool) later is
 one new file plus one environment variable: no schema change, and no changes to
@@ -191,8 +203,8 @@ regeneration is the button's job.
 
 ## 8. Cost and failure handling
 
-- **No quota guard is needed.** Gemini's free grounding allowance is 500 requests
-  per day and one run uses one; the app cannot approach it. If the provider
+- **No quota guard is needed.** One run is one free-tier request to Gemini, far
+  below any free-tier limit this app can reach. If the provider
   returns a quota or rate-limit error anyway, the run fails with «Превышен лимит
   запросов, попробуйте позже» and the button stays available.
 - A run that fails leaves the previous suggestions in place and shows

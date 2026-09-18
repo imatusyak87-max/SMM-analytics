@@ -22,20 +22,23 @@ describe('TelegramApiClient', () => {
 
   it('returns the channel description alongside the title', async () => {
     mockedGet.mockResolvedValue({
-      data: { ok: true, result: { title: 'Канал', description: 'Про маркетинг', photo: { big_file_id: 'f1' } } },
+      data: {
+        ok: true,
+        result: { type: 'channel', title: 'Канал', description: 'Про маркетинг', photo: { big_file_id: 'f1' } },
+      },
     } as any);
 
     const result = await new TelegramApiClient('token').getChat('@channel');
 
-    expect(result).toEqual({ title: 'Канал', description: 'Про маркетинг', photoUrl: 'f1' });
+    expect(result).toEqual({ type: 'channel', title: 'Канал', description: 'Про маркетинг', photoUrl: 'f1' });
   });
 
   it('returns null when the channel has no description', async () => {
-    mockedGet.mockResolvedValue({ data: { ok: true, result: { title: 'Канал' } } } as any);
+    mockedGet.mockResolvedValue({ data: { ok: true, result: { type: 'channel', title: 'Канал' } } } as any);
 
     const result = await new TelegramApiClient('token').getChat('@channel');
 
-    expect(result).toEqual({ title: 'Канал', description: null, photoUrl: null });
+    expect(result).toEqual({ type: 'channel', title: 'Канал', description: null, photoUrl: null });
   });
 
   it('downloadFile resolves the file path then fetches the bytes', async () => {

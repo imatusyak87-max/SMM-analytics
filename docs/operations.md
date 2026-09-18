@@ -435,6 +435,9 @@ patch inline while running an operational check.
   `docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT \"createdAt\", status, niche, \"candidatesProposed\", \"candidatesVerified\", \"errorMessage\" FROM competitor_runs ORDER BY \"createdAt\" DESC LIMIT 10;"'`
 - Besides existing, a candidate must pass two filters
   (`backend/src/competitors/competitor-verifier.service.ts`):
+  - **Groups** are dropped: a public @username can name a group as well as a
+    channel (Telegram's page then says "N members, M online" instead of
+    "subscribers"), and only `getChat` type `channel` passes.
   - **Spam funnels** are dropped: descriptions with two or more private invite
     links (`t.me/+…`, `t.me/joinchat/…`), or one alongside bait wording
     («закрытый», «резерв», «впускаем», «осталось N мест»…). Rules live in

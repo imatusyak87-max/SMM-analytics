@@ -138,4 +138,39 @@ describe('CompetitorsSection', () => {
 
     expect((apiClient.get as any).mock.calls.length).toBe(1);
   });
+
+  it('stops polling the old account when accountId changes, and never polls it again', async () => {
+    vi.useFakeTimers();
+    (apiClient.get as any).mockResolvedValueOnce({
+      data: { ...payload, run: { ...payload.run, status: 'running' }, suggestions: [] },
+    });
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <CompetitorsSection accountId="acc-1" />
+      </MemoryRouter>,
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    // acc-2's own initial fetch is also "running", so its own load() takes the
+    // arm branch (not the disarm-on-settle branch) — it must not be blocked from
+    // arming its own poller by a stale acc-1 interval sitting in the same ref.
+    (apiClient.get as any).mockResolvedValue({
+      data: { ...payload, run: { ...payload.run, status: 'running' }, suggestions: [] },
+    });
+    rerender(
+      <MemoryRouter>
+        <CompetitorsSection accountId="acc-2" />
+      </MemoryRouter>,
+    );
+
+    await vi.advanceTimersByTimeAsync(15000);
+    vi.useRealTimers();
+
+    const callsAfterSwitch = (apiClient.get as any).mock.calls.slice(1);
+    expect(callsAfterSwitch.length).toBeGreaterThan(0);
+    for (const call of callsAfterSwitch) {
+      expect(call[0]).toBe('/accounts/acc-2/competitors');
+    }
+  });
 });

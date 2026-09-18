@@ -38,6 +38,11 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
   // A load() started before unmount can still resolve after it: its continuation
   // must not arm a fresh interval for a component nothing will ever clear again.
   const mounted = useRef(true);
+  // Bumped on every load() call, so a response for an account the user has
+  // already navigated away from (accountId changed mid-flight) can tell it is
+  // stale and must neither render nor arm a poller for the account it fetched —
+  // same generation-counter idea as useApiGet's `latest` ref.
+  const generation = useRef(0);
 
   const stopPolling = useCallback(() => {
     if (poll.current) clearInterval(poll.current);
@@ -51,12 +56,16 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
   // (tests advancing fake timers right after mount rely on this), so the
   // interval itself must not wait on that.
   const load = useCallback(async () => {
+    const gen = ++generation.current;
     const res = await apiClient.get(`/accounts/${accountId}/competitors`);
     const payload = res.data as CompetitorsPayload;
+    // A response for an account the user has already navigated away from, or one
+    // arriving after unmount, must neither render nor arm a poller.
+    if (!mounted.current || gen !== generation.current) return payload;
     setData(payload);
     const stillRunning = payload.run?.status === 'pending' || payload.run?.status === 'running';
     if (stillRunning) {
-      if (mounted.current && !poll.current) {
+      if (!poll.current) {
         poll.current = setInterval(() => {
           load().catch(() => undefined);
         }, POLL_MS);
@@ -67,20 +76,14 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
     return payload;
   }, [accountId, stopPolling]);
 
-  // Separate from the data-loading effect below (and keyed only on the stable
-  // stopPolling) so this fires exactly once per real mount/unmount, not on
-  // every accountId-driven identity change of `load`.
-  useEffect(
-    () => () => {
-      mounted.current = false;
-      stopPolling();
-    },
-    [stopPolling],
-  );
-
   useEffect(() => {
     load().catch(() => setError('Не удалось загрузить конкурентов'));
-  }, [load]);
+    return () => stopPolling(); // fires on accountId change AND on unmount
+  }, [load, stopPolling]);
+
+  useEffect(() => () => {
+    mounted.current = false;
+  }, []);
 
   // Derived purely for rendering (disabling the button, showing the "in progress" note).
   const running = data?.run?.status === 'pending' || data?.run?.status === 'running';

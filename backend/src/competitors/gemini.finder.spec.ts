@@ -140,6 +140,17 @@ describe('GeminiFinder', () => {
     );
   });
 
+  it('tells the model which channels were already checked', async () => {
+    mockedPost.mockResolvedValue(
+      reply('{"niche":"SMM","competitors":[{"handle":"@rival","reason":"Та же тема","fit":8}]}') as any,
+    );
+
+    await new GeminiFinder('key-123').suggest(profile, ['checked_one', 'checked_two']);
+
+    const prompt = (mockedPost.mock.calls[0][1] as any).contents[0].parts[0].text;
+    expect(prompt).toContain('@checked_one, @checked_two');
+  });
+
   describe('when Google is overloaded', () => {
     // The production failure: "This model is currently experiencing high demand".
     const overloaded = {

@@ -26,9 +26,9 @@ export class GeminiFinder implements CompetitorFinder {
     private retryDelaysMs: number[] = [5_000, 20_000],
   ) {}
 
-  async suggest(profile: ChannelProfile): Promise<FinderResult> {
+  async suggest(profile: ChannelProfile, exclude: string[] = []): Promise<FinderResult> {
     const body = {
-      contents: [{ parts: [{ text: buildPrompt(profile) }] }],
+      contents: [{ parts: [{ text: buildPrompt(profile, exclude) }] }],
     };
 
     let data: any;
@@ -65,7 +65,7 @@ export class GeminiFinder implements CompetitorFinder {
   }
 }
 
-function buildPrompt(profile: ChannelProfile): string {
+function buildPrompt(profile: ChannelProfile, exclude: string[]): string {
   const captions = profile.captions
     .slice(0, MAX_CAPTIONS)
     .map((caption) => `- ${caption.slice(0, MAX_CAPTION_CHARS)}`)
@@ -84,6 +84,9 @@ function buildPrompt(profile: ChannelProfile): string {
     'уверен: каждый будет проверен, так что лучше меньше, но реальных.',
     `Не включай сам канал @${profile.handle}. Указывай только публичные каналы с @-именем.`,
     'Только живые авторские каналы: без заброшенных, ботов и каналов-воронок в закрытые каналы.',
+    ...(exclude.length > 0
+      ? [`Эти каналы уже проверены, не называй их снова: ${exclude.map((handle) => `@${handle}`).join(', ')}.`]
+      : []),
     '',
     'Ответь ТОЛЬКО JSON без пояснений:',
     '{"niche":"<ниша канала по-русски>","competitors":[{"handle":"@channel","reason":"<почему конкурент, одна строка по-русски>","fit":<1-10>}]}',

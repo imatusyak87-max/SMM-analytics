@@ -19,7 +19,7 @@ describe('App', () => {
     window.history.pushState({}, '', '/');
     render(<App />);
 
-    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Логин')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument();
     expect(apiClient.get).not.toHaveBeenCalled();
   });

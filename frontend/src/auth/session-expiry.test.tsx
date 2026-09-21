@@ -42,7 +42,7 @@ describe('an expired session', () => {
 
     render(<App />);
 
-    expect(await screen.findByLabelText('Email')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Логин')).toBeInTheDocument();
     expect(localStorage.getItem('accessToken')).toBeNull();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });

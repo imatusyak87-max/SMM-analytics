@@ -5,6 +5,7 @@ import { Account } from '../db/entities/account.entity';
 import { Post } from '../db/entities/post.entity';
 import { CompetitorRun } from '../db/entities/competitor-run.entity';
 import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
+import { CompetitorRejection } from '../db/entities/competitor-rejection.entity';
 import { ConnectorsModule } from '../connectors/connectors.module';
 import { COMPETITOR_FINDER } from './competitor-finder';
 import { GeminiFinder } from './gemini.finder';
@@ -53,7 +54,7 @@ export function resolveCompetitorFinder(env: NodeJS.ProcessEnv) {
 @Module({
   imports: [
     BullModule.registerQueue({ name: 'competitors' }),
-    TypeOrmModule.forFeature([Account, Post, CompetitorRun, CompetitorSuggestion]),
+    TypeOrmModule.forFeature([Account, Post, CompetitorRun, CompetitorSuggestion, CompetitorRejection]),
     ConnectorsModule,
   ],
   controllers: [CompetitorsController],

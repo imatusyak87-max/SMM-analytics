@@ -53,6 +53,7 @@ describe('AccountsService', () => {
         (call: unknown[]) => (call[0] as { name: string }).name,
       );
       expect(deletedTables).toEqual([
+        'CompetitorRejection',
         'CompetitorSuggestion',
         'CompetitorRun',
         'Post',

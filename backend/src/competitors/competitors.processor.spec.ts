@@ -41,6 +41,7 @@ function makeProcessor(overrides: any = {}) {
       { handle: 'rival', name: 'Конкурент', followersCount: 4800, reason: 'Та же тема', fit: 9 },
     ]),
   };
+  const rejectionsRepo = overrides.rejectionsRepo ?? { find: jest.fn().mockResolvedValue([]) };
   const processor = new CompetitorsProcessor(
     accountsRepo as any,
     runsRepo as any,
@@ -48,6 +49,7 @@ function makeProcessor(overrides: any = {}) {
     profiles as any,
     finder as any,
     verifier as any,
+    rejectionsRepo as any,
   );
   return { processor, runsRepo, suggestionsRepo, em, finder, verifier };
 }
@@ -288,5 +290,42 @@ describe('CompetitorsProcessor', () => {
         expect.objectContaining({ status: CompetitorRunStatus.SUCCESS }),
       );
     });
+  });
+
+  it('tells Gemini which channels the user rejected, and never verifies or keeps them', async () => {
+    const finder = {
+      suggest: jest.fn().mockResolvedValue({
+        niche: 'SMM',
+        candidates: [
+          { handle: 'wrong', reason: 'r', fit: 9 },
+          { handle: 'a', reason: 'r', fit: 8 },
+          { handle: 'b', reason: 'r', fit: 8 },
+          { handle: 'c', reason: 'r', fit: 8 },
+          { handle: 'd', reason: 'r', fit: 8 },
+          { handle: 'e', reason: 'r', fit: 8 },
+        ],
+        provider: 'gemini',
+        model: 'gemini-3.6-flash',
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: 0,
+      }),
+    };
+    const verifier = {
+      verify: jest.fn(async (candidates: any[]) =>
+        candidates.map((c) => ({ handle: c.handle, name: c.handle, followersCount: 5000, reason: 'r', fit: c.fit })),
+      ),
+    };
+    const rejectionsRepo = { find: jest.fn().mockResolvedValue([{ externalId: 'wrong' }]) };
+    const { processor, em, runsRepo } = makeProcessor({ finder, verifier, rejectionsRepo });
+
+    await processor.process(job());
+
+    expect(rejectionsRepo.find).toHaveBeenCalledWith({ where: { accountId: 'acc-1' } });
+    expect(finder.suggest.mock.calls[0][1]).toEqual(['wrong']);
+    expect(verifier.verify.mock.calls[0][0].map((c: any) => c.handle)).not.toContain('wrong');
+    expect((em.save.mock.calls[0][0] as any[]).map((row) => row.externalId)).not.toContain('wrong');
+    // A rejected handle the model repeats was not really proposed.
+    expect(runsRepo.update).toHaveBeenLastCalledWith('run-1', expect.objectContaining({ candidatesProposed: 5 }));
   });
 });

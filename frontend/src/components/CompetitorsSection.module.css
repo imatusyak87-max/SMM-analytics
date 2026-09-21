@@ -117,9 +117,17 @@
   font-size: 13px;
 }
 
-.add,
-.tracked {
+.actions {
   margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.add,
+.tracked,
+.reject {
   flex-shrink: 0;
   padding: 8px 14px;
   border-radius: 8px;
@@ -143,4 +151,52 @@
 .tracked {
   border: 1px solid var(--border);
   color: var(--text);
+}
+
+/* Secondary to «Добавить»: text-weight until hovered, so the list stays calm. */
+.reject {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.reject:hover {
+  border-color: var(--border);
+  color: var(--text-h);
+}
+
+.undo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.undoButton {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.undoButton:hover {
+  text-decoration: underline;
+}
+
+/* Two buttons beside the channel info leave it no room on a phone: stack them under it. */
+@media (max-width: 600px) {
+  .item {
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
 }

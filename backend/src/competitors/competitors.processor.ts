@@ -6,6 +6,7 @@ import { Job } from 'bullmq';
 import { Account } from '../db/entities/account.entity';
 import { CompetitorRun, CompetitorRunStatus } from '../db/entities/competitor-run.entity';
 import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
+import { CompetitorRejection } from '../db/entities/competitor-rejection.entity';
 import { COMPETITOR_FINDER, type ChannelProfile, type CompetitorFinder } from './competitor-finder';
 import { CompetitorProfileService } from './competitor-profile.service';
 import { CompetitorVerifier, VerifiedCandidate } from './competitor-verifier.service';
@@ -37,6 +38,7 @@ export class CompetitorsProcessor extends WorkerHost {
     private profiles: CompetitorProfileService,
     @Inject(COMPETITOR_FINDER) private finder: CompetitorFinder,
     private verifier: CompetitorVerifier,
+    @InjectRepository(CompetitorRejection) private rejectionsRepo: Repository<CompetitorRejection>,
   ) {
     super();
   }
@@ -51,7 +53,9 @@ export class CompetitorsProcessor extends WorkerHost {
       if (!account) throw new Error(`Account ${accountId} not found`);
 
       const profile = await this.profiles.build(account);
-      const { result, proposed, verified } = await this.findAndVerify(profile);
+      const rejections = await this.rejectionsRepo.find({ where: { accountId } });
+      const rejected = rejections.map((r) => r.externalId);
+      const { result, proposed, verified } = await this.findAndVerify(profile, rejected);
 
       const ranked = verified
         .map((candidate) => ({
@@ -122,23 +126,27 @@ export class CompetitorsProcessor extends WorkerHost {
    * leave too few. Ask again, naming what was already checked, until MIN_SHOWN
    * pass, the model runs out of new channels, or MAX_ROUNDS is reached. Only the
    * first round's failure fails the run; a failed top-up keeps what passed.
+   *
+   * Channels the user marked «Не конкурент» are named to the model up front and
+   * skipped if it repeats them anyway: never verified, never counted as proposed.
    */
-  private async findAndVerify(profile: ChannelProfile) {
-    const first = await this.finder.suggest(profile);
+  private async findAndVerify(profile: ChannelProfile, rejected: string[]) {
+    const skip = new Set(rejected);
+    const first = await this.finder.suggest(profile, rejected);
     const result = { ...first };
     const checked = new Set<string>();
     const verified: VerifiedCandidate[] = [];
 
     let candidates = first.candidates;
     for (let round = 1; ; round++) {
-      const fresh = candidates.filter((candidate) => !checked.has(candidate.handle));
+      const fresh = candidates.filter((candidate) => !checked.has(candidate.handle) && !skip.has(candidate.handle));
       if (fresh.length === 0) break;
       fresh.forEach((candidate) => checked.add(candidate.handle));
       verified.push(...(await this.verifier.verify(fresh, profile)));
       if (verified.length >= MIN_SHOWN || round >= MAX_ROUNDS) break;
 
       try {
-        const next = await this.finder.suggest(profile, [...checked]);
+        const next = await this.finder.suggest(profile, [...rejected, ...checked]);
         result.inputTokens = addTokens(result.inputTokens, next.inputTokens);
         result.outputTokens = addTokens(result.outputTokens, next.outputTokens);
         result.costUsd += next.costUsd;

@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CompetitorsSection } from './CompetitorsSection';
 import { apiClient } from '../api/client';
 
-vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn() } }));
+vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }));
 
 const payload = {
   enabled: true,
@@ -192,5 +192,60 @@ describe('CompetitorsSection', () => {
     );
 
     expect(await screen.findByText('Конкурент')).toBeInTheDocument();
+  });
+
+  describe('«Не конкурент»', () => {
+    const withoutRival = { ...payload, suggestions: payload.suggestions.filter((s) => s.externalId !== 'rival') };
+
+    it('hides the channel at once and offers to undo', async () => {
+      (apiClient.get as any).mockResolvedValueOnce({ data: payload }).mockResolvedValue({ data: withoutRival });
+      (apiClient.post as any).mockResolvedValue({});
+
+      renderSection();
+      const buttons = await screen.findAllByRole('button', { name: 'Не конкурент' });
+      fireEvent.click(buttons[0]);
+
+      await waitFor(() => expect(screen.queryByText('Конкурент')).not.toBeInTheDocument());
+      expect(apiClient.post).toHaveBeenCalledWith('/accounts/acc-1/competitors/rival/reject');
+      expect(screen.getByText(/@rival скрыт/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Отменить' })).toBeInTheDocument();
+    });
+
+    it('is offered on tracked suggestions too: tracking a channel does not make it a competitor', async () => {
+      (apiClient.get as any).mockResolvedValue({ data: payload });
+
+      renderSection();
+
+      expect(await screen.findAllByRole('button', { name: 'Не конкурент' })).toHaveLength(2);
+    });
+
+    it('brings the channel back on «Отменить»', async () => {
+      (apiClient.get as any)
+        .mockResolvedValueOnce({ data: payload })
+        .mockResolvedValueOnce({ data: withoutRival })
+        .mockResolvedValue({ data: payload });
+      (apiClient.post as any).mockResolvedValue({});
+      (apiClient.delete as any).mockResolvedValue({});
+
+      renderSection();
+      fireEvent.click((await screen.findAllByRole('button', { name: 'Не конкурент' }))[0]);
+      fireEvent.click(await screen.findByRole('button', { name: 'Отменить' }));
+
+      await waitFor(() => expect(apiClient.delete).toHaveBeenCalledWith('/accounts/acc-1/competitors/rival/reject'));
+      expect(await screen.findByText('Конкурент')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Отменить' })).not.toBeInTheDocument();
+    });
+
+    it('keeps the channel and explains when hiding fails', async () => {
+      (apiClient.get as any).mockResolvedValue({ data: payload });
+      (apiClient.post as any).mockRejectedValue({ response: { status: 500 } });
+
+      renderSection();
+      fireEvent.click((await screen.findAllByRole('button', { name: 'Не конкурент' }))[0]);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось скрыть канал');
+      expect(screen.getByText('Конкурент')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Отменить' })).not.toBeInTheDocument();
+    });
   });
 });

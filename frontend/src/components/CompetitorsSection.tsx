@@ -41,6 +41,9 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
   const [data, setData] = useState<CompetitorsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
+  // The last channel marked «Не конкурент», kept for «Отменить». Hidden locally
+  // at once, before the reload confirms it.
+  const [hidden, setHidden] = useState<string | null>(null);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
   // A load() started before unmount can still resolve after it: its continuation
   // must not arm a fresh interval for a component nothing will ever clear again.
@@ -100,6 +103,7 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
 
   async function refresh() {
     setError(null);
+    setHidden(null);
     try {
       await apiClient.post(`/accounts/${accountId}/competitors/refresh`);
       await load();
@@ -111,6 +115,7 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
   async function add(handle: string) {
     setAdding(handle);
     setError(null);
+    setHidden(null);
     try {
       await apiClient.post('/accounts/from-link', { link: `https://t.me/${handle}` });
       await load();
@@ -121,7 +126,32 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
     }
   }
 
-  const suggestions = data?.suggestions ?? [];
+  async function reject(handle: string) {
+    setError(null);
+    try {
+      await apiClient.post(`/accounts/${accountId}/competitors/${handle}/reject`);
+      setHidden(handle);
+      await load();
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? 'Не удалось скрыть канал');
+    }
+  }
+
+  async function undoReject() {
+    if (!hidden) return;
+    const handle = hidden;
+    setError(null);
+    setHidden(null);
+    try {
+      await apiClient.delete(`/accounts/${accountId}/competitors/${handle}/reject`);
+      await load();
+    } catch (err: any) {
+      setHidden(handle);
+      setError(err.response?.data?.message ?? 'Не удалось вернуть канал');
+    }
+  }
+
+  const suggestions = (data?.suggestions ?? []).filter((s) => s.externalId !== hidden);
   const failed = data?.run?.status === 'failed';
 
   return (
@@ -154,6 +184,15 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
         </p>
       )}
 
+      {hidden && (
+        <p className={styles.undo}>
+          Канал @{hidden} скрыт
+          <button type="button" className={styles.undoButton} onClick={undoReject}>
+            Отменить
+          </button>
+        </p>
+      )}
+
       {suggestions.length > 0 ? (
         <ul className={styles.list}>
           {suggestions.map((s) => (
@@ -171,20 +210,25 @@ export function CompetitorsSection({ accountId }: { accountId: string }) {
                 <span className={styles.followers}>{formatCount(s.followersCount)} подписчиков</span>
                 <span className={styles.reason}>{s.reason}</span>
               </div>
-              {s.alreadyTracked ? (
-                <Link className={styles.tracked} to={`/accounts/${s.trackedAccountId}`}>
-                  Уже отслеживается
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  className={styles.add}
-                  onClick={() => add(s.externalId)}
-                  disabled={adding === s.externalId}
-                >
-                  Добавить
+              <div className={styles.actions}>
+                <button type="button" className={styles.reject} onClick={() => reject(s.externalId)}>
+                  Не конкурент
                 </button>
-              )}
+                {s.alreadyTracked ? (
+                  <Link className={styles.tracked} to={`/accounts/${s.trackedAccountId}`}>
+                    Уже отслеживается
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.add}
+                    onClick={() => add(s.externalId)}
+                    disabled={adding === s.externalId}
+                  >
+                    Добавить
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>

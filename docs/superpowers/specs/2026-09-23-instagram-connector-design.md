@@ -193,16 +193,27 @@ requests/hour/account limit; no batching needed for this slice.
 
 ## 7. UI
 
-Two explicit buttons on the overview page, next to the existing
-competitor-add button, instead of a modal with a type picker:
+**Inside the existing `AddAccountModal`, as a platform choice** — not
+separate buttons. The modal gains a small platform selector at the top
+(Telegram / Instagram); its title, currently «Добавьте аккаунт
+конкурента», stops being accurate once the same modal can also connect
+a full-access own/client account, so it becomes the neutral
+«Добавьте аккаунт», with per-tab helper text underneath.
 
-- «Подключить свой Instagram» and «Подключить Instagram клиента» —
-  each starts the OAuth redirect with that type already encoded in the
-  state token, so connecting is one click with no extra dialog.
-- **Reconnect** reuses the identical flow. When `needsReconnect` is
-  true for an account (exposed on `GET /accounts/:id`), its detail
-  page shows a banner with a «Переподключить» button hitting the same
-  entry point. No accountId needs to be threaded through — see §3.
+- **Telegram tab:** unchanged — paste a link, live preview, «Добавить».
+- **Instagram tab:** no link and no preview, because nothing is known
+  before Instagram's own login screen. Just a type choice (own /
+  client) and one «Подключить» button. Clicking it navigates the whole
+  page to Instagram's OAuth screen (the §3 diagram) — this is a full
+  redirect, not a popup, so the modal's own state doesn't need to
+  survive the round trip: the app reloads at `/accounts/:id` on the
+  way back, past the point where the modal existed.
+
+**Reconnect is unaffected by this change** — it isn't adding a new
+account, so it doesn't go through this modal. It stays a banner with a
+«Переподключить» button on the affected account's detail page (§5),
+hitting the same OAuth entry point. No accountId needs to be threaded
+through — see §3.
 
 ## 8. Meta app requirements this design assumes
 

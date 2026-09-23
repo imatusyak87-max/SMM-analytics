@@ -1361,7 +1361,7 @@ export class InstagramConnector implements SocialConnector {
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd backend && npx jest src/connectors/instagram/instagram.connector -v`
-Expected: PASS, 8 tests
+Expected: PASS, 7 tests
 
 - [ ] **Step 5: Commit**
 
@@ -1736,7 +1736,7 @@ export class InstagramOauthService {
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd backend && npx jest src/connectors/instagram/instagram-oauth.service -v`
-Expected: PASS, 7 tests
+Expected: PASS, 6 tests
 
 - [ ] **Step 5: Commit**
 

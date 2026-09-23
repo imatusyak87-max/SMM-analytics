@@ -985,7 +985,7 @@ export class InstagramApiClient {
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd backend && npx jest src/connectors/instagram/instagram-api.client -v`
-Expected: PASS, 9 tests
+Expected: PASS, 8 tests
 
 - [ ] **Step 5: Commit**
 

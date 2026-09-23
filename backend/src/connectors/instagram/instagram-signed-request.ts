@@ -12,6 +12,7 @@ function base64urlDecode(input: string): Buffer {
  * to respond, never crash on a request it doesn't recognise.
  */
 export function verifySignedRequest(signedRequest: string, appSecret: string): { userId: string } | null {
+  if (typeof signedRequest !== 'string' || !signedRequest) return null;
   const parts = signedRequest.split('.');
   if (parts.length !== 2) return null;
   const [encodedSignature, encodedPayload] = parts;

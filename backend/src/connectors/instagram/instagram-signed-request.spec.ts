@@ -33,4 +33,12 @@ describe('verifySignedRequest', () => {
   it('rejects an empty string', () => {
     expect(verifySignedRequest('', APP_SECRET)).toBeNull();
   });
+
+  it('rejects undefined input', () => {
+    expect(verifySignedRequest(undefined as any, APP_SECRET)).toBeNull();
+  });
+
+  it('rejects null input', () => {
+    expect(verifySignedRequest(null as any, APP_SECRET)).toBeNull();
+  });
 });

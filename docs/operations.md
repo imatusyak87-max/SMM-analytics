@@ -492,15 +492,20 @@ patch inline while running an operational check.
   docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT a.id, a.name, c.\"tokenExpiresAt\", c.\"needsReconnect\" FROM accounts a JOIN account_credentials c ON c.\"accountId\" = a.id WHERE a.platform = '"'"'instagram'"'"';"'
   ```
 - `needsReconnect = true` means the stored access token is invalid, expired, or
-  was revoked by Meta (e.g. via the deauthorize webhook). It blocks syncs for
-  that account. Clear it by clicking the «Переподключить» button on the account
-  detail page, which starts the OAuth flow again. On success, `needsReconnect`
-  is set back to `false`.
-- Deleting an Instagram account removes only the stored access token. All
-  collected posts, follower snapshots, and other analytics history remain in
-  the database, the same as for every other platform's account delete. Posts
-  and snapshots tied to that account's `accountId` keep their foreign key but
-  the account row itself is gone.
+  was revoked by Meta (e.g. via the deauthorize webhook). Each sync fails while
+  this flag is set (and re-sets it on each failure). Clear it by clicking the
+  «Переподключить» button on the account detail page, which starts the OAuth
+  flow again. On success, `needsReconnect` is set back to `false`.
+- In the UI, «Удалить» removes the account row together with all collected
+  posts, snapshots, sync jobs, competitor data, and credentials — the same as
+  for every platform. The confirmation dialog asks «…и всю собранную статистику?».
+  To keep all history and only stop syncing without deleting, use
+  «Деактивировать», which sets `isActive = false` and stops the sync loop.
+- Meta's webhooks have different effects: the deauthorize webhook (`POST
+  /api/instagram/deauthorize`) only sets `needsReconnect = true`, while the
+  data-deletion webhook (`POST /api/instagram/data-deletion`) removes only the
+  stored access token (the `account_credentials` row), keeping all posts and
+  snapshots intact.
 - Meta calls three public endpoints after successful authorization, deauthorization,
   or user data deletion — they are configured in the Meta app dashboard:
   - `GET /api/instagram/callback` — browser redirect after user approves the login

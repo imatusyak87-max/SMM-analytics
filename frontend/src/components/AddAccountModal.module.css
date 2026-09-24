@@ -154,3 +154,65 @@
   font-size: 13px;
   color: var(--danger);
 }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab,
+.tabActive {
+  padding: 9px 4px;
+  margin-bottom: -1px;
+  font-size: 14px;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tab {
+  color: var(--text);
+}
+
+.tabActive {
+  color: var(--text-h);
+  border-bottom-color: var(--accent);
+}
+
+.helperText {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.radioRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.connectButton {
+  width: 100%;
+  padding: 9px 18px;
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.connectButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

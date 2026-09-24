@@ -62,16 +62,16 @@ export class InstagramApiClient {
   }
 
   async exchangeForLongLivedToken(shortLivedToken: string): Promise<{ accessToken: string; expiresInSeconds: number }> {
-    const { data } = await axios.get(
-      `${GRAPH_BASE}/access_token?grant_type=ig_exchange_token&client_secret=${this.appSecret}&access_token=${shortLivedToken}`,
-    );
+    const { data } = await axios.get(`${GRAPH_BASE}/access_token`, {
+      params: { grant_type: 'ig_exchange_token', client_secret: this.appSecret, access_token: shortLivedToken },
+    });
     return { accessToken: data.access_token, expiresInSeconds: data.expires_in };
   }
 
   async refreshLongLivedToken(longLivedToken: string): Promise<{ accessToken: string; expiresInSeconds: number }> {
-    const { data } = await axios.get(
-      `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${longLivedToken}`,
-    );
+    const { data } = await axios.get('https://graph.instagram.com/refresh_access_token', {
+      params: { grant_type: 'ig_refresh_token', access_token: longLivedToken },
+    });
     return { accessToken: data.access_token, expiresInSeconds: data.expires_in };
   }
 

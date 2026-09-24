@@ -38,7 +38,12 @@ describe('InstagramApiClient', () => {
     const result = await client.exchangeForLongLivedToken('short-tok');
 
     expect(result).toEqual({ accessToken: 'long-tok', expiresInSeconds: 5184000 });
-    expect(mockedGet.mock.calls[0][0]).toContain('grant_type=ig_exchange_token');
+    const [url, config] = mockedGet.mock.calls[0];
+    // Secret and token go through axios params (URL-encoded), never concatenated into the URL.
+    expect(url).toBe('https://graph.instagram.com/v21.0/access_token');
+    expect(config).toEqual({
+      params: { grant_type: 'ig_exchange_token', client_secret: 'app-secret', access_token: 'short-tok' },
+    });
   });
 
   it('refreshes a long-lived token', async () => {
@@ -48,7 +53,9 @@ describe('InstagramApiClient', () => {
     const result = await client.refreshLongLivedToken('long-tok');
 
     expect(result).toEqual({ accessToken: 'refreshed-tok', expiresInSeconds: 5184000 });
-    expect(mockedGet.mock.calls[0][0]).toContain('grant_type=ig_refresh_token');
+    const [url, config] = mockedGet.mock.calls[0];
+    expect(url).toBe('https://graph.instagram.com/refresh_access_token');
+    expect(config).toEqual({ params: { grant_type: 'ig_refresh_token', access_token: 'long-tok' } });
   });
 
   it('fetches the profile and maps snake_case fields', async () => {

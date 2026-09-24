@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import { Account } from '../db/entities/account.entity';
+import { AccountCredential } from '../db/entities/account-credential.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post, PostType } from '../db/entities/post.entity';
 import type { PostSortKey } from './dto/post-filter.dto';
@@ -93,12 +94,14 @@ export class StatsService {
     @InjectRepository(Account) private accountsRepo: Repository<Account>,
     @InjectRepository(AccountSnapshot) private snapshotsRepo: Repository<AccountSnapshot>,
     @InjectRepository(Post) private postsRepo: Repository<Post>,
+    @InjectRepository(AccountCredential) private credentialsRepo: Repository<AccountCredential>,
   ) {}
 
   async getAccountDetail(accountId: string, period: Period) {
     const account = await this.accountsRepo.findOneBy({ id: accountId });
     if (!account) throw new NotFoundException(`Account ${accountId} not found`);
 
+    const credential = await this.credentialsRepo.findOneBy({ accountId });
     const trend = await this.snapshotsRepo.find({
       where: { accountId, date: Between(period.from, period.to) },
       order: { date: 'ASC' },
@@ -113,6 +116,7 @@ export class StatsService {
 
     return {
       account,
+      needsReconnect: credential?.needsReconnect ?? false,
       latestSnapshot,
       trend,
       summary: summarise(totals, latestSnapshot?.followersCount ?? null),

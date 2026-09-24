@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Account } from '../db/entities/account.entity';
+import { AccountCredential } from '../db/entities/account-credential.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post } from '../db/entities/post.entity';
 import { StatsService } from './stats.service';
 import { StatsController } from './stats.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Account, AccountSnapshot, Post])],
+  imports: [TypeOrmModule.forFeature([Account, AccountSnapshot, Post, AccountCredential])],
   providers: [StatsService],
   controllers: [StatsController],
   exports: [StatsService],

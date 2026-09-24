@@ -16,7 +16,7 @@ function fakeQueryBuilder(result: [unknown[], number] = [[], 0]) {
 
 function serviceWith(qb: any) {
   const postsRepo = { createQueryBuilder: jest.fn().mockReturnValue(qb) } as any;
-  return new StatsService({} as any, {} as any, postsRepo);
+  return new StatsService({} as any, {} as any, postsRepo, {} as any);
 }
 
 const base = { from: '2026-09-01', to: '2026-09-30', sort: 'views' as const, page: 1, size: 10 };

@@ -18,6 +18,7 @@ interface Setup {
   trend?: object[];
   firstSnapshot?: object | null;
   raw?: Record<string, string>;
+  credential?: object | null;
 }
 
 function setup({
@@ -25,6 +26,7 @@ function setup({
   trend = [],
   firstSnapshot = null,
   raw,
+  credential = null,
 }: Setup = {}) {
   const qb = totalsQuery(raw);
   const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(account) } as any;
@@ -33,7 +35,14 @@ function setup({
     findOne: jest.fn().mockResolvedValue(firstSnapshot),
   } as any;
   const postsRepo = { createQueryBuilder: jest.fn().mockReturnValue(qb) } as any;
-  return { service: new StatsService(accountsRepo, snapshotsRepo, postsRepo), qb, snapshotsRepo, postsRepo };
+  const credentialsRepo = { findOneBy: jest.fn().mockResolvedValue(credential) } as any;
+  return {
+    service: new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo),
+    qb,
+    snapshotsRepo,
+    postsRepo,
+    credentialsRepo,
+  };
 }
 
 const period = { from: '2026-08-01', to: '2026-08-13' };
@@ -98,6 +107,16 @@ describe('StatsService.getAccountDetail', () => {
 
     expect(summary.postsCount).toBe(0);
     expect(summary.erViews).toBeNull();
+  });
+
+  it('reports needsReconnect from the account credential, false when there is none', async () => {
+    const { service: withCredential } = setup({ credential: { needsReconnect: true } });
+    const withResult = await withCredential.getAccountDetail('acc-1', period);
+    expect(withResult.needsReconnect).toBe(true);
+
+    const { service: withoutCredential } = setup({ credential: null });
+    const withoutResult = await withoutCredential.getAccountDetail('acc-1', period);
+    expect(withoutResult.needsReconnect).toBe(false);
   });
 });
 
@@ -201,7 +220,8 @@ describe('StatsService.getOverview', () => {
       find: jest.fn(),
     } as any;
     const postsRepo = {} as any;
-    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo);
+    const credentialsRepo = {} as any;
+    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo);
 
     const result = await service.getOverview();
 
@@ -223,7 +243,8 @@ describe('StatsService.compare', () => {
     } as any;
     const snapshotsRepo = { find: jest.fn().mockResolvedValue([{ date: '2026-08-13', followersCount: 100 }]) } as any;
     const postsRepo = {} as any;
-    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo);
+    const credentialsRepo = {} as any;
+    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo);
 
     const result = await service.compare(['acc-1', 'acc-2'], period);
 

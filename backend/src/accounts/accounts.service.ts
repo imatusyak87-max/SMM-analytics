@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Account, AccountType } from '../db/entities/account.entity';
+import { Account, AccountPlatform, AccountType } from '../db/entities/account.entity';
 import { AccountCredential } from '../db/entities/account-credential.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post } from '../db/entities/post.entity';
@@ -22,6 +22,7 @@ import { CreateAccountDto } from './dto/create-account.dto';
 import { ParsedAccountLink, parseAccountLink } from './parse-account-link';
 
 const ALREADY_ADDED = 'Этот аккаунт уже добавлен';
+const INSTAGRAM_NOT_BY_LINK = 'Instagram-аккаунты подключаются через вкладку Instagram — по ссылке их добавить нельзя';
 const PG_UNIQUE_VIOLATION = '23505';
 
 @Injectable()
@@ -129,6 +130,10 @@ export class AccountsService {
       throw new BadRequestException(
         'Unsupported link. Paste a Telegram, Instagram, VK, YouTube or LinkedIn account URL.',
       );
+    }
+    // Instagram needs the owner's OAuth token, which a pasted link cannot carry.
+    if (parsed.platform === AccountPlatform.INSTAGRAM) {
+      throw new BadRequestException(INSTAGRAM_NOT_BY_LINK);
     }
 
     try {

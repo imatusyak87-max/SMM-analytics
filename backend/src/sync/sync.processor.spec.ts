@@ -14,7 +14,7 @@ describe('SyncProcessor', () => {
   };
 
   function buildProcessor(
-    overrides: Partial<{ getAccountStats: any; getPosts: any; syncJobsUpdate: any; competitorRuns: any }> = {},
+    overrides: Partial<{ getAccountStats: any; getPosts: any; syncJobsUpdate: any; competitorRuns: any; account: any }> = {},
   ) {
     const connector = {
       platform: AccountPlatform.TELEGRAM,
@@ -23,7 +23,7 @@ describe('SyncProcessor', () => {
       getPosts: overrides.getPosts ?? jest.fn().mockResolvedValue([]),
     };
     const registry = { get: jest.fn().mockReturnValue(connector) } as any;
-    const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(account) } as any;
+    const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(overrides.account ?? account) } as any;
     const snapshotsRepo = { upsert: jest.fn() } as any;
     const postsRepo = { upsert: jest.fn() } as any;
     const syncJobsRepo = { update: overrides.syncJobsUpdate ?? jest.fn() } as any;
@@ -215,6 +215,29 @@ describe('SyncProcessor', () => {
     ).rejects.toThrow();
 
     expect(competitorRuns.createForNewAccount).toHaveBeenCalledWith('acc-1');
+  });
+
+  it('does not start competitor discovery for an Instagram account (it finds Telegram channels only)', async () => {
+    const instagramAccount = { ...account, platform: AccountPlatform.INSTAGRAM, externalId: '17841400000000000' };
+    const { processor, competitorRuns } = buildProcessor({ account: instagramAccount });
+
+    await processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any);
+
+    expect(competitorRuns.createForNewAccount).not.toHaveBeenCalled();
+  });
+
+  it('does not start competitor discovery for an Instagram account whose sync fails for good', async () => {
+    const instagramAccount = { ...account, platform: AccountPlatform.INSTAGRAM, externalId: '17841400000000000' };
+    const { processor, competitorRuns } = buildProcessor({
+      account: instagramAccount,
+      getPosts: jest.fn().mockRejectedValue(new Error('Instagram не ответил')),
+    });
+
+    await expect(
+      processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any),
+    ).rejects.toThrow();
+
+    expect(competitorRuns.createForNewAccount).not.toHaveBeenCalled();
   });
 
   it('does not fail a sync when queueing competitor discovery throws', async () => {

@@ -472,3 +472,51 @@ patch inline while running an operational check.
   ```bash
   docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "UPDATE competitor_runs SET status='"'"'failed'"'"' WHERE status IN ('"'"'pending'"'"','"'"'running'"'"') AND \"createdAt\" < now() - interval '"'"'1 hour'"'"';"'
   ```
+
+## Instagram
+
+- Requires three environment variables in `/opt/smm-dashboard/app/.env`:
+  `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_REDIRECT_URI`. A new
+  value for any of these only reaches the process when the backend container is
+  **recreated** — `docker compose -f docker-compose.prod.yml up -d --build`
+  (part of the normal redeploy sequence described above). A plain `restart`
+  reuses the old environment and the change has no effect.
+- Also requires `CREDENTIAL_ENCRYPTION_KEY`: exactly **64 hex characters**
+  (32 bytes, AES-256-GCM key for the stored access tokens). Generate one with
+  `openssl rand -hex 32`. Never change it once accounts are connected — the
+  stored tokens can no longer be decrypted and every Instagram account would
+  need reconnecting.
+- None of these are required to boot: when any is missing (or the key is not
+  64 hex characters) the backend logs a `WARN [InstagramModule] Instagram is
+  not fully configured: …` line at startup and keeps running — Telegram is
+  unaffected, only connecting/syncing Instagram accounts will fail.
+- The Meta app stays in development mode. Each connected Instagram account — the
+  agency's own as well as every client's — must be manually added as a tester in
+  the Meta app dashboard (`https://developers.meta.com/...`) and must accept the
+  invite sent to the account's associated email before connecting through the UI.
+- Token refresh runs at 2:30am, 30 minutes before the 3am sync, so a freshly
+  refreshed token is ready when the sync fires. To check which accounts need
+  re-authorization or have expiring tokens:
+  ```bash
+  docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT a.id, a.name, c.\"tokenExpiresAt\", c.\"needsReconnect\" FROM accounts a JOIN account_credentials c ON c.\"accountId\" = a.id WHERE a.platform = '"'"'instagram'"'"';"'
+  ```
+- `needsReconnect = true` means the stored access token is invalid, expired, or
+  was revoked by Meta (e.g. via the deauthorize webhook). Each sync fails while
+  this flag is set (and re-sets it on each failure). Clear it by clicking the
+  «Переподключить» button on the account detail page, which starts the OAuth
+  flow again. On success, `needsReconnect` is set back to `false`.
+- In the UI, «Удалить» removes the account row together with all collected
+  posts, snapshots, sync jobs, competitor data, and credentials — the same as
+  for every platform. The confirmation dialog asks «…и всю собранную статистику?».
+  To keep all history and only stop syncing without deleting, use
+  «Деактивировать», which sets `isActive = false` and stops the sync loop.
+- Meta's webhooks have different effects: the deauthorize webhook (`POST
+  /api/instagram/deauthorize`) only sets `needsReconnect = true`, while the
+  data-deletion webhook (`POST /api/instagram/data-deletion`) removes only the
+  stored access token (the `account_credentials` row), keeping all posts and
+  snapshots intact.
+- Meta calls three public endpoints after successful authorization, deauthorization,
+  or user data deletion — they are configured in the Meta app dashboard:
+  - `GET /api/instagram/callback` — browser redirect after user approves the login
+  - `POST /api/instagram/deauthorize` — notification when user revokes the app in Meta settings
+  - `POST /api/instagram/data-deletion` — GDPR data deletion request

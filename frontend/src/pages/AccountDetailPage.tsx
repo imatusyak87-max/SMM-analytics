@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
 import { CompetitorsSection } from '../components/CompetitorsSection';
 import { Pagination } from '../components/Pagination';
@@ -25,6 +26,7 @@ interface DetailData {
   summary: AccountSummary;
   /** Where collected data begins; earlier periods are shown as far as it reaches. */
   coverage: { postsFrom: string; followersFrom: string };
+  needsReconnect: boolean;
 }
 
 interface PostsPage {
@@ -42,6 +44,8 @@ export function AccountDetailPage() {
   const [tableSize, setTableSize] = useState(10);
   const [openPost, setOpenPost] = useState<PostItem | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
 
   const range = { from: period.from, to: period.to };
   const postFilter = { ...range, sort, type: typeFilter === 'all' ? undefined : typeFilter };
@@ -76,6 +80,18 @@ export function AccountDetailPage() {
     setTablePage(1);
   };
 
+  async function handleReconnect() {
+    setReconnecting(true);
+    setReconnectError(null);
+    try {
+      const { data } = await apiClient.get('/accounts/instagram/connect', { params: { type: 'own' } });
+      window.location.href = data.redirectUrl;
+    } catch (err: any) {
+      setReconnectError(err.response?.data?.message ?? 'Не удалось начать переподключение');
+      setReconnecting(false);
+    }
+  }
+
   if (detail.error) {
     const status = (detail.error as { response?: { status?: number } }).response?.status;
     return (
@@ -103,6 +119,15 @@ export function AccountDetailPage() {
           }}
         />
       </div>
+      {detail.data.needsReconnect && (
+        <div className={styles.reconnectBanner} role="alert">
+          <span>Переподключите Instagram — доступ к аккаунту был потерян.</span>
+          <button type="button" onClick={handleReconnect} disabled={reconnecting}>
+            {reconnecting ? 'Переходим…' : 'Переподключить'}
+          </button>
+          {reconnectError && <span className={styles.error}>{reconnectError}</span>}
+        </div>
+      )}
       <section className={styles.overview} aria-label="Сводка за период">
         <PeriodPicker value={period} onChange={changePeriod} />
         {showCoverage && (

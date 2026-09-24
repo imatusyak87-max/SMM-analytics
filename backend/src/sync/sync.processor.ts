@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
 import { ConnectorRegistry } from '../connectors/connector-registry.service';
-import { Account } from '../db/entities/account.entity';
+import { Account, AccountPlatform } from '../db/entities/account.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post } from '../db/entities/post.entity';
 import { SyncJob, SyncStatus } from '../db/entities/sync-job.entity';
@@ -39,12 +39,14 @@ export class SyncProcessor extends WorkerHost {
 
   async process(job: Job<SyncJobData>): Promise<void> {
     const { syncJobId, accountId } = job.data;
+    let platform: AccountPlatform | null = null;
 
     try {
       await this.syncJobsRepo.update(syncJobId, { status: SyncStatus.RUNNING, startedAt: new Date() });
 
       const account = await this.accountsRepo.findOneBy({ id: accountId });
       if (!account) throw new Error(`Account ${accountId} not found`);
+      platform = account.platform;
 
       const connector = this.registry.get(account.platform);
       const stats = await connector.getAccountStats(account);
@@ -106,7 +108,7 @@ export class SyncProcessor extends WorkerHost {
       );
 
       await this.syncJobsRepo.update(syncJobId, { status: SyncStatus.SUCCESS, finishedAt: new Date() });
-      await this.startCompetitorDiscovery(accountId);
+      await this.startCompetitorDiscovery(accountId, platform);
     } catch (error) {
       // Only the last attempt is a real failure — marking earlier ones FAILED would
       // show the user a failure that a retry is about to fix.
@@ -126,7 +128,7 @@ export class SyncProcessor extends WorkerHost {
           );
         }
 
-        await this.startCompetitorDiscovery(accountId);
+        await this.startCompetitorDiscovery(accountId, platform);
       }
 
       // BullMQ decides retry and backoff from a rejected promise; swallowing here
@@ -140,7 +142,11 @@ export class SyncProcessor extends WorkerHost {
    * createForNewAccount is "this account has no run yet", so the nightly sync
    * never re-runs it. Queueing must never turn a finished sync into a failed one.
    */
-  private async startCompetitorDiscovery(accountId: string): Promise<void> {
+  private async startCompetitorDiscovery(accountId: string, platform: AccountPlatform | null): Promise<void> {
+    // Discovery asks the LLM for similar Telegram channels — meaningless for
+    // any other platform. An unknown platform (account never loaded) keeps
+    // the previous behaviour.
+    if (platform !== null && platform !== AccountPlatform.TELEGRAM) return;
     try {
       await this.competitorRuns.createForNewAccount(accountId);
     } catch (error) {

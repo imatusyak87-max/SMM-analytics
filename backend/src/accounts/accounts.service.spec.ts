@@ -319,6 +319,40 @@ describe('AccountsService', () => {
     });
   });
 
+  describe('Instagram links', () => {
+    const MESSAGE = 'Instagram-аккаунты подключаются через вкладку Instagram — по ссылке их добавить нельзя';
+
+    function setup() {
+      const repo = makeRepo();
+      const connector = { getAccountInfo: jest.fn(), getAccountStats: jest.fn(), getAvatar: jest.fn() };
+      const registry = { get: jest.fn().mockReturnValue(connector) } as any;
+      const syncJobs = { createManual: jest.fn() };
+      const service = new AccountsService(repo, registry, syncJobs as any);
+      return { service, repo, connector, syncJobs };
+    }
+
+    it('refuses to preview an Instagram link without calling the connector', async () => {
+      const { service, connector } = setup();
+
+      const attempt = service.preview('https://www.instagram.com/someone');
+
+      await expect(attempt).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.preview('https://www.instagram.com/someone')).rejects.toThrow(MESSAGE);
+      expect(connector.getAccountInfo).not.toHaveBeenCalled();
+      expect(connector.getAccountStats).not.toHaveBeenCalled();
+    });
+
+    it('refuses to add an Instagram account from a link', async () => {
+      const { service, repo, connector, syncJobs } = setup();
+
+      await expect(service.createFromLink('https://instagram.com/someone')).rejects.toThrow(MESSAGE);
+      await expect(service.createFromLink('https://instagram.com/someone')).rejects.toBeInstanceOf(BadRequestException);
+      expect(connector.getAccountInfo).not.toHaveBeenCalled();
+      expect(repo.save).not.toHaveBeenCalled();
+      expect(syncJobs.createManual).not.toHaveBeenCalled();
+    });
+  });
+
   describe('createFromLink duplicate protection', () => {
     function serviceWith(repo: any, syncJobs = { createManual: jest.fn() }) {
       const connector = {

@@ -5,7 +5,7 @@ import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { InstagramOauthState } from '../../db/entities/instagram-oauth-state.entity';
 import { InstagramApiClient } from './instagram-api.client';
 import { InstagramConnector } from './instagram.connector';
-import { InstagramOauthController, INSTAGRAM_APP_SECRET } from './instagram-oauth.controller';
+import { INSTAGRAM_APP_SECRET } from './instagram-oauth.controller';
 import { InstagramOauthService } from './instagram-oauth.service';
 import { InstagramOauthStateService } from './instagram-oauth-state.service';
 import { InstagramTokenRefreshService } from './instagram-token-refresh.service';
@@ -14,14 +14,13 @@ const INSTAGRAM_API_CLIENT = 'INSTAGRAM_API_CLIENT';
 
 /**
  * Owns everything Instagram-specific: OAuth state, credential encryption,
- * the API client, the connector, the token-refresh cron, and the public
- * OAuth/webhook endpoints. Exports InstagramConnector so ConnectorsModule
- * can add it to the platform-agnostic CONNECTORS registry — this module
- * does not depend on ConnectorsModule, only the other way around.
+ * the API client, the connector, and the token-refresh cron. The public
+ * OAuth/webhook controller's file lives here but AccountsModule registers
+ * it. Exports InstagramConnector so ConnectorsModule can add it to the
+ * platform-agnostic CONNECTORS registry — this module does not depend on ConnectorsModule, only the other way around.
  */
 @Module({
   imports: [TypeOrmModule.forFeature([Account, AccountCredential, InstagramOauthState])],
-  controllers: [InstagramOauthController],
   providers: [
     {
       provide: INSTAGRAM_API_CLIENT,
@@ -75,7 +74,9 @@ const INSTAGRAM_API_CLIENT = 'INSTAGRAM_API_CLIENT';
     },
   ],
   // InstagramConnector for ConnectorsModule (Task 12); InstagramOauthService
-  // for AccountsModule's own connect endpoint (Task 13).
-  exports: [InstagramConnector, InstagramOauthService],
+  // for AccountsModule's own connect endpoint (Task 13); InstagramOauthService
+  // and INSTAGRAM_APP_SECRET also for InstagramOauthController, which
+  // AccountsModule hosts so it can queue a first sync.
+  exports: [InstagramConnector, InstagramOauthService, INSTAGRAM_APP_SECRET],
 })
 export class InstagramModule {}

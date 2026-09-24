@@ -5,8 +5,9 @@ function makeController(overrides: Partial<Record<string, any>> = {}) {
   const oauthService = { completeLogin: jest.fn(), ...overrides.oauthService };
   const accountsRepo = { findOneBy: jest.fn(), ...overrides.accountsRepo };
   const credentialsRepo = { update: jest.fn(), delete: jest.fn(), ...overrides.credentialsRepo };
-  const controller = new InstagramOauthController(oauthService, accountsRepo, credentialsRepo, 'app-secret');
-  return { controller, oauthService, accountsRepo, credentialsRepo };
+  const syncJobs = { createManual: jest.fn().mockResolvedValue({ id: 'job-1' }), ...overrides.syncJobs };
+  const controller = new InstagramOauthController(oauthService, accountsRepo, credentialsRepo, 'app-secret', syncJobs);
+  return { controller, oauthService, accountsRepo, credentialsRepo, syncJobs };
 }
 
 function fakeResponse() {
@@ -22,6 +23,42 @@ describe('InstagramOauthController.callback', () => {
 
     expect(oauthService.completeLogin).toHaveBeenCalledWith('a-code', 'good-state');
     expect(res.redirect).toHaveBeenCalledWith('/accounts/acc-1');
+  });
+
+  it('queues a first sync for the connected account before redirecting', async () => {
+    const { controller, syncJobs } = makeController({ oauthService: { completeLogin: jest.fn().mockResolvedValue({ id: 'acc-1' }) } });
+    const res = fakeResponse();
+    const order: string[] = [];
+    syncJobs.createManual.mockImplementation(async () => { order.push('sync'); });
+    res.redirect.mockImplementation(() => { order.push('redirect'); });
+
+    await controller.callback('a-code', 'good-state', res);
+
+    expect(syncJobs.createManual).toHaveBeenCalledWith('acc-1');
+    expect(order).toEqual(['sync', 'redirect']);
+  });
+
+  it('still redirects when the sync cannot be queued', async () => {
+    const { controller } = makeController({
+      oauthService: { completeLogin: jest.fn().mockResolvedValue({ id: 'acc-1' }) },
+      syncJobs: { createManual: jest.fn().mockRejectedValue(new Error('redis down')) },
+    });
+    const res = fakeResponse();
+
+    await controller.callback('a-code', 'good-state', res);
+
+    expect(res.redirect).toHaveBeenCalledWith('/accounts/acc-1');
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('does not queue a sync when the login fails', async () => {
+    const { controller, syncJobs } = makeController({
+      oauthService: { completeLogin: jest.fn().mockRejectedValue(new Error('nope')) },
+    });
+
+    await controller.callback('a-code', 'bad-state', fakeResponse());
+
+    expect(syncJobs.createManual).not.toHaveBeenCalled();
   });
 
   it('responds 400 with a plain message when the login cannot be completed', async () => {

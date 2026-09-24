@@ -8,6 +8,8 @@ import { InstagramTokenRefreshService } from './instagram-token-refresh.service'
 import { Account } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { InstagramOauthState } from '../../db/entities/instagram-oauth-state.entity';
+import { SyncJobService } from '../../sync/sync-job.service';
+import { AccountsModule } from '../../accounts/accounts.module';
 
 describe('InstagramModule', () => {
   const originalEnv = process.env;
@@ -43,8 +45,28 @@ describe('InstagramModule', () => {
     expect(moduleRef.get(InstagramConnector)).toBeInstanceOf(InstagramConnector);
   });
 
-  it('provides an InstagramOauthController', async () => {
-    const moduleRef = await compileModule();
+  it('no longer hosts the OAuth controller itself — AccountsModule does, for SyncJobService access', () => {
+    expect(Reflect.getMetadata('controllers', InstagramModule) ?? []).not.toContain(InstagramOauthController);
+    expect(Reflect.getMetadata('controllers', AccountsModule)).toContain(InstagramOauthController);
+  });
+
+  it('exports what the OAuth controller needs, so a host module can resolve it', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [InstagramModule],
+      controllers: [InstagramOauthController],
+      providers: [
+        { provide: SyncJobService, useValue: { createManual: jest.fn() } },
+        { provide: getRepositoryToken(Account), useValue: {} },
+        { provide: getRepositoryToken(AccountCredential), useValue: {} },
+      ],
+    })
+      .overrideProvider(getRepositoryToken(Account))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(AccountCredential))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(InstagramOauthState))
+      .useValue({})
+      .compile();
 
     expect(moduleRef.get(InstagramOauthController)).toBeInstanceOf(InstagramOauthController);
   });

@@ -12,8 +12,9 @@ function makeDeps() {
     refreshLongLivedToken: jest.fn(),
     getProfile: jest.fn().mockResolvedValue({ id: 'ig-1', username: 'user', name: 'Name', profilePictureUrl: 'https://cdn/p.jpg' }),
   };
-  const service = new InstagramTokenRefreshService(accountsRepo as any, credentialsRepo as any, api as any, KEY);
-  return { service, accountsRepo, credentialsRepo, api };
+  const stateService = { purgeExpired: jest.fn() };
+  const service = new InstagramTokenRefreshService(accountsRepo as any, credentialsRepo as any, api as any, KEY, stateService as any);
+  return { service, accountsRepo, credentialsRepo, api, stateService };
 }
 
 describe('InstagramTokenRefreshService.refreshExpiring', () => {
@@ -169,5 +170,17 @@ describe('InstagramTokenRefreshService.refreshProfiles', () => {
     await service.refreshExpiring();
 
     expect(refreshProfiles).toHaveBeenCalled();
+  });
+});
+
+describe('InstagramTokenRefreshService nightly cleanup', () => {
+  it('purges abandoned OAuth states in the same cron', async () => {
+    const { service, accountsRepo, credentialsRepo, stateService } = makeDeps();
+    accountsRepo.find.mockResolvedValue([]);
+    credentialsRepo.find.mockResolvedValue([]);
+
+    await service.refreshExpiring();
+
+    expect(stateService.purgeExpired).toHaveBeenCalled();
   });
 });

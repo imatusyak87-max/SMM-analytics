@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
 import { InstagramAccountKind, InstagramOauthState } from '../../db/entities/instagram-oauth-state.entity';
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -39,5 +39,10 @@ export class InstagramOauthStateService {
 
     const age = Date.now() - new Date(row.createdAt).getTime();
     return age <= STATE_TTL_MS ? row.type : null;
+  }
+
+  /** Removes states whose login was abandoned (never reached the callback). */
+  async purgeExpired(): Promise<void> {
+    await this.repo.delete({ createdAt: LessThan(new Date(Date.now() - STATE_TTL_MS)) });
   }
 }

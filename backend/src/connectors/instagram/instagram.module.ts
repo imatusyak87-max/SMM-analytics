@@ -63,9 +63,15 @@ const INSTAGRAM_API_CLIENT = 'INSTAGRAM_API_CLIENT';
     },
     {
       provide: InstagramTokenRefreshService,
-      useFactory: (accountsRepo: any, credentialsRepo: any, api: InstagramApiClient) =>
-        new InstagramTokenRefreshService(accountsRepo, credentialsRepo, api, process.env.CREDENTIAL_ENCRYPTION_KEY as string),
-      inject: [getRepositoryToken(Account), getRepositoryToken(AccountCredential), INSTAGRAM_API_CLIENT],
+      useFactory: (accountsRepo: any, credentialsRepo: any, api: InstagramApiClient, stateService: InstagramOauthStateService) =>
+        new InstagramTokenRefreshService(
+          accountsRepo,
+          credentialsRepo,
+          api,
+          process.env.CREDENTIAL_ENCRYPTION_KEY as string,
+          stateService,
+        ),
+      inject: [getRepositoryToken(Account), getRepositoryToken(AccountCredential), INSTAGRAM_API_CLIENT, InstagramOauthStateService],
     },
   ],
   // InstagramConnector for ConnectorsModule (Task 12); InstagramOauthService

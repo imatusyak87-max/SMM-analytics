@@ -7,6 +7,7 @@ import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { InstagramApiClient } from './instagram-api.client';
 import { decryptToken, encryptToken } from './instagram-token-crypto';
 import { isInstagramAuthError } from './instagram-error';
+import { InstagramOauthStateService } from './instagram-oauth-state.service';
 
 const REFRESH_WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -20,6 +21,7 @@ export class InstagramTokenRefreshService {
     @InjectRepository(AccountCredential) private credentialsRepo: Repository<AccountCredential>,
     private api: InstagramApiClient,
     private encryptionKey: string,
+    private stateService: InstagramOauthStateService,
   ) {}
 
   /**
@@ -33,6 +35,11 @@ export class InstagramTokenRefreshService {
       await this.refreshProfiles();
     } catch (error) {
       this.logger.warn(`Could not refresh Instagram profiles: ${(error as Error).message}`);
+    }
+    try {
+      await this.stateService.purgeExpired();
+    } catch (error) {
+      this.logger.warn(`Could not purge expired Instagram OAuth states: ${(error as Error).message}`);
     }
   }
 

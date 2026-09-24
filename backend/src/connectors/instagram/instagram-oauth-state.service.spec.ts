@@ -1,3 +1,4 @@
+import { LessThan } from 'typeorm';
 import { InstagramOauthStateService } from './instagram-oauth-state.service';
 import { InstagramAccountKind } from '../../db/entities/instagram-oauth-state.entity';
 
@@ -82,5 +83,18 @@ describe('InstagramOauthStateService', () => {
     expect(await service.consume(['a', 'b'] as any)).toBeNull();
     expect(repo.createQueryBuilder).not.toHaveBeenCalled();
     expect(repo.findOneBy).not.toHaveBeenCalled();
+  });
+
+  it('purges abandoned states older than the 10-minute TTL', async () => {
+    const { repo } = makeRepo();
+    const service = new InstagramOauthStateService(repo);
+    const before = Date.now();
+
+    await service.purgeExpired();
+
+    expect(repo.delete).toHaveBeenCalledWith({ createdAt: expect.any(LessThan(new Date()).constructor) });
+    const cutoff: Date = repo.delete.mock.calls[0][0].createdAt.value;
+    expect(cutoff.getTime()).toBeLessThanOrEqual(before - 10 * 60 * 1000 + 1000);
+    expect(cutoff.getTime()).toBeGreaterThanOrEqual(before - 10 * 60 * 1000 - 1000);
   });
 });

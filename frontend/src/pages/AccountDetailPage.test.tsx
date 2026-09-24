@@ -25,6 +25,7 @@ function detail(coverage = { postsFrom: '2026-06-12', followersFrom: '2026-06-12
     trend: [],
     summary,
     coverage,
+    needsReconnect: false,
   };
 }
 
@@ -301,5 +302,41 @@ describe('AccountDetailPage', () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Аккаунт не найден'));
+  });
+
+  it('shows a reconnect banner when the account needs one, and starts the same OAuth flow', async () => {
+    get.mockImplementation((url: string) => {
+      if (url.endsWith('/detail')) return Promise.resolve({ data: { ...detail(), needsReconnect: true } });
+      if (url.endsWith('/posts')) return Promise.resolve({ data: { total: 2, items: [post('p1', 'Hello'), post('p2', 'World')] } });
+      if (url.includes('/accounts/instagram/connect')) {
+        return Promise.resolve({ data: { redirectUrl: 'https://www.instagram.com/oauth/authorize?state=xyz' } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    const originalLocation = window.location;
+    delete (window as any).location;
+    (window as any).location = { href: '' };
+
+    try {
+      renderPage();
+
+      expect(await screen.findByText(/Переподключите Instagram/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Переподключить' }));
+
+      await waitFor(() =>
+        expect(get).toHaveBeenCalledWith('/accounts/instagram/connect', { params: { type: 'own' } }),
+      );
+      await waitFor(() => expect(window.location.href).toBe('https://www.instagram.com/oauth/authorize?state=xyz'));
+    } finally {
+      (window as any).location = originalLocation;
+    }
+  });
+
+  it('shows no banner when the account does not need reconnecting', async () => {
+    mockApi({ detailData: { ...detail(), needsReconnect: false } });
+    renderPage();
+
+    await screen.findByText(detail().account.name); // page has loaded
+    expect(screen.queryByText(/Переподключите Instagram/)).not.toBeInTheDocument();
   });
 });

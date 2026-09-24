@@ -72,6 +72,19 @@ describe('InstagramConnector', () => {
     expect(avatar.contentType).toBe('image/jpeg');
   });
 
+  it('refuses an account without an id instead of loading some other account credential', async () => {
+    const api = { getProfile: jest.fn() };
+    const credentialRepo = makeCredentialRepo();
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+    const draft = { platform: AccountPlatform.INSTAGRAM, externalId: 'someone' } as any;
+
+    await expect(connector.getAccountInfo(draft)).rejects.toThrow();
+    await expect(connector.getAccountStats(draft)).rejects.toThrow();
+    await expect(connector.getPosts(draft, new Date())).rejects.toThrow();
+    expect(credentialRepo.findOneBy).not.toHaveBeenCalled();
+    expect(api.getProfile).not.toHaveBeenCalled();
+  });
+
   it('sets needsReconnect on the credential when a call fails with an auth error', async () => {
     const authError = { response: { status: 400, data: { error: { type: 'OAuthException', code: 190, message: 'Error validating access token' } } } };
     const api = { getProfile: jest.fn().mockRejectedValue(authError) };

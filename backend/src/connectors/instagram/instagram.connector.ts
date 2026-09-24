@@ -72,6 +72,9 @@ export class InstagramConnector implements SocialConnector {
    * set consistently regardless of which call actually failed.
    */
   private async call<T>(account: Account, fn: (token: string) => Promise<T>): Promise<T> {
+    // A draft account (e.g. from link-based preview) has no id; TypeORM would
+    // drop the undefined where-value and hand back some other account's token.
+    if (!account.id) throw new Error('Instagram connector needs a saved account; link-based access is not supported');
     const credential = await this.credentialsRepo.findOneBy({ accountId: account.id });
     if (!credential) throw new Error(`No Instagram credential stored for account ${account.id}`);
     const token = decryptToken(credential.encryptedToken, this.encryptionKey);

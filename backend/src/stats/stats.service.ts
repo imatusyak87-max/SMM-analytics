@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
-import { Account } from '../db/entities/account.entity';
+import { Account, AccountPlatform } from '../db/entities/account.entity';
 import { AccountCredential } from '../db/entities/account-credential.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Post, PostType } from '../db/entities/post.entity';
@@ -116,7 +116,10 @@ export class StatsService {
 
     return {
       account,
-      needsReconnect: credential?.needsReconnect ?? false,
+      // An Instagram account cannot sync without its stored token, so a missing
+      // row (e.g. removed by Meta's data-deletion callback) means reconnect.
+      // Telegram accounts never have a credential row.
+      needsReconnect: credential ? credential.needsReconnect : account.platform === AccountPlatform.INSTAGRAM,
       latestSnapshot,
       trend,
       summary: summarise(totals, latestSnapshot?.followersCount ?? null),

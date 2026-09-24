@@ -1,3 +1,4 @@
+import { AccountPlatform } from '../db/entities/account.entity';
 import { NotFoundException } from '@nestjs/common';
 import { StatsService, summarise } from './stats.service';
 
@@ -117,6 +118,26 @@ describe('StatsService.getAccountDetail', () => {
     const { service: withoutCredential } = setup({ credential: null });
     const withoutResult = await withoutCredential.getAccountDetail('acc-1', period);
     expect(withoutResult.needsReconnect).toBe(false);
+  });
+
+  it('reports needsReconnect for an Instagram account whose credential is gone (e.g. after data deletion)', async () => {
+    const { service } = setup({
+      account: { id: 'acc-ig', name: 'IG', platform: AccountPlatform.INSTAGRAM, createdAt: new Date('2026-09-10T12:00:00Z') } as any,
+      credential: null,
+    });
+
+    const result = await service.getAccountDetail('acc-ig', period);
+
+    expect(result.needsReconnect).toBe(true);
+  });
+
+  it('keeps needsReconnect false for a Telegram account with no credential row', async () => {
+    const { service } = setup({
+      account: { id: 'acc-tg', name: 'TG', platform: AccountPlatform.TELEGRAM, createdAt: new Date('2026-09-10T12:00:00Z') } as any,
+      credential: null,
+    });
+
+    expect((await service.getAccountDetail('acc-tg', period)).needsReconnect).toBe(false);
   });
 });
 

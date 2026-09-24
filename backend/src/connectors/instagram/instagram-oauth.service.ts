@@ -68,10 +68,9 @@ export class InstagramOauthService {
     const existing = await this.accountsRepo.findOneBy({ platform: AccountPlatform.INSTAGRAM, externalId: instagramUserId });
 
     if (existing) {
-      await this.credentialsRepo.update(
-        { accountId: existing.id },
-        { encryptedToken, tokenExpiresAt, needsReconnect: false },
-      );
+      // save() on the accountId primary key is an upsert: it re-creates the
+      // row the data-deletion webhook removed, where update() would touch 0 rows.
+      await this.credentialsRepo.save({ accountId: existing.id, encryptedToken, tokenExpiresAt, needsReconnect: false });
       return existing;
     }
 

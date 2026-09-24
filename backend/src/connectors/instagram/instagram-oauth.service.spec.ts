@@ -64,7 +64,7 @@ describe('InstagramOauthService.completeLogin', () => {
     expect(account.id).toBe('acc-new');
   });
 
-  it('updates the existing credential, and clears needsReconnect, when the Instagram id is already tracked', async () => {
+  it('writes (upserts) the credential, and clears needsReconnect, when the Instagram id is already tracked', async () => {
     const { service, stateService, api, accountsRepo, credentialsRepo } = makeDeps();
     stateService.consume.mockResolvedValue(InstagramAccountKind.OWN);
     api.exchangeCodeForToken.mockResolvedValue({ accessToken: 'short-tok', instagramUserId: '17841400000000000' });
@@ -76,10 +76,13 @@ describe('InstagramOauthService.completeLogin', () => {
 
     expect(account.id).toBe('acc-existing');
     expect(accountsRepo.save).not.toHaveBeenCalled();
-    expect(credentialsRepo.update).toHaveBeenCalledWith(
-      { accountId: 'acc-existing' },
-      expect.objectContaining({ needsReconnect: false }),
+    // save() keyed by the accountId primary key inserts the row when the
+    // data-deletion webhook removed it, and updates it otherwise; update()
+    // would silently touch 0 rows after a deletion.
+    expect(credentialsRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 'acc-existing', needsReconnect: false, encryptedToken: expect.any(String) }),
     );
+    expect(credentialsRepo.update).not.toHaveBeenCalled();
   });
 
   it('keys the account by the /me profile id, not the token response user_id', async () => {

@@ -21,6 +21,16 @@ describe('InstagramApiClient', () => {
     expect((form as URLSearchParams).get('client_secret')).toBe('app-secret');
   });
 
+  it.each([
+    ['access_token', { user_id: '17841400000000000' }],
+    ['user_id', { access_token: 'short-tok' }],
+  ])('refuses a code-exchange response with no %s', async (_missing, data) => {
+    mockedPost.mockResolvedValue({ data } as any);
+    const client = new InstagramApiClient('app-id', 'app-secret', 'https://example.com/callback');
+
+    await expect(client.exchangeCodeForToken('a-code')).rejects.toThrow();
+  });
+
   it('exchanges a short-lived token for a long-lived one', async () => {
     mockedGet.mockResolvedValue({ data: { access_token: 'long-tok', expires_in: 5184000 } } as any);
     const client = new InstagramApiClient('app-id', 'app-secret', 'https://example.com/callback');

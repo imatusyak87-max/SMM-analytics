@@ -42,10 +42,10 @@ export class InstagramOauthService {
       throw new Error('Ссылка для входа устарела, попробуйте подключить аккаунт заново');
     }
 
-    let shortLivedToken: string, instagramUserId: string, longLivedToken: string, expiresInSeconds: number;
+    let shortLivedToken: string, longLivedToken: string, expiresInSeconds: number;
     let profile: InstagramProfile;
     try {
-      ({ accessToken: shortLivedToken, instagramUserId } = await this.api.exchangeCodeForToken(code));
+      ({ accessToken: shortLivedToken } = await this.api.exchangeCodeForToken(code));
       ({ accessToken: longLivedToken, expiresInSeconds } = await this.api.exchangeForLongLivedToken(shortLivedToken));
       profile = await this.api.getProfile(longLivedToken);
     } catch (error) {
@@ -53,6 +53,11 @@ export class InstagramOauthService {
       // layer that turns one into a message safe to show the user.
       throw translateInstagramError(error);
     }
+
+    if (!profile.id) throw new Error('Instagram не вернул идентификатор аккаунта, попробуйте подключить заново');
+    // The token response's user_id is a JSON number that can exceed 2^53 and
+    // lose precision; /me returns the same id as a string, so key on that.
+    const instagramUserId = String(profile.id);
 
     const encryptedToken = encryptToken(longLivedToken, this.encryptionKey);
     const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000);

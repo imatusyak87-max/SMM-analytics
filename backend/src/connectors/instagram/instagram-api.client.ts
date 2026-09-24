@@ -55,6 +55,9 @@ export class InstagramApiClient {
       code,
     });
     const { data } = await axios.post('https://api.instagram.com/oauth/access_token', form);
+    if (!data?.access_token || data?.user_id === undefined || data?.user_id === null) {
+      throw new Error('Instagram returned an unexpected token response');
+    }
     return { accessToken: data.access_token, instagramUserId: String(data.user_id) };
   }
 

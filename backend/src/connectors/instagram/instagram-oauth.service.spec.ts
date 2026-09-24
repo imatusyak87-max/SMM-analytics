@@ -50,7 +50,7 @@ describe('InstagramOauthService.completeLogin', () => {
     stateService.consume.mockResolvedValue(InstagramAccountKind.CLIENT);
     api.exchangeCodeForToken.mockResolvedValue({ accessToken: 'short-tok', instagramUserId: '17841400000000000' });
     api.exchangeForLongLivedToken.mockResolvedValue({ accessToken: 'long-tok', expiresInSeconds: 5184000 });
-    api.getProfile.mockResolvedValue({ username: 'client_account', name: 'Client', profilePictureUrl: null, biography: null });
+    api.getProfile.mockResolvedValue({ id: '17841400000000000', username: 'client_account', name: 'Client', profilePictureUrl: null, biography: null });
     accountsRepo.findOneBy.mockResolvedValue(null);
 
     const account = await service.completeLogin('a-code', 'good-state');
@@ -69,7 +69,7 @@ describe('InstagramOauthService.completeLogin', () => {
     stateService.consume.mockResolvedValue(InstagramAccountKind.OWN);
     api.exchangeCodeForToken.mockResolvedValue({ accessToken: 'short-tok', instagramUserId: '17841400000000000' });
     api.exchangeForLongLivedToken.mockResolvedValue({ accessToken: 'long-tok', expiresInSeconds: 5184000 });
-    api.getProfile.mockResolvedValue({ username: 'agency_own', name: null, profilePictureUrl: null, biography: null });
+    api.getProfile.mockResolvedValue({ id: '17841400000000000', username: 'agency_own', name: null, profilePictureUrl: null, biography: null });
     accountsRepo.findOneBy.mockResolvedValue({ id: 'acc-existing', platform: AccountPlatform.INSTAGRAM, externalId: '17841400000000000' });
 
     const account = await service.completeLogin('a-code', 'good-state');
@@ -82,12 +82,27 @@ describe('InstagramOauthService.completeLogin', () => {
     );
   });
 
+  it('keys the account by the /me profile id, not the token response user_id', async () => {
+    const { service, stateService, api, accountsRepo } = makeDeps();
+    stateService.consume.mockResolvedValue(InstagramAccountKind.OWN);
+    // A numeric user_id past 2^53 loses precision in JSON.parse; /me returns the id as a string.
+    api.exchangeCodeForToken.mockResolvedValue({ accessToken: 'short-tok', instagramUserId: '17841400000000000' });
+    api.exchangeForLongLivedToken.mockResolvedValue({ accessToken: 'long-tok', expiresInSeconds: 5184000 });
+    api.getProfile.mockResolvedValue({ id: '17841400000000001', username: 'agency_own', name: null, profilePictureUrl: null, biography: null });
+    accountsRepo.findOneBy.mockResolvedValue(null);
+
+    await service.completeLogin('a-code', 'good-state');
+
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ platform: AccountPlatform.INSTAGRAM, externalId: '17841400000000001' });
+    expect(accountsRepo.save).toHaveBeenCalledWith(expect.objectContaining({ externalId: '17841400000000001' }));
+  });
+
   it('stores the token encrypted, never the plaintext', async () => {
     const { service, stateService, api, accountsRepo, credentialsRepo } = makeDeps();
     stateService.consume.mockResolvedValue(InstagramAccountKind.OWN);
     api.exchangeCodeForToken.mockResolvedValue({ accessToken: 'short-tok', instagramUserId: '17841400000000000' });
     api.exchangeForLongLivedToken.mockResolvedValue({ accessToken: 'the-real-long-lived-token', expiresInSeconds: 5184000 });
-    api.getProfile.mockResolvedValue({ username: 'agency_own', name: null, profilePictureUrl: null, biography: null });
+    api.getProfile.mockResolvedValue({ id: '17841400000000000', username: 'agency_own', name: null, profilePictureUrl: null, biography: null });
     accountsRepo.findOneBy.mockResolvedValue(null);
 
     await service.completeLogin('a-code', 'good-state');

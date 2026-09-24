@@ -22,9 +22,49 @@ export class InstagramTokenRefreshService {
     private encryptionKey: string,
   ) {}
 
-  /** Runs 30 minutes before the 3am sync, so a freshly refreshed token is ready when it fires. */
+  /**
+   * Runs 30 minutes before the 3am sync, so a freshly refreshed token is ready
+   * when it fires. Profiles are refreshed after tokens, so they use the new ones.
+   */
   @Cron('30 2 * * *')
   async refreshExpiring(): Promise<void> {
+    await this.refreshTokens();
+    try {
+      await this.refreshProfiles();
+    } catch (error) {
+      this.logger.warn(`Could not refresh Instagram profiles: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * The sync pipeline never rewrites an account's name or avatar, and
+   * Instagram's profile_picture_url is a signed CDN link that expires — so
+   * both are refreshed here, nightly, for every account that is still connected.
+   */
+  async refreshProfiles(): Promise<void> {
+    const accounts = await this.accountsRepo.find({ where: { platform: AccountPlatform.INSTAGRAM } });
+    const accountIds = new Set(accounts.map((a) => a.id));
+    const connected = await this.credentialsRepo.find({ where: { needsReconnect: false } });
+
+    for (const credential of connected.filter((c) => accountIds.has(c.accountId))) {
+      try {
+        const token = decryptToken(credential.encryptedToken, this.encryptionKey);
+        const profile = await this.api.getProfile(token);
+        await this.accountsRepo.update(
+          { id: credential.accountId },
+          { name: profile.name ?? profile.username, avatarUrl: profile.profilePictureUrl },
+        );
+      } catch (error) {
+        if (isInstagramAuthError(error)) {
+          await this.credentialsRepo.update({ accountId: credential.accountId }, { needsReconnect: true });
+        } else {
+          this.logger.warn(`Could not refresh Instagram profile for account ${credential.accountId}: ${(error as Error).message}`);
+        }
+      }
+    }
+  }
+
+  private async refreshTokens(): Promise<void> {
     const accounts = await this.accountsRepo.find({ where: { platform: AccountPlatform.INSTAGRAM } });
     const accountIds = new Set(accounts.map((a) => a.id));
 

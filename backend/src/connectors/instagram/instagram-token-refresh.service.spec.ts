@@ -6,9 +6,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const KEY = 'a'.repeat(64);
 
 function makeDeps() {
-  const accountsRepo = { find: jest.fn() };
+  const accountsRepo = { find: jest.fn(), update: jest.fn() };
   const credentialsRepo = { find: jest.fn(), update: jest.fn() };
-  const api = { refreshLongLivedToken: jest.fn() };
+  const api = {
+    refreshLongLivedToken: jest.fn(),
+    getProfile: jest.fn().mockResolvedValue({ id: 'ig-1', username: 'user', name: 'Name', profilePictureUrl: 'https://cdn/p.jpg' }),
+  };
   const service = new InstagramTokenRefreshService(accountsRepo as any, credentialsRepo as any, api as any, KEY);
   return { service, accountsRepo, credentialsRepo, api };
 }
@@ -89,5 +92,82 @@ describe('InstagramTokenRefreshService.refreshExpiring', () => {
     expect(api.refreshLongLivedToken).toHaveBeenCalledTimes(2);
     expect(credentialsRepo.update).toHaveBeenCalledTimes(1);
     expect(credentialsRepo.update.mock.calls[0][0]).toEqual({ accountId: 'acc-2' });
+  });
+});
+
+describe('InstagramTokenRefreshService.refreshProfiles', () => {
+  it('updates name and avatar for every connected Instagram account', async () => {
+    const { service, accountsRepo, credentialsRepo, api } = makeDeps();
+    accountsRepo.find.mockResolvedValue([{ id: 'acc-1', platform: AccountPlatform.INSTAGRAM }]);
+    credentialsRepo.find.mockResolvedValue([{ accountId: 'acc-1', encryptedToken: encryptToken('tok-1', KEY), needsReconnect: false }]);
+    api.getProfile.mockResolvedValue({ id: 'ig-1', username: 'fallback', name: null, profilePictureUrl: 'https://cdn/fresh.jpg' });
+
+    await service.refreshProfiles();
+
+    expect(api.getProfile).toHaveBeenCalledWith('tok-1');
+    expect(credentialsRepo.find).toHaveBeenCalledWith({ where: { needsReconnect: false } });
+    expect(accountsRepo.update).toHaveBeenCalledWith({ id: 'acc-1' }, { name: 'fallback', avatarUrl: 'https://cdn/fresh.jpg' });
+  });
+
+  it('skips credentials that belong to no Instagram account', async () => {
+    const { service, accountsRepo, credentialsRepo, api } = makeDeps();
+    accountsRepo.find.mockResolvedValue([]);
+    credentialsRepo.find.mockResolvedValue([{ accountId: 'acc-x', encryptedToken: encryptToken('tok', KEY), needsReconnect: false }]);
+
+    await service.refreshProfiles();
+
+    expect(api.getProfile).not.toHaveBeenCalled();
+    expect(accountsRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('flags needsReconnect on an auth error and keeps going', async () => {
+    const { service, accountsRepo, credentialsRepo, api } = makeDeps();
+    accountsRepo.find.mockResolvedValue([
+      { id: 'acc-1', platform: AccountPlatform.INSTAGRAM },
+      { id: 'acc-2', platform: AccountPlatform.INSTAGRAM },
+    ]);
+    credentialsRepo.find.mockResolvedValue([
+      { accountId: 'acc-1', encryptedToken: encryptToken('tok-1', KEY), needsReconnect: false },
+      { accountId: 'acc-2', encryptedToken: encryptToken('tok-2', KEY), needsReconnect: false },
+    ]);
+    api.getProfile
+      .mockRejectedValueOnce({ response: { status: 400, data: { error: { type: 'OAuthException', code: 190 } } } })
+      .mockResolvedValueOnce({ id: 'ig-2', username: 'two', name: 'Two', profilePictureUrl: null });
+
+    await service.refreshProfiles();
+
+    expect(credentialsRepo.update).toHaveBeenCalledWith({ accountId: 'acc-1' }, { needsReconnect: true });
+    expect(accountsRepo.update).toHaveBeenCalledWith({ id: 'acc-2' }, { name: 'Two', avatarUrl: null });
+  });
+
+  it('leaves needsReconnect alone on a rate limit or network error and keeps going', async () => {
+    const { service, accountsRepo, credentialsRepo, api } = makeDeps();
+    accountsRepo.find.mockResolvedValue([
+      { id: 'acc-1', platform: AccountPlatform.INSTAGRAM },
+      { id: 'acc-2', platform: AccountPlatform.INSTAGRAM },
+    ]);
+    credentialsRepo.find.mockResolvedValue([
+      { accountId: 'acc-1', encryptedToken: encryptToken('tok-1', KEY), needsReconnect: false },
+      { accountId: 'acc-2', encryptedToken: encryptToken('tok-2', KEY), needsReconnect: false },
+    ]);
+    api.getProfile
+      .mockRejectedValueOnce({ response: { status: 429, data: { error: { type: 'OAuthException', code: 4 } } } })
+      .mockResolvedValueOnce({ id: 'ig-2', username: 'two', name: 'Two', profilePictureUrl: null });
+
+    await service.refreshProfiles();
+
+    expect(credentialsRepo.update).not.toHaveBeenCalled();
+    expect(accountsRepo.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs as part of the nightly cron, after the token refresh', async () => {
+    const { service, accountsRepo, credentialsRepo } = makeDeps();
+    accountsRepo.find.mockResolvedValue([]);
+    credentialsRepo.find.mockResolvedValue([]);
+    const refreshProfiles = jest.spyOn(service, 'refreshProfiles');
+
+    await service.refreshExpiring();
+
+    expect(refreshProfiles).toHaveBeenCalled();
   });
 });

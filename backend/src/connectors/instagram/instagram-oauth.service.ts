@@ -71,7 +71,11 @@ export class InstagramOauthService {
       // save() on the accountId primary key is an upsert: it re-creates the
       // row the data-deletion webhook removed, where update() would touch 0 rows.
       await this.credentialsRepo.save({ accountId: existing.id, encryptedToken, tokenExpiresAt, needsReconnect: false });
-      return existing;
+      // The sync pipeline never rewrites name/avatar, and Instagram's avatar
+      // CDN URLs expire — a reconnect is a natural moment to refresh both.
+      const refreshed = { name: profile.name ?? profile.username, avatarUrl: profile.profilePictureUrl };
+      await this.accountsRepo.update({ id: existing.id }, refreshed);
+      return { ...existing, ...refreshed };
     }
 
     const account = await this.accountsRepo.save({

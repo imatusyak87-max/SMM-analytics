@@ -9,7 +9,7 @@ function makeDeps() {
     exchangeForLongLivedToken: jest.fn(),
     getProfile: jest.fn(),
   };
-  const accountsRepo = { findOneBy: jest.fn(), save: jest.fn((row) => ({ id: 'acc-new', ...row })) };
+  const accountsRepo = { findOneBy: jest.fn(), save: jest.fn((row) => ({ id: 'acc-new', ...row })), update: jest.fn() };
   const credentialsRepo = { findOneBy: jest.fn(), save: jest.fn(), update: jest.fn() };
   const service = new InstagramOauthService(
     stateService as any,
@@ -83,6 +83,20 @@ describe('InstagramOauthService.completeLogin', () => {
       expect.objectContaining({ accountId: 'acc-existing', needsReconnect: false, encryptedToken: expect.any(String) }),
     );
     expect(credentialsRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the name and avatar of an already tracked account from the fetched profile', async () => {
+    const { service, stateService, api, accountsRepo } = makeDeps();
+    stateService.consume.mockResolvedValue(InstagramAccountKind.OWN);
+    api.exchangeCodeForToken.mockResolvedValue({ accessToken: 'short-tok', instagramUserId: '17841400000000000' });
+    api.exchangeForLongLivedToken.mockResolvedValue({ accessToken: 'long-tok', expiresInSeconds: 5184000 });
+    api.getProfile.mockResolvedValue({ id: '17841400000000000', username: 'renamed', name: 'New Name', profilePictureUrl: 'https://cdn/new.jpg', biography: null });
+    accountsRepo.findOneBy.mockResolvedValue({ id: 'acc-existing', name: 'Old Name', avatarUrl: 'https://cdn/expired.jpg' });
+
+    const account = await service.completeLogin('a-code', 'good-state');
+
+    expect(accountsRepo.update).toHaveBeenCalledWith({ id: 'acc-existing' }, { name: 'New Name', avatarUrl: 'https://cdn/new.jpg' });
+    expect(account).toMatchObject({ id: 'acc-existing', name: 'New Name', avatarUrl: 'https://cdn/new.jpg' });
   });
 
   it('keys the account by the /me profile id, not the token response user_id', async () => {

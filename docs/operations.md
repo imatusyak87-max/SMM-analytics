@@ -472,3 +472,37 @@ patch inline while running an operational check.
   ```bash
   docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "UPDATE competitor_runs SET status='"'"'failed'"'"' WHERE status IN ('"'"'pending'"'"','"'"'running'"'"') AND \"createdAt\" < now() - interval '"'"'1 hour'"'"';"'
   ```
+
+## Instagram
+
+- Requires three environment variables in `/opt/smm-dashboard/app/.env`:
+  `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_REDIRECT_URI`. A new
+  value for any of these only reaches the process when the backend container is
+  **recreated** — `docker compose -f docker-compose.prod.yml up -d --build`
+  (part of the normal redeploy sequence described above). A plain `restart`
+  reuses the old environment and the change has no effect.
+- The Meta app stays in development mode. Each connected Instagram account — the
+  agency's own as well as every client's — must be manually added as a tester in
+  the Meta app dashboard (`https://developers.meta.com/...`) and must accept the
+  invite sent to the account's associated email before connecting through the UI.
+- Token refresh runs at 2:30am, 30 minutes before the 3am sync, so a freshly
+  refreshed token is ready when the sync fires. To check which accounts need
+  re-authorization or have expiring tokens:
+  ```bash
+  docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT a.id, a.name, c.\"tokenExpiresAt\", c.\"needsReconnect\" FROM accounts a JOIN account_credentials c ON c.\"accountId\" = a.id WHERE a.platform = '"'"'instagram'"'"';"'
+  ```
+- `needsReconnect = true` means the stored access token is invalid, expired, or
+  was revoked by Meta (e.g. via the deauthorize webhook). It blocks syncs for
+  that account. Clear it by clicking the «Переподключить» button on the account
+  detail page, which starts the OAuth flow again. On success, `needsReconnect`
+  is set back to `false`.
+- Deleting an Instagram account removes only the stored access token. All
+  collected posts, follower snapshots, and other analytics history remain in
+  the database, the same as for every other platform's account delete. Posts
+  and snapshots tied to that account's `accountId` keep their foreign key but
+  the account row itself is gone.
+- Meta calls three public endpoints after successful authorization, deauthorization,
+  or user data deletion — they are configured in the Meta app dashboard:
+  - `GET /api/instagram/callback` — browser redirect after user approves the login
+  - `POST /api/instagram/deauthorize` — notification when user revokes the app in Meta settings
+  - `POST /api/instagram/data-deletion` — GDPR data deletion request

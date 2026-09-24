@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { InstagramModule } from './instagram.module';
@@ -81,5 +82,50 @@ describe('InstagramModule', () => {
     const moduleRef = await compileModule();
 
     expect(moduleRef.get(InstagramTokenRefreshService)).toBeInstanceOf(InstagramTokenRefreshService);
+  });
+
+  describe('startup configuration warning', () => {
+    let warn: jest.SpyInstance;
+    beforeEach(() => {
+      warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    });
+    afterEach(() => warn.mockRestore());
+
+    async function initModule() {
+      const moduleRef = await compileModule();
+      await moduleRef.init();
+      return moduleRef;
+    }
+
+    it('stays quiet when Instagram is fully configured', async () => {
+      await initModule();
+
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('warns, without failing to boot, when the Instagram env vars are unset', async () => {
+      delete process.env.INSTAGRAM_APP_ID;
+      delete process.env.INSTAGRAM_APP_SECRET;
+      delete process.env.INSTAGRAM_REDIRECT_URI;
+      delete process.env.CREDENTIAL_ENCRYPTION_KEY;
+
+      await expect(initModule()).resolves.toBeDefined();
+
+      const messages = warn.mock.calls.map((call) => String(call[0])).join(' | ');
+      expect(messages).toContain('INSTAGRAM_APP_ID');
+      expect(messages).toContain('INSTAGRAM_APP_SECRET');
+      expect(messages).toContain('INSTAGRAM_REDIRECT_URI');
+      expect(messages).toContain('CREDENTIAL_ENCRYPTION_KEY');
+    });
+
+    it('warns when CREDENTIAL_ENCRYPTION_KEY is not 64 hex characters, and never prints the key', async () => {
+      process.env.CREDENTIAL_ENCRYPTION_KEY = 'not-hex-and-too-short';
+
+      await initModule();
+
+      const messages = warn.mock.calls.map((call) => String(call[0])).join(' | ');
+      expect(messages).toContain('CREDENTIAL_ENCRYPTION_KEY');
+      expect(messages).not.toContain('not-hex-and-too-short');
+    });
   });
 });

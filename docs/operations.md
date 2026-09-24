@@ -481,6 +481,15 @@ patch inline while running an operational check.
   **recreated** — `docker compose -f docker-compose.prod.yml up -d --build`
   (part of the normal redeploy sequence described above). A plain `restart`
   reuses the old environment and the change has no effect.
+- Also requires `CREDENTIAL_ENCRYPTION_KEY`: exactly **64 hex characters**
+  (32 bytes, AES-256-GCM key for the stored access tokens). Generate one with
+  `openssl rand -hex 32`. Never change it once accounts are connected — the
+  stored tokens can no longer be decrypted and every Instagram account would
+  need reconnecting.
+- None of these are required to boot: when any is missing (or the key is not
+  64 hex characters) the backend logs a `WARN [InstagramModule] Instagram is
+  not fully configured: …` line at startup and keeps running — Telegram is
+  unaffected, only connecting/syncing Instagram accounts will fail.
 - The Meta app stays in development mode. Each connected Instagram account — the
   agency's own as well as every client's — must be manually added as a tester in
   the Meta app dashboard (`https://developers.meta.com/...`) and must accept the

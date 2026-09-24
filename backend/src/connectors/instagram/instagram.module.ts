@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { Account } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
@@ -11,6 +11,16 @@ import { InstagramOauthStateService } from './instagram-oauth-state.service';
 import { InstagramTokenRefreshService } from './instagram-token-refresh.service';
 
 const INSTAGRAM_API_CLIENT = 'INSTAGRAM_API_CLIENT';
+const REQUIRED_ENV = ['INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET', 'INSTAGRAM_REDIRECT_URI'] as const;
+
+/** Names what is missing or malformed — never the values themselves. */
+function instagramConfigProblems(env: NodeJS.ProcessEnv): string[] {
+  const problems: string[] = REQUIRED_ENV.filter((name) => !env[name]).map((name) => `${name} is not set`);
+  if (!/^[0-9a-fA-F]{64}$/.test(env.CREDENTIAL_ENCRYPTION_KEY ?? '')) {
+    problems.push('CREDENTIAL_ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
+  }
+  return problems;
+}
 
 /**
  * Owns everything Instagram-specific: OAuth state, credential encryption,
@@ -79,4 +89,16 @@ const INSTAGRAM_API_CLIENT = 'INSTAGRAM_API_CLIENT';
   // AccountsModule hosts so it can queue a first sync.
   exports: [InstagramConnector, InstagramOauthService, INSTAGRAM_APP_SECRET],
 })
-export class InstagramModule {}
+export class InstagramModule implements OnModuleInit {
+  private readonly logger = new Logger(InstagramModule.name);
+
+  /**
+   * Warn only: the app (and every Telegram feature) must keep booting when
+   * Instagram is not configured; connecting an Instagram account just won't work.
+   */
+  onModuleInit(): void {
+    for (const problem of instagramConfigProblems(process.env)) {
+      this.logger.warn(`Instagram is not fully configured: ${problem}`);
+    }
+  }
+}

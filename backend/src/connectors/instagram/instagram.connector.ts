@@ -3,7 +3,7 @@ import { Repository } from 'typeorm';
 import { Account, AccountPlatform } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { AccountInfo, AccountStats, AvatarImage, ConnectorPost, SocialConnector } from '../connector.interface';
-import { InstagramApiClient } from './instagram-api.client';
+import { InstagramApiClient, InstagramMediaInsights } from './instagram-api.client';
 import { decryptToken } from './instagram-token-crypto';
 import { isInstagramAuthError, translateInstagramError } from './instagram-error';
 import { mapInstagramPost } from './instagram-post-mapper';
@@ -44,8 +44,7 @@ export class InstagramConnector implements SocialConnector {
         const { items, nextCursor } = await this.api.getMedia(token, after);
         for (const media of items) {
           if (new Date(media.timestamp) < sinceDate) break paging;
-          const insights = await this.api.getMediaInsights(token, media.id);
-          collected.push(mapInstagramPost(media, insights));
+          collected.push(mapInstagramPost(media, await this.insightsOrNull(token, media.id)));
         }
         if (!nextCursor) break;
         after = nextCursor;
@@ -53,6 +52,20 @@ export class InstagramConnector implements SocialConnector {
 
       return collected;
     });
+  }
+
+  /**
+   * One post's insights can fail on its own (e.g. media from before the
+   * account became a Business/Creator account) — that must not lose the
+   * rest of the sync. Auth errors still propagate so `call` flags reconnect.
+   */
+  private async insightsOrNull(token: string, mediaId: string): Promise<InstagramMediaInsights> {
+    try {
+      return await this.api.getMediaInsights(token, mediaId);
+    } catch (error) {
+      if (isInstagramAuthError(error)) throw error;
+      return { reach: null, saved: null, shares: null };
+    }
   }
 
   async getAvatar(fileRef: string): Promise<AvatarImage> {

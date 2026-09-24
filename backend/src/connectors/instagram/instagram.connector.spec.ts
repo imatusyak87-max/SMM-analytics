@@ -61,6 +61,39 @@ describe('InstagramConnector', () => {
     expect(api.getMediaInsights).toHaveBeenCalledWith('plain-token', 'new');
   });
 
+  it('getPosts keeps a post with null insights when only its insights call fails', async () => {
+    const media = (id: string) => ({ id, timestamp: '2026-09-10T00:00:00+0000', likeCount: 5, commentsCount: 1, mediaType: 'IMAGE', mediaProductType: 'FEED', caption: null, mediaUrl: null, thumbnailUrl: null, permalink: null });
+    const api = {
+      getMedia: jest.fn().mockResolvedValue({ items: [media('a'), media('b')], nextCursor: null }),
+      getMediaInsights: jest
+        .fn()
+        .mockRejectedValueOnce({ response: { status: 400, data: { error: { type: 'OAuthException', code: 100, message: 'media posted before business conversion' } } } })
+        .mockResolvedValueOnce({ reach: 10, saved: 1, shares: 2 }),
+    };
+    const credentialRepo = makeCredentialRepo();
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+
+    const posts = await connector.getPosts(account, new Date('2026-09-01'));
+
+    expect(posts.map((p) => p.externalPostId)).toEqual(['a', 'b']);
+    expect(posts[0]).toMatchObject({ likes: 5, comments: 1, reach: null, shares: 0 });
+    expect(posts[1]).toMatchObject({ reach: 10, shares: 2 });
+    expect(credentialRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('getPosts still fails, and flags reconnect, when an insights call hits an auth error', async () => {
+    const media = { id: 'a', timestamp: '2026-09-10T00:00:00+0000', likeCount: 5, commentsCount: 1, mediaType: 'IMAGE', mediaProductType: 'FEED', caption: null, mediaUrl: null, thumbnailUrl: null, permalink: null };
+    const api = {
+      getMedia: jest.fn().mockResolvedValue({ items: [media], nextCursor: null }),
+      getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 400, data: { error: { type: 'OAuthException', code: 190 } } } }),
+    };
+    const credentialRepo = makeCredentialRepo();
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+
+    await expect(connector.getPosts(account, new Date('2026-09-01'))).rejects.toThrow('Instagram отклонил доступ, нужно переподключить аккаунт');
+    expect(credentialRepo.update).toHaveBeenCalledWith({ accountId: 'acc-1' }, { needsReconnect: true });
+  });
+
   it('getAvatar downloads bytes from the profile_picture_url', async () => {
     const axios = require('axios');
     jest.spyOn(axios, 'get').mockResolvedValue({ data: Buffer.from('img-bytes'), headers: { 'content-type': 'image/jpeg' } });

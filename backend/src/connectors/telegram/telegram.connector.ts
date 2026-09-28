@@ -67,6 +67,23 @@ function toConnectorPost(post: ParsedPreviewPost): ConnectorPost {
   };
 }
 
+/**
+ * The preview page shows an album once, under its lowest id. All its parts share
+ * one timestamp, but they need not be adjacent: another post sent in the same
+ * second can take an id between them. So an album is keyed by its timestamp,
+ * and each lower part walked into replaces the album's entry.
+ */
+function collapseAlbumPost(post: ParsedPreviewPost, albumSlots: Map<number, number>, collected: ConnectorPost[]): void {
+  const time = post.publishedAt.getTime();
+  const slot = post.grouped ? albumSlots.get(time) : undefined;
+  if (slot !== undefined) {
+    collected[slot] = toConnectorPost(post);
+  } else {
+    if (post.grouped) albumSlots.set(time, collected.length);
+    collected.push(toConnectorPost(post));
+  }
+}
+
 export class TelegramConnector implements SocialConnector {
   platform = AccountPlatform.TELEGRAM;
   private readonly logger = new Logger(TelegramConnector.name);
@@ -290,10 +307,6 @@ export class TelegramConnector implements SocialConnector {
     const newest = await this.findNewestEmbedId(read, previewError);
 
     const collected: ConnectorPost[] = [];
-    // The preview page shows an album once, under its lowest id. All its parts share
-    // one timestamp, but they need not be adjacent: another post sent in the same
-    // second can take an id between them. So an album is keyed by its timestamp,
-    // and each lower part walked into replaces the album's entry.
     const albumSlots = new Map<number, number>();
     try {
       for (let id = newest; id >= 1; id--) {
@@ -301,13 +314,7 @@ export class TelegramConnector implements SocialConnector {
         if (!post) continue;
         if (post.publishedAt < sinceDate) break;
 
-        const slot = post.grouped ? albumSlots.get(post.publishedAt.getTime()) : undefined;
-        if (slot !== undefined) {
-          collected[slot] = toConnectorPost(post);
-        } else {
-          if (post.grouped) albumSlots.set(post.publishedAt.getTime(), collected.length);
-          collected.push(toConnectorPost(post));
-        }
+        collapseAlbumPost(post, albumSlots, collected);
       }
     } catch (err) {
       if (!(err instanceof EmbedBudgetExhausted)) throw err;
@@ -384,13 +391,7 @@ export class TelegramConnector implements SocialConnector {
         break; // past the budget and outside the album: this id starts the next chunk
       }
 
-      const slot = post.grouped ? albumSlots.get(time) : undefined;
-      if (slot !== undefined) {
-        collected[slot] = toConnectorPost(post);
-      } else {
-        if (post.grouped) albumSlots.set(time, collected.length);
-        collected.push(toConnectorPost(post));
-      }
+      collapseAlbumPost(post, albumSlots, collected);
       openAlbum = post.grouped ? time : null;
       id -= 1;
     }

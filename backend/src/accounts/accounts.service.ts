@@ -15,6 +15,7 @@ import { SyncJob } from '../db/entities/sync-job.entity';
 import { CompetitorRun } from '../db/entities/competitor-run.entity';
 import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
 import { CompetitorRejection } from '../db/entities/competitor-rejection.entity';
+import { HistoryLoad } from '../db/entities/history-load.entity';
 import { ConnectorRegistry } from '../connectors/connector-registry.service';
 import { AccountInfo, AccountStats, AvatarImage, SocialConnector } from '../connectors/connector.interface';
 import { SyncJobService } from '../sync/sync-job.service';
@@ -168,6 +169,7 @@ export class AccountsService {
       await em.delete(AccountSnapshot, { accountId: id });
       await em.delete(SyncJob, { accountId: id });
       await em.delete(AccountCredential, { accountId: id });
+      await em.delete(HistoryLoad, { accountId: id });
       await em.delete(Account, { id });
     });
   }

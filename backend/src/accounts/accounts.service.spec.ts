@@ -60,6 +60,7 @@ describe('AccountsService', () => {
         'AccountSnapshot',
         'SyncJob',
         'AccountCredential',
+        'HistoryLoad',
         'Account',
       ]);
       expect(em.delete).toHaveBeenCalledWith(expect.anything(), {

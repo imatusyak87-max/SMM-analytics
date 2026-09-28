@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
 import { CompetitorsSection } from '../components/CompetitorsSection';
+import { HistoryLoadPanel } from '../components/HistoryLoadPanel';
 import { Pagination } from '../components/Pagination';
 import { PeriodPicker } from '../components/PeriodPicker';
 import { PostList, type PostItem, type PostSort } from '../components/PostList';
@@ -123,6 +124,13 @@ export function AccountDetailPage() {
         <RefreshButton
           accountId={account.id}
           onSynced={() => {
+            setReloadKey((key) => key + 1);
+            setTablePage(1);
+          }}
+        />
+        <HistoryLoadPanel
+          accountId={account.id}
+          onFinished={() => {
             setReloadKey((key) => key + 1);
             setTablePage(1);
           }}

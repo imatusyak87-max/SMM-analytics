@@ -61,7 +61,7 @@ describe('selectPreset', () => {
 });
 
 describe('PRESETS', () => {
-  it('offers the eight presets in order, in Russian', () => {
+  it('offers the nine presets in order, in Russian', () => {
     expect(PRESETS.map((preset) => preset.label)).toEqual([
       'Последние 7 дней',
       'Последние 30 дней',
@@ -71,7 +71,21 @@ describe('PRESETS', () => {
       'Прошлый квартал',
       'Текущий год',
       'Прошлый год',
+      'За всё время',
     ]);
+  });
+});
+
+describe('allTime preset', () => {
+  const today = new Date(2026, 8, 28);
+
+  it('runs from the given first date to today', () => {
+    expect(presetRange('allTime', today, '2021-03-12')).toEqual({ from: '2021-03-12', to: '2026-09-28' });
+    expect(selectPreset('allTime', today, '2021-03-12')).toEqual({ preset: 'allTime', from: '2021-03-12', to: '2026-09-28' });
+  });
+
+  it('is labelled «За всё время» and listed last', () => {
+    expect(PRESETS.at(-1)).toEqual({ id: 'allTime', label: 'За всё время' });
   });
 });
 

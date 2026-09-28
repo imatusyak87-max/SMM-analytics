@@ -18,6 +18,8 @@ interface PeriodPickerProps {
   onChange: (next: SelectedPeriod) => void;
   /** Injectable so tests do not depend on the real date. */
   today?: Date;
+  /** First day with data; enables «За всё время». */
+  allTimeFrom?: string;
 }
 
 /** Narrow screens get one month, since two beside the preset column do not fit. */
@@ -65,7 +67,7 @@ function ChevronIcon() {
   );
 }
 
-export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPickerProps) {
+export function PeriodPicker({ value, onChange, today = new Date(), allTimeFrom }: PeriodPickerProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | undefined>();
   // The applied preset stays marked in the column until a day is picked by hand.
@@ -112,7 +114,7 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
   // Presets live only in this column now, so one click applies them — the
   // common case stays two clicks. Hand-picked ranges still wait for «Применить».
   function pickPreset(preset: PresetId) {
-    onChange(selectPreset(preset, today));
+    onChange(selectPreset(preset, today, allTimeFrom));
     close(true);
   }
 
@@ -133,7 +135,7 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
     if (!draft?.from) return;
     onChange(
       draftPreset
-        ? selectPreset(draftPreset, today)
+        ? selectPreset(draftPreset, today, allTimeFrom)
         : { preset: null, from: toIsoDate(draft.from), to: toIsoDate(draft.to ?? draft.from) },
     );
     close(true);
@@ -141,6 +143,7 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
 
   const dates = formatPeriod(value);
   const presetName = PRESETS.find((preset) => preset.id === value.preset)?.label;
+  const presets = PRESETS.filter((preset) => preset.id !== 'allTime' || allTimeFrom !== undefined);
   // A lone first click applies as a one-day period, so it reads as one.
   const draftEnd = draft?.to ?? draft?.from;
 
@@ -163,7 +166,7 @@ export function PeriodPicker({ value, onChange, today = new Date() }: PeriodPick
       {open && (
         <div className={styles.popover} role="dialog" aria-label="Выбор периода">
           <div className={styles.quick} role="group" aria-label="Быстрый выбор">
-            {PRESETS.map((preset) => (
+            {presets.map((preset) => (
               <button
                 key={preset.id}
                 type="button"

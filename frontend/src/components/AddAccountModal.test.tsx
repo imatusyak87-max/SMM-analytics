@@ -101,18 +101,17 @@ describe('AddAccountModal', () => {
 describe('Instagram tab', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows a type choice and one button instead of the link field', async () => {
+  it('shows only a connect button, with no link field and no own/client choice', async () => {
     render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Instagram' }));
 
     expect(screen.queryByLabelText('Ссылка на аккаунт')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Свой аккаунт')).toBeInTheDocument();
-    expect(screen.getByLabelText('Аккаунт клиента')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Подключить' })).toBeInTheDocument();
   });
 
-  it('navigates to the URL the backend returns, for the selected type', async () => {
+  it('connects as an own account and navigates to the URL the backend returns', async () => {
     const originalLocation = window.location;
     (apiClient.get as any).mockResolvedValue({ data: { redirectUrl: 'https://www.instagram.com/oauth/authorize?state=abc' } });
     delete (window as any).location;
@@ -121,10 +120,9 @@ describe('Instagram tab', () => {
       render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
       fireEvent.click(screen.getByRole('tab', { name: 'Instagram' }));
-      fireEvent.click(screen.getByLabelText('Аккаунт клиента'));
       fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
 
-      await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/accounts/instagram/connect', { params: { type: 'client' } }));
+      await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/accounts/instagram/connect', { params: { type: 'own' } }));
       await waitFor(() => expect(window.location.href).toBe('https://www.instagram.com/oauth/authorize?state=abc'));
     } finally {
       (window as any).location = originalLocation;

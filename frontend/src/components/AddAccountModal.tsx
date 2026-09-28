@@ -18,7 +18,6 @@ interface AccountPreview {
 }
 
 type Platform = 'telegram' | 'instagram';
-type InstagramKind = 'own' | 'client';
 
 export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
   const [platform, setPlatform] = useState<Platform>('telegram');
@@ -73,7 +72,6 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
   }
 
   // --- Instagram tab state ---
-  const [instagramKind, setInstagramKind] = useState<InstagramKind>('own');
   const [connecting, setConnecting] = useState(false);
   const [instagramError, setInstagramError] = useState<string | null>(null);
 
@@ -81,7 +79,8 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
     setConnecting(true);
     setInstagramError(null);
     try {
-      const { data } = await apiClient.get('/accounts/instagram/connect', { params: { type: instagramKind } });
+      // Always 'own' until the own/client split is used somewhere in the app.
+      const { data } = await apiClient.get('/accounts/instagram/connect', { params: { type: 'own' } });
       // Full-page navigation, not an in-app route: Instagram's own login screen
       // is outside the SPA, and the callback lands back on /accounts/:id once done.
       window.location.href = data.redirectUrl;
@@ -175,27 +174,6 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
             <p className={styles.helperText}>
               Потребуется войти в Instagram владельцу аккаунта. Мы не увидим и не сохраним его пароль.
             </p>
-
-            <label className={styles.radioRow}>
-              <input
-                type="radio"
-                name="instagram-kind"
-                checked={instagramKind === 'own'}
-                onChange={() => setInstagramKind('own')}
-                aria-label="Свой аккаунт"
-              />
-              Свой аккаунт
-            </label>
-            <label className={styles.radioRow}>
-              <input
-                type="radio"
-                name="instagram-kind"
-                checked={instagramKind === 'client'}
-                onChange={() => setInstagramKind('client')}
-                aria-label="Аккаунт клиента"
-              />
-              Аккаунт клиента
-            </label>
 
             {instagramError && (
               <p className={styles.error} role="alert">

@@ -1,5 +1,7 @@
 import { InstagramConnector } from './instagram.connector';
 import { AccountPlatform } from '../../db/entities/account.entity';
+import { HistoryPauseError } from '../history-pause.error';
+import { HistoryPauseReason } from '../../db/entities/history-load.entity';
 
 const account = { id: 'acc-1', platform: AccountPlatform.INSTAGRAM, externalId: '17841400000000000' } as any;
 
@@ -136,5 +138,94 @@ describe('InstagramConnector', () => {
 
     await expect(connector.getAccountInfo(account)).rejects.toThrow();
     expect(credentialRepo.update).not.toHaveBeenCalled();
+  });
+
+  const historyMedia = (id: string) => ({ id, timestamp: '2024-03-12T10:00:00+0000', likeCount: 7, commentsCount: 2, mediaType: 'IMAGE', mediaProductType: 'FEED', caption: 'old', mediaUrl: null, thumbnailUrl: null, permalink: 'https://instagram.com/p/x' });
+
+  it('loadHistoryPage reads one media page from the given cursor, without insights', async () => {
+    const api = { getMedia: jest.fn().mockResolvedValue({ items: [historyMedia('m1'), historyMedia('m2')], nextCursor: 'CUR2' }), getMediaInsights: jest.fn() };
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+
+    const page = await connector.loadHistoryPage(account, 'CUR1');
+
+    expect(api.getMedia).toHaveBeenCalledWith('plain-token', 'CUR1');
+    expect(api.getMediaInsights).not.toHaveBeenCalled();
+    expect(page.nextCursor).toBe('CUR2');
+    expect(page.posts.map((p) => p.externalPostId)).toEqual(['m1', 'm2']);
+    expect(page.posts[0]).toMatchObject({ likes: 7, comments: 2, reach: null, shares: 0 });
+  });
+
+  it('loadHistoryPage starts from the newest page when there is no cursor', async () => {
+    const api = { getMedia: jest.fn().mockResolvedValue({ items: [], nextCursor: null }) };
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+
+    const page = await connector.loadHistoryPage(account, null);
+
+    expect(api.getMedia).toHaveBeenCalledWith('plain-token', undefined);
+    expect(page).toEqual({ posts: [], nextCursor: null });
+  });
+
+  it('loadHistoryPage turns an Instagram rate limit into a one-hour pause', async () => {
+    const api = { getMedia: jest.fn().mockRejectedValue({ response: { status: 400, data: { error: { type: 'OAuthException', code: 4 } } } }) };
+    const credentialRepo = makeCredentialRepo();
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+
+    const error = await connector.loadHistoryPage(account, null).catch((e) => e);
+
+    expect(error).toBeInstanceOf(HistoryPauseError);
+    expect(error.reason).toBe(HistoryPauseReason.INSTAGRAM_RATE_LIMIT);
+    expect(error.retryAfterMs).toBe(60 * 60_000);
+    expect(credentialRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('loadHistoryPage turns a network timeout into a network pause', async () => {
+    const api = { getMedia: jest.fn().mockRejectedValue({ code: 'ETIMEDOUT', message: 'timeout of 15000ms exceeded' }) };
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+
+    const error = await connector.loadHistoryPage(account, null).catch((e) => e);
+
+    expect(error).toBeInstanceOf(HistoryPauseError);
+    expect(error.reason).toBe(HistoryPauseReason.NETWORK);
+  });
+
+  it('loadPostInsights returns reach and shares for one post', async () => {
+    const api = { getMediaInsights: jest.fn().mockResolvedValue({ reach: 120, saved: 3, shares: 4 }) };
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+
+    expect(await connector.loadPostInsights(account, 'm1')).toEqual({ reach: 120, shares: 4 });
+    expect(api.getMediaInsights).toHaveBeenCalledWith('plain-token', 'm1');
+  });
+
+  it('loadPostInsights gives null insights for a post Instagram has no insights for', async () => {
+    const api = { getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 400, data: { error: { type: 'OAuthException', code: 100, message: 'media posted before business conversion' } } } }) };
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+
+    expect(await connector.loadPostInsights(account, 'm1')).toEqual({ reach: null, shares: null });
+  });
+
+  it('loadPostInsights pauses on a rate limit instead of recording null insights', async () => {
+    const api = { getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 429, data: { error: { code: 32 } } } }) };
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+
+    await expect(connector.loadPostInsights(account, 'm1')).rejects.toBeInstanceOf(HistoryPauseError);
+  });
+
+  it('loadPostInsights still flags reconnect on an auth error', async () => {
+    const api = { getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 400, data: { error: { type: 'OAuthException', code: 190 } } } }) };
+    const credentialRepo = makeCredentialRepo();
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+
+    await expect(connector.loadPostInsights(account, 'm1')).rejects.toThrow('Instagram отклонил доступ, нужно переподключить аккаунт');
+    expect(credentialRepo.update).toHaveBeenCalledWith({ accountId: 'acc-1' }, { needsReconnect: true });
+  });
+
+  it('getPosts fails (so the nightly job retries) when an insights call is rate-limited, instead of saving null reach', async () => {
+    const api = {
+      getMedia: jest.fn().mockResolvedValue({ items: [{ ...historyMedia('a'), timestamp: '2026-09-10T00:00:00+0000' }], nextCursor: null }),
+      getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 429, data: { error: { code: 4 } } } }),
+    };
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+
+    await expect(connector.getPosts(account, new Date('2026-09-01'))).rejects.toBeInstanceOf(HistoryPauseError);
   });
 });

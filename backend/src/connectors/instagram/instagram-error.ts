@@ -17,6 +17,19 @@ export function isInstagramAuthError(error: unknown): boolean {
   return e?.type === 'OAuthException' && e?.code === AUTH_ERROR_CODE;
 }
 
+/**
+ * Meta's throttling codes: 4 (app), 17 (user), 32 (page/account), 613 (calls
+ * within the rolling window). Unconfirmed against a live throttle yet — see
+ * the full-post-history spec §9; adjust here only.
+ */
+const RATE_LIMIT_CODES = new Set([4, 17, 32, 613]);
+
+export function isInstagramRateLimitError(error: unknown): boolean {
+  if ((error as InstagramApiError)?.response?.status === 429) return true;
+  const code = igError(error)?.code;
+  return code !== undefined && RATE_LIMIT_CODES.has(code);
+}
+
 export function translateInstagramError(error: unknown): Error {
   const status = (error as InstagramApiError)?.response?.status;
   const e = igError(error);

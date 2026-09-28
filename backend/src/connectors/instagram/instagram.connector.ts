@@ -2,11 +2,23 @@ import axios from 'axios';
 import { Repository } from 'typeorm';
 import { Account, AccountPlatform } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
-import { AccountInfo, AccountStats, AvatarImage, ConnectorPost, SocialConnector } from '../connector.interface';
+import { AccountInfo, AccountStats, AvatarImage, ConnectorPost, HistoryPage, PostInsights, SocialConnector } from '../connector.interface';
 import { InstagramApiClient, InstagramMediaInsights } from './instagram-api.client';
 import { decryptToken } from './instagram-token-crypto';
-import { isInstagramAuthError, translateInstagramError } from './instagram-error';
+import { isInstagramAuthError, isInstagramRateLimitError, translateInstagramError } from './instagram-error';
+import { HistoryPauseError, isNetworkError, MINUTE_MS, networkPause } from '../history-pause.error';
+import { HistoryPauseReason } from '../../db/entities/history-load.entity';
 import { mapInstagramPost } from './instagram-post-mapper';
+
+const NO_INSIGHTS: InstagramMediaInsights = { reach: null, saved: null, shares: null };
+
+function instagramRateLimitPause(): HistoryPauseError {
+  return new HistoryPauseError(
+    HistoryPauseReason.INSTAGRAM_RATE_LIMIT,
+    60 * MINUTE_MS,
+    'Превышен лимит запросов к Instagram, попробуйте позже',
+  );
+}
 
 export class InstagramConnector implements SocialConnector {
   platform = AccountPlatform.INSTAGRAM;
@@ -63,9 +75,31 @@ export class InstagramConnector implements SocialConnector {
     try {
       return await this.api.getMediaInsights(token, mediaId);
     } catch (error) {
-      if (isInstagramAuthError(error)) throw error;
+      if (isInstagramAuthError(error) || isInstagramRateLimitError(error) || isNetworkError(error)) throw error;
       return { reach: null, saved: null, shares: null };
     }
+  }
+
+  async loadHistoryPage(account: Account, cursor: string | null): Promise<HistoryPage> {
+    return this.call(account, async (token) => {
+      const { items, nextCursor } = await this.api.getMedia(token, cursor ?? undefined);
+      // Insights are a separate, paced phase; the page only carries likes/comments.
+      return { posts: items.map((media) => mapInstagramPost(media, NO_INSIGHTS)), nextCursor };
+    });
+  }
+
+  async loadPostInsights(account: Account, externalPostId: string): Promise<PostInsights> {
+    return this.call(account, async (token) => {
+      try {
+        const insights = await this.api.getMediaInsights(token, externalPostId);
+        return { reach: insights.reach, shares: insights.shares };
+      } catch (error) {
+        // Media from before the account became Business/Creator has no insights;
+        // that is an answer, not a failure. Everything temporary goes to `call`.
+        if (isInstagramAuthError(error) || isInstagramRateLimitError(error) || isNetworkError(error)) throw error;
+        return { reach: null, shares: null };
+      }
+    });
   }
 
   async getAvatar(fileRef: string): Promise<AvatarImage> {
@@ -95,9 +129,13 @@ export class InstagramConnector implements SocialConnector {
     try {
       return await fn(token);
     } catch (error) {
+      if (error instanceof HistoryPauseError) throw error;
       if (isInstagramAuthError(error)) {
         await this.credentialsRepo.update({ accountId: account.id }, { needsReconnect: true });
+        throw translateInstagramError(error);
       }
+      if (isInstagramRateLimitError(error)) throw instagramRateLimitPause();
+      if (isNetworkError(error)) throw networkPause();
       throw translateInstagramError(error);
     }
   }

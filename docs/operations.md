@@ -164,6 +164,60 @@ cd /opt/smm-dashboard/app && docker compose -f docker-compose.prod.yml exec -T p
   sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT count(*) FROM accounts;"'
 ```
 
+## Загрузка всей истории постов
+
+«Загрузить все посты» loads all historical posts for an account one load at a time
+app-wide, processing short slices in the `history` BullMQ queue with concurrency 1.
+The nightly sync is unaffected by this process and continues to run independently.
+
+### Deploy
+
+A new table `history_loads` stores the load state. Deploy as always:
+
+```bash
+cd /opt/smm-dashboard/app && git pull
+docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+docker compose -f docker-compose.prod.yml exec -T backend npx typeorm migration:run -d dist/db/data-source.js
+```
+
+The `migration:run` step **must run immediately**, as described in "Redeploying" above.
+
+### Monitor progress
+
+Query the load status and details:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT a.name, h.status, h.phase, h.\"postsLoaded\", h.\"insightsDone\", h.\"insightsTotal\", h.\"pausedUntil\", h.\"errorMessage\" FROM history_loads h JOIN accounts a ON a.id = h.\"accountId\" ORDER BY h.\"startedAt\" DESC NULLS LAST;"'
+```
+
+Columns show: account name, load status, current phase, posts loaded, insights done,
+total insights to collect, pause deadline, and any error message.
+
+### Stop a load
+
+To stop a load that must not continue, set its status to `failed`. The next slice
+will then exit:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "UPDATE history_loads SET status = '"'"'failed'"'"', \"errorMessage\" = '"'"'Остановлено вручную'"'"' WHERE \"accountId\" = '"'"'<account id>'"'"';"'
+```
+
+### Pauses and recovery
+
+- **Instagram rate limit** pauses a load for 1 hour.
+- **Telegram 429 / network errors** pause for 5 minutes.
+- After a backend restart, unfinished loads (those queued, running, or paused without
+  a pending job) are re-queued automatically.
+- If a runner encounters an error that is not a user-facing Russian message, the
+  backend logs it as a warning under `HistoryRunner` — check the backend logs for
+  the real cause — and stores «непредвиденная ошибка» in the `errorMessage` column.
+
+### Post counts and engagement rates
+
+Old posts' numbers (views, reactions) are a snapshot captured at the time of the
+load. Engagement rate (ER) calculations for those posts use today's follower count,
+not the count from the time the posts were published.
+
 ## HTTPS
 
 The site is served by Caddy (the `caddy` service in `docker-compose.prod.yml`),

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account } from '../db/entities/account.entity';
@@ -29,6 +29,9 @@ export const INSIGHTS_PER_SLICE = 60;
 const DAY_MS = 86_400_000;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** The panel shows errorMessage verbatim; fall back rather than leak an English/driver error to the user. */
+const userFacingMessage = (message: string): string => (/[А-Яа-яЁё]/.test(message) ? message : 'непредвиденная ошибка');
+
 /**
  * Runs one slice of an account's full-history load and records progress after
  * every page or post, so a pause, failure or restart loses nothing.
@@ -36,6 +39,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 @Injectable()
 export class HistoryRunner {
   private readonly timing: HistoryTiming;
+  private readonly logger = new Logger(HistoryRunner.name);
 
   constructor(
     @InjectRepository(HistoryLoad) private loadsRepo: Repository<HistoryLoad>,
@@ -76,8 +80,10 @@ export class HistoryRunner {
         await this.persist(load);
         return error.retryAfterMs;
       }
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`History load for account ${accountId} failed: ${message}`);
       load.status = HistoryLoadStatus.FAILED;
-      load.errorMessage = (error as Error).message;
+      load.errorMessage = userFacingMessage(message);
       load.finishedAt = new Date();
       await this.persist(load);
       return null;

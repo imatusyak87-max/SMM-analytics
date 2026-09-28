@@ -2,6 +2,7 @@ import { HistoryRunner, POSTS_UNITS_PER_SLICE, INSIGHTS_PER_SLICE } from './hist
 import { HistoryLoadPhase, HistoryLoadStatus, HistoryPauseReason } from '../db/entities/history-load.entity';
 import { AccountPlatform } from '../db/entities/account.entity';
 import { HistoryPauseError } from '../connectors/history-pause.error';
+import { Logger } from '@nestjs/common';
 
 const DAY = 86_400_000;
 
@@ -158,6 +159,16 @@ describe('HistoryRunner.runSlice — insights phase', () => {
 });
 
 describe('HistoryRunner.runSlice — pauses and failures', () => {
+  let warnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
   it('pauses on a HistoryPauseError and asks for the next slice after the pause', async () => {
     const connector = {
       loadHistoryPage: jest.fn().mockRejectedValue(new HistoryPauseError(HistoryPauseReason.TELEGRAM_RATE_LIMIT, 300_000, 'Telegram ограничил запросы, продолжим через 5 минут')),
@@ -179,6 +190,16 @@ describe('HistoryRunner.runSlice — pauses and failures', () => {
 
     expect(next).toBeNull();
     expect(lastWrite(loadsRepo)).toMatchObject({ status: HistoryLoadStatus.FAILED, cursor: 'CUR', errorMessage: 'Instagram отклонил доступ, нужно переподключить аккаунт' });
+  });
+
+  it('falls back to a Russian message when the error is not user-facing', async () => {
+    const connector = { loadHistoryPage: jest.fn().mockRejectedValue(new Error('duplicate key value violates unique constraint')) };
+    const { runner, loadsRepo } = setup({ load: makeLoad({ cursor: 'CUR' }), connector });
+
+    const next = await runner.runSlice('acc-1');
+
+    expect(next).toBeNull();
+    expect(lastWrite(loadsRepo)).toMatchObject({ status: HistoryLoadStatus.FAILED, errorMessage: 'непредвиденная ошибка' });
   });
 
   it('keeps progress already saved before a later page pauses', async () => {

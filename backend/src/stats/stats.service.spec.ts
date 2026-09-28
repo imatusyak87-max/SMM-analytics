@@ -20,6 +20,7 @@ interface Setup {
   firstSnapshot?: object | null;
   raw?: Record<string, string>;
   credential?: object | null;
+  oldestPost?: object | null;
 }
 
 function setup({
@@ -28,6 +29,7 @@ function setup({
   firstSnapshot = null,
   raw,
   credential = null,
+  oldestPost = null,
 }: Setup = {}) {
   const qb = totalsQuery(raw);
   const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(account) } as any;
@@ -35,7 +37,10 @@ function setup({
     find: jest.fn().mockResolvedValue(trend),
     findOne: jest.fn().mockResolvedValue(firstSnapshot),
   } as any;
-  const postsRepo = { createQueryBuilder: jest.fn().mockReturnValue(qb) } as any;
+  const postsRepo = {
+    createQueryBuilder: jest.fn().mockReturnValue(qb),
+    findOne: jest.fn().mockResolvedValue(oldestPost),
+  } as any;
   const credentialsRepo = { findOneBy: jest.fn().mockResolvedValue(credential) } as any;
   return {
     service: new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo),
@@ -143,10 +148,24 @@ describe('StatsService.getAccountDetail', () => {
 
 describe('StatsService.getAccountDetail coverage', () => {
   // The first sync scrapes 90 days back, so post data begins 90 days before the
-  // account was added — not at the oldest stored post, which for a quiet channel
-  // can be much later than where collection began.
+  // account was added — unless a full-history load reached further back.
   it('says posts were collected from 90 days before the account was added', async () => {
     const { service } = setup();
+    const { coverage } = await service.getAccountDetail('acc-1', period);
+    expect(coverage.postsFrom).toBe('2026-06-12');
+  });
+
+  it('says posts were collected from the oldest stored post when history reaches further back', async () => {
+    const { service, postsRepo } = setup({ oldestPost: { publishedAt: new Date('2021-03-12T10:00:00Z') } });
+
+    const { coverage } = await service.getAccountDetail('acc-1', period);
+
+    expect(coverage.postsFrom).toBe('2021-03-12');
+    expect(postsRepo.findOne).toHaveBeenCalledWith({ where: { accountId: 'acc-1' }, order: { publishedAt: 'ASC' } });
+  });
+
+  it('keeps the 90-day start when the oldest stored post is newer than that', async () => {
+    const { service } = setup({ oldestPost: { publishedAt: new Date('2026-09-01T10:00:00Z') } });
     const { coverage } = await service.getAccountDetail('acc-1', period);
     expect(coverage.postsFrom).toBe('2026-06-12');
   });

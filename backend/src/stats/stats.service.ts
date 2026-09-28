@@ -110,6 +110,9 @@ export class StatsService {
       where: { accountId },
       order: { date: 'ASC' },
     });
+    const oldestPost = await this.postsRepo.findOne({ where: { accountId }, order: { publishedAt: 'ASC' } });
+    const windowStart = new Date(account.createdAt.getTime() - POST_HISTORY_DAYS * DAY_MS);
+    const postsFrom = oldestPost && oldestPost.publishedAt < windowStart ? oldestPost.publishedAt : windowStart;
     const totals = await this.getPostTotals(accountId, period);
 
     const latestSnapshot = trend.length > 0 ? trend[trend.length - 1] : null;
@@ -124,7 +127,7 @@ export class StatsService {
       trend,
       summary: summarise(totals, latestSnapshot?.followersCount ?? null),
       coverage: {
-        postsFrom: isoDate(new Date(account.createdAt.getTime() - POST_HISTORY_DAYS * DAY_MS)),
+        postsFrom: isoDate(postsFrom),
         followersFrom: firstSnapshot?.date ?? isoDate(account.createdAt),
       },
     };

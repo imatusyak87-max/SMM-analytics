@@ -40,7 +40,7 @@ describe('HistoryPostStore.write', () => {
     expect(qb.orUpdate.mock.calls[0][0]).toEqual(expect.arrayContaining(['reach', 'shares', 'er', 'likes']));
   });
 
-  it('never overwrites reach, shares or er of an existing row when insights are preserved', async () => {
+  it('never overwrites reach, shares, views or either ER of an existing row when insights are preserved', async () => {
     const qb = chain();
     const store = new HistoryPostStore({ createQueryBuilder: jest.fn().mockReturnValue(qb) } as any);
 
@@ -50,7 +50,9 @@ describe('HistoryPostStore.write', () => {
     expect(updated).not.toContain('reach');
     expect(updated).not.toContain('shares');
     expect(updated).not.toContain('er');
-    expect(updated).toEqual(expect.arrayContaining(['likes', 'comments', 'caption', 'views', 'erViews', 'lastSyncedAt']));
+    expect(updated).not.toContain('views');
+    expect(updated).not.toContain('erViews');
+    expect(updated).toEqual(expect.arrayContaining(['likes', 'comments', 'caption', 'lastSyncedAt']));
   });
 
   it('does nothing for an empty page', async () => {
@@ -107,21 +109,29 @@ describe('HistoryPostStore insight targets', () => {
 });
 
 describe('HistoryPostStore.saveInsights', () => {
-  it('writes reach and shares and recomputes ER', async () => {
+  it('writes reach, shares and views and recomputes both ERs', async () => {
     const repo = { update: jest.fn() };
     const store = new HistoryPostStore(repo as any);
 
-    await store.saveInsights({ id: 'p1', likes: 8, comments: 2, shares: 0, reach: null } as any, { reach: 300, shares: 10 }, 200);
+    await store.saveInsights(
+      { id: 'p1', likes: 8, comments: 2, shares: 0, reach: null, views: null } as any,
+      { reach: 300, shares: 10, views: 400 },
+      200,
+    );
 
-    expect(repo.update).toHaveBeenCalledWith({ id: 'p1' }, { reach: 300, shares: 10, er: 10 });
+    expect(repo.update).toHaveBeenCalledWith({ id: 'p1' }, { reach: 300, shares: 10, views: 400, er: 10, erViews: 2 });
   });
 
   it('keeps the stored values when Instagram has no insights for the post', async () => {
     const repo = { update: jest.fn() };
     const store = new HistoryPostStore(repo as any);
 
-    await store.saveInsights({ id: 'p1', likes: 8, comments: 2, shares: 3, reach: 250 } as any, { reach: null, shares: null }, 200);
+    await store.saveInsights(
+      { id: 'p1', likes: 8, comments: 2, shares: 3, reach: 250, views: 160 } as any,
+      { reach: null, shares: null, views: null },
+      200,
+    );
 
-    expect(repo.update).toHaveBeenCalledWith({ id: 'p1' }, { reach: 250, shares: 3, er: 6.5 });
+    expect(repo.update).toHaveBeenCalledWith({ id: 'p1' }, { reach: 250, shares: 3, views: 160, er: 6.5, erViews: 5 });
   });
 });

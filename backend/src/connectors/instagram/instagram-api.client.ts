@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { isInstagramAuthError, isInstagramRateLimitError } from './instagram-error';
 
 const GRAPH_VERSION = 'v21.0';
 const GRAPH_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
@@ -36,10 +37,13 @@ export interface InstagramMediaInsights {
   reach: number | null;
   saved: number | null;
   shares: number | null;
+  views: number | null;
 }
 
 const PROFILE_FIELDS =
   'id,username,name,account_type,followers_count,follows_count,media_count,profile_picture_url,biography';
+const INSIGHT_METRICS = 'reach,saved,shares';
+
 const MEDIA_FIELDS =
   'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count';
 
@@ -125,10 +129,21 @@ export class InstagramApiClient {
   }
 
   async getMediaInsights(accessToken: string, mediaId: string): Promise<InstagramMediaInsights> {
-    const { data } = await axios.get(`${GRAPH_BASE}/${mediaId}/insights`, {
-      params: { metric: 'reach,saved,shares', access_token: accessToken },
-      timeout: REQUEST_TIMEOUT_MS,
-    });
+    const request = (metric: string) =>
+      axios.get(`${GRAPH_BASE}/${mediaId}/insights`, {
+        params: { metric, access_token: accessToken },
+        timeout: REQUEST_TIMEOUT_MS,
+      });
+    let data: any;
+    try {
+      ({ data } = await request(`${INSIGHT_METRICS},views`));
+    } catch (error) {
+      // Instagram rejects the whole request when one metric is unsupported for
+      // a media item; a post without `views` must not lose its reach as well.
+      const rejected = (error as { response?: { status?: number } })?.response?.status === 400;
+      if (!rejected || isInstagramAuthError(error) || isInstagramRateLimitError(error)) throw error;
+      ({ data } = await request(INSIGHT_METRICS));
+    }
     const byName = new Map<string, number>(
       (data.data ?? []).map((metric: any) => [metric.name, metric.values?.[0]?.value ?? null]),
     );
@@ -136,6 +151,7 @@ export class InstagramApiClient {
       reach: byName.get('reach') ?? null,
       saved: byName.get('saved') ?? null,
       shares: byName.get('shares') ?? null,
+      views: byName.get('views') ?? null,
     };
   }
 }

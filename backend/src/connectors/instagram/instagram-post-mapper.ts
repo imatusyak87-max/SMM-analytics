@@ -31,7 +31,7 @@ export function mapInstagramPost(media: InstagramMedia, insights: InstagramMedia
     likes: media.likeCount,
     comments: media.commentsCount,
     shares: insights.shares ?? 0,
-    views: null,
+    views: insights.views,
     reach: insights.reach,
   };
 }

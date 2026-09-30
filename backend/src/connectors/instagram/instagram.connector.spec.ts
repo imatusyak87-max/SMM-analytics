@@ -188,11 +188,11 @@ describe('InstagramConnector', () => {
     expect(error.reason).toBe(HistoryPauseReason.NETWORK);
   });
 
-  it('loadPostInsights returns reach and shares for one post', async () => {
-    const api = { getMediaInsights: jest.fn().mockResolvedValue({ reach: 120, saved: 3, shares: 4 }) };
+  it('loadPostInsights returns reach, shares and views for one post', async () => {
+    const api = { getMediaInsights: jest.fn().mockResolvedValue({ reach: 120, saved: 3, shares: 4, views: 800 }) };
     const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
 
-    expect(await connector.loadPostInsights(account, 'm1')).toEqual({ reach: 120, shares: 4 });
+    expect(await connector.loadPostInsights(account, 'm1')).toEqual({ reach: 120, shares: 4, views: 800 });
     expect(api.getMediaInsights).toHaveBeenCalledWith('plain-token', 'm1');
   });
 
@@ -200,7 +200,7 @@ describe('InstagramConnector', () => {
     const api = { getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 400, data: { error: { type: 'OAuthException', code: 100, message: 'media posted before business conversion' } } } }) };
     const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
 
-    expect(await connector.loadPostInsights(account, 'm1')).toEqual({ reach: null, shares: null });
+    expect(await connector.loadPostInsights(account, 'm1')).toEqual({ reach: null, shares: null, views: null });
   });
 
   it('loadPostInsights pauses on a rate limit instead of recording null insights', async () => {

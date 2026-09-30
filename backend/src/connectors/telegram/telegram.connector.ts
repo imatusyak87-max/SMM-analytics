@@ -5,9 +5,12 @@ import {
   AccountStats,
   AvatarImage,
   ConnectorPost,
+  HistoryPage,
   LatestPost,
   SocialConnector,
 } from '../connector.interface';
+import { HistoryPauseError, isNetworkError, MINUTE_MS, networkPause } from '../history-pause.error';
+import { HistoryPauseReason } from '../../db/entities/history-load.entity';
 import { TelegramApiClient } from './telegram-api.client';
 import { TelegramPreviewClient } from './telegram-preview.client';
 import {
@@ -28,10 +31,25 @@ const PROBE_SPAN = 4;
 const MISSING_RUN_LIMIT = 10;
 /** Channel post ids start at 1; if nothing exists below this, the channel has no readable posts. */
 const FIRST_POST_SEARCH_LIMIT = 1024;
+/** Embed ids read per history call; the processor paces calls into slices. */
+const EMBED_HISTORY_CHUNK = 50;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class EmbedBudgetExhausted extends Error {}
+
+function toTelegramPause(err: unknown): unknown {
+  if (err instanceof HistoryPauseError) return err;
+  if ((err as { response?: { status?: number } })?.response?.status === 429) {
+    return new HistoryPauseError(
+      HistoryPauseReason.TELEGRAM_RATE_LIMIT,
+      5 * MINUTE_MS,
+      'Telegram ограничил запросы, продолжим через 5 минут',
+    );
+  }
+  if (isNetworkError(err)) return networkPause();
+  return err;
+}
 
 function toConnectorPost(post: ParsedPreviewPost): ConnectorPost {
   return {
@@ -47,6 +65,23 @@ function toConnectorPost(post: ParsedPreviewPost): ConnectorPost {
     views: post.views,
     reach: null,
   };
+}
+
+/**
+ * The preview page shows an album once, under its lowest id. All its parts share
+ * one timestamp, but they need not be adjacent: another post sent in the same
+ * second can take an id between them. So an album is keyed by its timestamp,
+ * and each lower part walked into replaces the album's entry.
+ */
+function collapseAlbumPost(post: ParsedPreviewPost, albumSlots: Map<number, number>, collected: ConnectorPost[]): void {
+  const time = post.publishedAt.getTime();
+  const slot = post.grouped ? albumSlots.get(time) : undefined;
+  if (slot !== undefined) {
+    collected[slot] = toConnectorPost(post);
+  } else {
+    if (post.grouped) albumSlots.set(time, collected.length);
+    collected.push(toConnectorPost(post));
+  }
 }
 
 export class TelegramConnector implements SocialConnector {
@@ -179,33 +214,21 @@ export class TelegramConnector implements SocialConnector {
     return collected;
   }
 
-  /**
-   * Reads a channel whose web preview is disabled, one embed page per post. Nothing
-   * lists the post ids, so the newest one is found by probing, then the walk steps
-   * down id by id until it passes sinceDate. Deleted ids are "Post not found" pages
-   * and are skipped.
-   */
-  private async getPostsFromEmbeds(
-    channel: string,
-    sinceDate: Date,
-    previewError: PreviewUnavailableError,
-  ): Promise<ConnectorPost[]> {
+  /** Reads embed pages with a per-walk request budget, pacing and caching each id. */
+  private makeEmbedReader(channel: string, budget: number): (id: number) => Promise<ParsedPreviewPost | null> {
     const handle = channel.replace(/^@/, '');
     const pages = new Map<number, ParsedPreviewPost | null>();
     let requests = 0;
 
-    const read = async (id: number): Promise<ParsedPreviewPost | null> => {
+    return async (id: number) => {
       if (pages.has(id)) return pages.get(id)!;
-      if (requests >= MAX_EMBED_REQUESTS) throw new EmbedBudgetExhausted();
+      if (requests >= budget) throw new EmbedBudgetExhausted();
       if (requests > 0) await delay(this.requestDelayMs);
       requests += 1;
 
       let post: ParsedPreviewPost | null;
       try {
-        [post] = parsePreviewPage(
-          await this.preview.fetchEmbed(channel, String(id)),
-          handle,
-        );
+        [post] = parsePreviewPage(await this.preview.fetchEmbed(channel, String(id)), handle);
       } catch (err) {
         if (!(err instanceof PreviewUnavailableError)) throw err;
         post = null;
@@ -213,7 +236,17 @@ export class TelegramConnector implements SocialConnector {
       pages.set(id, post);
       return post;
     };
+  }
 
+  /**
+   * Nothing lists a hidden channel's post ids, so the newest one is found by
+   * probing: double until no post is near, binary-search the gap, then scan up
+   * past deleted ids. Throws `previewError` when the channel has no readable posts.
+   */
+  private async findNewestEmbedId(
+    read: (id: number) => Promise<ParsedPreviewPost | null>,
+    previewError: PreviewUnavailableError,
+  ): Promise<number> {
     const hasPostNear = async (id: number): Promise<boolean> => {
       for (let probe = id; probe < id + PROBE_SPAN; probe++) {
         if (await read(probe)) return true;
@@ -221,10 +254,7 @@ export class TelegramConnector implements SocialConnector {
       return false;
     };
 
-    let newest = 0;
     try {
-      // Double until there are no posts near the probe, then binary-search the gap:
-      // a post is always near `low`, never near `high`.
       let low = 0;
       let high = 1;
       while (low > 0 || high <= FIRST_POST_SEARCH_LIMIT) {
@@ -245,8 +275,7 @@ export class TelegramConnector implements SocialConnector {
         else high = middle;
       }
 
-      // A deleted post at a probe can still leave `low` short of the newest post;
-      // scanning up until a long run of missing ids closes that gap.
+      let newest = 0;
       let missing = 0;
       for (let id = low; missing < MISSING_RUN_LIMIT; id++) {
         if (await read(id)) {
@@ -256,16 +285,28 @@ export class TelegramConnector implements SocialConnector {
           missing += 1;
         }
       }
+      return newest;
     } catch (err) {
       if (err instanceof EmbedBudgetExhausted) throw previewError;
       throw err;
     }
+  }
+
+  /**
+   * Reads a channel whose web preview is disabled, one embed page per post. Nothing
+   * lists the post ids, so the newest one is found by probing, then the walk steps
+   * down id by id until it passes sinceDate. Deleted ids are "Post not found" pages
+   * and are skipped.
+   */
+  private async getPostsFromEmbeds(
+    channel: string,
+    sinceDate: Date,
+    previewError: PreviewUnavailableError,
+  ): Promise<ConnectorPost[]> {
+    const read = this.makeEmbedReader(channel, MAX_EMBED_REQUESTS);
+    const newest = await this.findNewestEmbedId(read, previewError);
 
     const collected: ConnectorPost[] = [];
-    // The preview page shows an album once, under its lowest id. All its parts share
-    // one timestamp, but they need not be adjacent: another post sent in the same
-    // second can take an id between them. So an album is keyed by its timestamp,
-    // and each lower part walked into replaces the album's entry.
     const albumSlots = new Map<number, number>();
     try {
       for (let id = newest; id >= 1; id--) {
@@ -273,16 +314,7 @@ export class TelegramConnector implements SocialConnector {
         if (!post) continue;
         if (post.publishedAt < sinceDate) break;
 
-        const slot = post.grouped
-          ? albumSlots.get(post.publishedAt.getTime())
-          : undefined;
-        if (slot !== undefined) {
-          collected[slot] = toConnectorPost(post);
-        } else {
-          if (post.grouped)
-            albumSlots.set(post.publishedAt.getTime(), collected.length);
-          collected.push(toConnectorPost(post));
-        }
+        collapseAlbumPost(post, albumSlots, collected);
       }
     } catch (err) {
       if (!(err instanceof EmbedBudgetExhausted)) throw err;
@@ -292,5 +324,78 @@ export class TelegramConnector implements SocialConnector {
     }
 
     return collected;
+  }
+
+  /**
+   * One step of the full-history walk. Normal channels page back through
+   * t.me/s/ with no page cap; channels with the preview disabled are read one
+   * embed page per post, all the way down to id 1.
+   */
+  async loadHistoryPage(account: Account, cursor: string | null): Promise<HistoryPage> {
+    const channel = account.externalId;
+    try {
+      if (cursor?.startsWith('e:')) return await this.embedHistoryChunk(channel, Number(cursor.slice(2)));
+      return await this.previewHistoryPage(channel, cursor?.startsWith('p:') ? cursor.slice(2) : undefined);
+    } catch (err) {
+      throw toTelegramPause(err);
+    }
+  }
+
+  private async previewHistoryPage(channel: string, before: string | undefined): Promise<HistoryPage> {
+    let parsed: ParsedPreviewPost[];
+    try {
+      parsed = parsePreviewPage(await this.preview.fetchPage(channel, before), channel.replace(/^@/, ''));
+    } catch (err) {
+      if (!(err instanceof PreviewUnavailableError)) throw err;
+      // On the first page this means the preview is disabled: switch to embeds.
+      // Later, it means the walk went past the channel's first post.
+      if (before !== undefined) return { posts: [], nextCursor: null };
+      const newest = await this.findNewestEmbedId(this.makeEmbedReader(channel, MAX_EMBED_REQUESTS), err);
+      return this.embedHistoryChunk(channel, newest);
+    }
+
+    const oldest = parsed.reduce((a, b) => (a.publishedAt <= b.publishedAt ? a : b));
+    const nextBefore = oldest.externalPostId;
+    return {
+      posts: parsed.map(toConnectorPost),
+      nextCursor: nextBefore === before ? null : `p:${nextBefore}`,
+    };
+  }
+
+  /**
+   * Reads up to EMBED_HISTORY_CHUNK ids downward from `startId`. Deleted ids
+   * are skipped without ending the walk. The chunk never stops inside an
+   * album, so an album is never split into two posts across chunks.
+   */
+  private async embedHistoryChunk(channel: string, startId: number): Promise<HistoryPage> {
+    const read = this.makeEmbedReader(channel, Number.POSITIVE_INFINITY);
+    const collected: ConnectorPost[] = [];
+    const albumSlots = new Map<number, number>();
+    let openAlbum: number | null = null;
+    let reads = 0;
+    let id = startId;
+
+    while (id >= 1) {
+      if (reads >= EMBED_HISTORY_CHUNK && openAlbum === null) break;
+      const post = await read(id);
+      reads += 1;
+
+      if (!post) {
+        if (reads > EMBED_HISTORY_CHUNK) openAlbum = null;
+        id -= 1;
+        continue;
+      }
+
+      const time = post.publishedAt.getTime();
+      if (reads > EMBED_HISTORY_CHUNK && !(post.grouped && time === openAlbum)) {
+        break; // past the budget and outside the album: this id starts the next chunk
+      }
+
+      collapseAlbumPost(post, albumSlots, collected);
+      openAlbum = post.grouped ? time : null;
+      id -= 1;
+    }
+
+    return { posts: collected, nextCursor: id >= 1 ? `e:${id}` : null };
   }
 }

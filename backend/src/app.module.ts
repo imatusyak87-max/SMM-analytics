@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { StatsModule } from './stats/stats.module';
 import { SyncModule } from './sync/sync.module';
+import { HistoryModule } from './history/history.module';
 import { ConnectorsModule } from './connectors/connectors.module';
 import { CompetitorsModule } from './competitors/competitors.module';
 
@@ -19,6 +20,7 @@ import { CompetitorsModule } from './competitors/competitors.module';
     AccountsModule,
     StatsModule,
     SyncModule,
+    HistoryModule,
     ConnectorsModule,
     CompetitorsModule,
     BullModule.forRoot({ connection: { url: process.env.REDIS_URL } }),

@@ -5,6 +5,8 @@ import { PostType } from '../../db/entities/post.entity';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PreviewUnavailableError, parsePreviewPage } from './telegram-preview.parser';
+import { HistoryPauseError } from '../history-pause.error';
+import { HistoryPauseReason } from '../../db/entities/history-load.entity';
 
 describe('TelegramConnector', () => {
   const account = {
@@ -449,5 +451,124 @@ describe('TelegramConnector.getLatestPostAt', () => {
     const connector = new TelegramConnector({} as any, preview);
 
     await expect(connector.getLatestPostAt(account)).rejects.toThrow('ETIMEDOUT');
+  });
+});
+
+describe('TelegramConnector.loadHistoryPage', () => {
+  const account = { externalId: '@testchannel' } as any;
+
+  it('reads the newest preview page first and points the cursor at its oldest post', async () => {
+    const preview = { fetchPage: jest.fn().mockResolvedValue(page([5, 6, 7], '2024-03-12T10:00:00Z')), fetchEmbed: jest.fn() };
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    const result = await connector.loadHistoryPage(account, null);
+
+    expect(preview.fetchPage).toHaveBeenCalledWith('@testchannel', undefined);
+    expect(ids(result.posts)).toEqual([5, 6, 7]);
+    expect(result.nextCursor).toBe('p:5');
+  });
+
+  it('continues the preview walk from the cursor, with no page cap', async () => {
+    const preview = { fetchPage: jest.fn().mockResolvedValue(page([2, 3, 4], '2021-01-01T10:00:00Z')), fetchEmbed: jest.fn() };
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    const result = await connector.loadHistoryPage(account, 'p:5');
+
+    expect(preview.fetchPage).toHaveBeenCalledWith('@testchannel', '5');
+    expect(result.nextCursor).toBe('p:2');
+  });
+
+  it('ends the preview walk when the page before the cursor has no posts', async () => {
+    const preview = { fetchPage: jest.fn().mockRejectedValue(new PreviewUnavailableError('past the start')), fetchEmbed: jest.fn() };
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    expect(await connector.loadHistoryPage(account, 'p:1')).toEqual({ posts: [], nextCursor: null });
+  });
+
+  it('ends the preview walk when Telegram hands back the same page again', async () => {
+    const preview = { fetchPage: jest.fn().mockResolvedValue(page([1, 2], '2020-01-01T10:00:00Z')), fetchEmbed: jest.fn() };
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    expect((await connector.loadHistoryPage(account, 'p:1')).nextCursor).toBeNull();
+  });
+
+  it('switches to the embed walk for a channel with its preview disabled, starting at the newest post', async () => {
+    const preview = hiddenChannel(dailyPosts(120));
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    const result = await connector.loadHistoryPage(account, null);
+
+    // 50 ids per call, newest first.
+    expect(ids(result.posts)).toEqual(Array.from({ length: 50 }, (_, i) => 71 + i));
+    expect(result.nextCursor).toBe('e:70');
+  });
+
+  it('walks the embed pages down to post 1, skipping deleted posts without stopping', async () => {
+    const preview = hiddenChannel(dailyPosts(30, [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]));
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    const result = await connector.loadHistoryPage(account, 'e:20');
+
+    expect(ids(result.posts)).toEqual([1, 2, 3, 16, 17, 18, 19, 20]);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('does not end an embed chunk inside an album', async () => {
+    // Ids 52..4 are ordinary posts (49 reads); ids 3, 2, 1 are one album. The
+    // 50-read budget runs out on id 3, inside the album, so the walk must keep
+    // reading 2 and 1.
+    const embeds: Record<number, string> = {};
+    for (let id = 4; id <= 52; id++) embeds[id] = embed(id, new Date(Date.UTC(2023, 0, id)).toISOString());
+    const albumTime = '2022-06-01T10:00:00Z';
+    embeds[3] = embed(3, albumTime, true);
+    embeds[2] = embed(2, albumTime, true);
+    embeds[1] = embed(1, albumTime, true);
+    const preview = hiddenChannel(embeds);
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    const result = await connector.loadHistoryPage(account, 'e:52');
+
+    const albumEntries = result.posts.filter((p) => p.publishedAt.toISOString() === new Date(albumTime).toISOString());
+    expect(albumEntries.map((p) => p.externalPostId)).toEqual(['1']);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('leaves the post after a finished album for the next chunk', async () => {
+    const embeds: Record<number, string> = {};
+    for (let id = 3; id <= 51; id++) embeds[id] = embed(id, new Date(Date.UTC(2023, 0, id)).toISOString());
+    const albumTime = '2022-06-01T10:00:00Z';
+    embeds[3] = embed(3, albumTime, true);
+    embeds[2] = embed(2, albumTime, true);
+    embeds[1] = embed(1, '2022-05-01T10:00:00Z');
+    const preview = hiddenChannel(embeds);
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    const result = await connector.loadHistoryPage(account, 'e:51');
+
+    expect(result.posts.some((p) => p.externalPostId === '1')).toBe(false);
+    expect(result.posts.filter((p) => p.publishedAt.toISOString() === new Date(albumTime).toISOString()).map((p) => p.externalPostId)).toEqual(['2']);
+    expect(result.nextCursor).toBe('e:1');
+  });
+
+  it('pauses for five minutes when Telegram answers 429', async () => {
+    const preview = { fetchPage: jest.fn().mockRejectedValue({ response: { status: 429 }, message: 'Request failed with status code 429' }), fetchEmbed: jest.fn() };
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    const error = await connector.loadHistoryPage(account, 'p:9').catch((e) => e);
+
+    expect(error).toBeInstanceOf(HistoryPauseError);
+    expect(error.reason).toBe(HistoryPauseReason.TELEGRAM_RATE_LIMIT);
+    expect(error.retryAfterMs).toBe(5 * 60_000);
+    expect(error.message).toBe('Telegram ограничил запросы, продолжим через 5 минут');
+  });
+
+  it('pauses on a network timeout', async () => {
+    const preview = { fetchPage: jest.fn(), fetchEmbed: jest.fn().mockRejectedValue({ code: 'ECONNABORTED', message: 'timeout' }) };
+    const connector = new TelegramConnector({} as any, preview as any, 0);
+
+    const error = await connector.loadHistoryPage(account, 'e:5').catch((e) => e);
+
+    expect(error).toBeInstanceOf(HistoryPauseError);
+    expect(error.reason).toBe(HistoryPauseReason.NETWORK);
   });
 });

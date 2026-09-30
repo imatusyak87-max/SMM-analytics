@@ -12,7 +12,8 @@ export type PresetId =
   | 'thisQuarter'
   | 'lastQuarter'
   | 'thisYear'
-  | 'lastYear';
+  | 'lastYear'
+  | 'allTime';
 
 export interface Period {
   from: string;
@@ -33,6 +34,7 @@ export const PRESETS: ReadonlyArray<{ id: PresetId; label: string }> = [
   { id: 'lastQuarter', label: 'Прошлый квартал' },
   { id: 'thisYear', label: 'Текущий год' },
   { id: 'lastYear', label: 'Прошлый год' },
+  { id: 'allTime', label: 'За всё время' },
 ];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -63,7 +65,7 @@ export function formatPeriod(period: Period): string {
  * months and days over, which handles every year and month boundary: month -1 is
  * last December, and day 0 is the previous month's last day.
  */
-export function presetRange(preset: PresetId, today: Date): Period {
+export function presetRange(preset: PresetId, today: Date, allTimeFrom?: string): Period {
   const y = today.getFullYear();
   const m = today.getMonth();
   const d = today.getDate();
@@ -88,9 +90,12 @@ export function presetRange(preset: PresetId, today: Date): Period {
       return { from: day(y, 0, 1), to: todayIso };
     case 'lastYear':
       return { from: day(y - 1, 0, 1), to: day(y - 1, 11, 31) };
+    case 'allTime':
+      // The account's first known post; without it there is nothing earlier to show.
+      return { from: allTimeFrom ?? todayIso, to: todayIso };
   }
 }
 
-export function selectPreset(preset: PresetId, today: Date): SelectedPeriod {
-  return { preset, ...presetRange(preset, today) };
+export function selectPreset(preset: PresetId, today: Date, allTimeFrom?: string): SelectedPeriod {
+  return { preset, ...presetRange(preset, today, allTimeFrom) };
 }

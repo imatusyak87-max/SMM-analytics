@@ -170,4 +170,18 @@ describe('PeriodPicker', () => {
     expect(onChange).not.toHaveBeenCalled();
     expect(trigger()).not.toHaveFocus();
   });
+
+  it('offers «За всё время» only when the first date is known, and applies it', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<PeriodPicker value={selectPreset('last30', today)} onChange={onChange} today={today} />);
+    fireEvent.click(screen.getByRole('button', { name: /Выбрать даты/ }));
+    expect(screen.queryByRole('button', { name: 'За всё время' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Выбрать даты/ }));
+    rerender(<PeriodPicker value={selectPreset('last30', today)} onChange={onChange} today={today} allTimeFrom="2021-03-12" />);
+    fireEvent.click(screen.getByRole('button', { name: /Выбрать даты/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'За всё время' }));
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ preset: 'allTime', from: '2021-03-12' }));
+  });
 });

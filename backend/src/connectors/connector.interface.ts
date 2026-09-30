@@ -37,6 +37,17 @@ export interface ConnectorPost {
   reach: number | null;
 }
 
+/** One step of a full-history walk. `nextCursor` is null once history is exhausted. */
+export interface HistoryPage {
+  posts: ConnectorPost[];
+  nextCursor: string | null;
+}
+
+export interface PostInsights {
+  reach: number | null;
+  shares: number | null;
+}
+
 /**
  * getPosts may return [] for push-based platforms (e.g. Telegram Bot API,
  * which delivers posts via webhook, not on-demand fetch) — callers must
@@ -54,4 +65,12 @@ export interface SocialConnector {
    * or null when the platform will not say.
    */
   getLatestPostAt?(account: Account): Promise<LatestPost>;
+  /**
+   * One page of the account's full post history, newest first. `cursor` is
+   * whatever the previous call returned as `nextCursor` (null to start).
+   * Temporary conditions throw HistoryPauseError.
+   */
+  loadHistoryPage?(account: Account, cursor: string | null): Promise<HistoryPage>;
+  /** Platforms whose post list lacks reach/shares fill them in one post at a time. */
+  loadPostInsights?(account: Account, externalPostId: string): Promise<PostInsights>;
 }

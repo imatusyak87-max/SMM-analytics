@@ -339,4 +339,10 @@ describe('AccountDetailPage', () => {
     await screen.findByText(detail().account.name); // page has loaded
     expect(screen.queryByText(/Переподключите Instagram/)).not.toBeInTheDocument();
   });
+
+  it('shows the full-history panel for the account', async () => {
+    mockApi();
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Загрузить все посты' })).toBeInTheDocument();
+  });
 });

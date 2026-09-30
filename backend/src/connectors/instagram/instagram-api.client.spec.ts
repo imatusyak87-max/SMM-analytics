@@ -5,6 +5,10 @@ jest.mock('axios');
 const mockedGet = axios.get as jest.MockedFunction<typeof axios.get>;
 const mockedPost = axios.post as jest.MockedFunction<typeof axios.post>;
 
+// Matches the module-level REQUEST_TIMEOUT_MS in instagram-api.client.ts — kept as a
+// literal (like telegram-preview.client.spec.ts) since the constant isn't exported.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 describe('InstagramApiClient', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -15,10 +19,11 @@ describe('InstagramApiClient', () => {
     const result = await client.exchangeCodeForToken('a-code');
 
     expect(result).toEqual({ accessToken: 'short-tok', instagramUserId: '17841400000000000' });
-    const [url, form] = mockedPost.mock.calls[0];
+    const [url, form, config] = mockedPost.mock.calls[0];
     expect(url).toBe('https://api.instagram.com/oauth/access_token');
     expect((form as URLSearchParams).get('code')).toBe('a-code');
     expect((form as URLSearchParams).get('client_secret')).toBe('app-secret');
+    expect(config).toEqual({ timeout: REQUEST_TIMEOUT_MS });
   });
 
   it.each([
@@ -43,6 +48,7 @@ describe('InstagramApiClient', () => {
     expect(url).toBe('https://graph.instagram.com/v21.0/access_token');
     expect(config).toEqual({
       params: { grant_type: 'ig_exchange_token', client_secret: 'app-secret', access_token: 'short-tok' },
+      timeout: REQUEST_TIMEOUT_MS,
     });
   });
 
@@ -55,7 +61,10 @@ describe('InstagramApiClient', () => {
     expect(result).toEqual({ accessToken: 'refreshed-tok', expiresInSeconds: 5184000 });
     const [url, config] = mockedGet.mock.calls[0];
     expect(url).toBe('https://graph.instagram.com/refresh_access_token');
-    expect(config).toEqual({ params: { grant_type: 'ig_refresh_token', access_token: 'long-tok' } });
+    expect(config).toEqual({
+      params: { grant_type: 'ig_refresh_token', access_token: 'long-tok' },
+      timeout: REQUEST_TIMEOUT_MS,
+    });
   });
 
   it('fetches the profile and maps snake_case fields', async () => {
@@ -127,6 +136,8 @@ describe('InstagramApiClient', () => {
       commentsCount: 3,
     });
     expect(result.nextCursor).toBe('cursor-2');
+    const [, config] = mockedGet.mock.calls[0];
+    expect(config).toMatchObject({ timeout: REQUEST_TIMEOUT_MS });
   });
 
   it('returns a null cursor on the last page', async () => {
@@ -147,6 +158,8 @@ describe('InstagramApiClient', () => {
     const insights = await client.getMediaInsights('a-token', 'media-1');
 
     expect(insights).toEqual({ reach: 500, saved: 12, shares: null });
+    const [, config] = mockedGet.mock.calls[0];
+    expect(config).toMatchObject({ timeout: REQUEST_TIMEOUT_MS });
   });
 
   it('lets a failed request propagate untranslated — the caller classifies and translates it', async () => {

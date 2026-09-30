@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
 import { CompetitorsSection } from '../components/CompetitorsSection';
+import { HistoryLoadPanel } from '../components/HistoryLoadPanel';
 import { Pagination } from '../components/Pagination';
 import { PeriodPicker } from '../components/PeriodPicker';
 import { PostList, type PostItem, type PostSort } from '../components/PostList';
@@ -51,6 +52,15 @@ export function AccountDetailPage() {
   const postFilter = { ...range, sort, type: typeFilter === 'all' ? undefined : typeFilter };
 
   const detail = useApiGet<DetailData>(`/accounts/${id}/detail`, range, { reloadKey });
+
+  // History loads move the first known post back; keep «За всё время» honest.
+  const postsFrom = detail.data?.coverage.postsFrom;
+  useEffect(() => {
+    if (postsFrom && period.preset === 'allTime' && period.from !== postsFrom) {
+      setPeriod(selectPreset('allTime', new Date(), postsFrom));
+    }
+  }, [postsFrom, period.preset, period.from]);
+
   const top = useApiGet<PostsPage>(
     `/accounts/${id}/posts`,
     { ...postFilter, page: 1, size: TOP_COUNT },
@@ -118,6 +128,13 @@ export function AccountDetailPage() {
             setTablePage(1);
           }}
         />
+        <HistoryLoadPanel
+          accountId={account.id}
+          onFinished={() => {
+            setReloadKey((key) => key + 1);
+            setTablePage(1);
+          }}
+        />
       </div>
       {detail.data.needsReconnect && (
         <div className={styles.reconnectBanner} role="alert">
@@ -129,7 +146,7 @@ export function AccountDetailPage() {
         </div>
       )}
       <section className={styles.overview} aria-label="Сводка за период">
-        <PeriodPicker value={period} onChange={changePeriod} />
+        <PeriodPicker value={period} onChange={changePeriod} allTimeFrom={coverage.postsFrom} />
         {showCoverage && (
           <p className={styles.coverage} role="note">
             Посты собраны с {formatIsoDate(coverage.postsFrom)}, подписчики — с{' '}

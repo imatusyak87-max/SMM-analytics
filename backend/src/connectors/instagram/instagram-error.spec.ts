@@ -1,4 +1,4 @@
-import { translateInstagramError, isInstagramAuthError } from './instagram-error';
+import { translateInstagramError, isInstagramAuthError, isInstagramRateLimitError } from './instagram-error';
 
 function axiosError(status: number, body: unknown, message = 'Request failed') {
   return { message, response: { status, data: body } };
@@ -47,5 +47,23 @@ describe('isInstagramAuthError', () => {
 
   it('is false for a network error with no response', () => {
     expect(isInstagramAuthError({ message: 'ETIMEDOUT' })).toBe(false);
+  });
+});
+
+describe('isInstagramRateLimitError', () => {
+  const graphError = (status: number, code: number) => ({ response: { status, data: { error: { type: 'OAuthException', code } } } });
+
+  it.each([4, 17, 32, 613])('treats Graph error code %i as a rate limit', (code) => {
+    expect(isInstagramRateLimitError(graphError(400, code))).toBe(true);
+  });
+
+  it('treats a bare HTTP 429 as a rate limit', () => {
+    expect(isInstagramRateLimitError({ response: { status: 429, data: {} } })).toBe(true);
+  });
+
+  it('does not treat an auth error or an ordinary bad request as a rate limit', () => {
+    expect(isInstagramRateLimitError(graphError(400, 190))).toBe(false);
+    expect(isInstagramRateLimitError(graphError(400, 100))).toBe(false);
+    expect(isInstagramRateLimitError({ code: 'ETIMEDOUT' })).toBe(false);
   });
 });

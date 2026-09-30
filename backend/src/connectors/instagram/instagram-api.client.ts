@@ -3,6 +3,10 @@ import axios from 'axios';
 const GRAPH_VERSION = 'v21.0';
 const GRAPH_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
 
+// Matches the Telegram preview client's timeout. Without it a stalled connection never
+// rejects, so the concurrency-1 history queue stalls app-wide instead of pausing.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 export interface InstagramProfile {
   id: string;
   username: string;
@@ -54,7 +58,9 @@ export class InstagramApiClient {
       redirect_uri: this.redirectUri,
       code,
     });
-    const { data } = await axios.post('https://api.instagram.com/oauth/access_token', form);
+    const { data } = await axios.post('https://api.instagram.com/oauth/access_token', form, {
+      timeout: REQUEST_TIMEOUT_MS,
+    });
     if (!data?.access_token || data?.user_id === undefined || data?.user_id === null) {
       throw new Error('Instagram returned an unexpected token response');
     }
@@ -64,6 +70,7 @@ export class InstagramApiClient {
   async exchangeForLongLivedToken(shortLivedToken: string): Promise<{ accessToken: string; expiresInSeconds: number }> {
     const { data } = await axios.get(`${GRAPH_BASE}/access_token`, {
       params: { grant_type: 'ig_exchange_token', client_secret: this.appSecret, access_token: shortLivedToken },
+      timeout: REQUEST_TIMEOUT_MS,
     });
     return { accessToken: data.access_token, expiresInSeconds: data.expires_in };
   }
@@ -71,6 +78,7 @@ export class InstagramApiClient {
   async refreshLongLivedToken(longLivedToken: string): Promise<{ accessToken: string; expiresInSeconds: number }> {
     const { data } = await axios.get('https://graph.instagram.com/refresh_access_token', {
       params: { grant_type: 'ig_refresh_token', access_token: longLivedToken },
+      timeout: REQUEST_TIMEOUT_MS,
     });
     return { accessToken: data.access_token, expiresInSeconds: data.expires_in };
   }
@@ -78,6 +86,7 @@ export class InstagramApiClient {
   async getProfile(accessToken: string): Promise<InstagramProfile> {
     const { data } = await axios.get(`${GRAPH_BASE}/me`, {
       params: { fields: PROFILE_FIELDS, access_token: accessToken },
+      timeout: REQUEST_TIMEOUT_MS,
     });
     return {
       id: data.id,
@@ -95,6 +104,7 @@ export class InstagramApiClient {
   async getMedia(accessToken: string, after?: string): Promise<{ items: InstagramMedia[]; nextCursor: string | null }> {
     const { data } = await axios.get(`${GRAPH_BASE}/me/media`, {
       params: { fields: MEDIA_FIELDS, access_token: accessToken, ...(after ? { after } : {}) },
+      timeout: REQUEST_TIMEOUT_MS,
     });
     const items: InstagramMedia[] = (data.data ?? []).map((raw: any) => ({
       id: raw.id,
@@ -117,6 +127,7 @@ export class InstagramApiClient {
   async getMediaInsights(accessToken: string, mediaId: string): Promise<InstagramMediaInsights> {
     const { data } = await axios.get(`${GRAPH_BASE}/${mediaId}/insights`, {
       params: { metric: 'reach,saved,shares', access_token: accessToken },
+      timeout: REQUEST_TIMEOUT_MS,
     });
     const byName = new Map<string, number>(
       (data.data ?? []).map((metric: any) => [metric.name, metric.values?.[0]?.value ?? null]),

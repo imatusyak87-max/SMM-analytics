@@ -34,8 +34,11 @@ export class HistoryPostStore {
 
   async write(accountId: string, posts: ConnectorPost[], followersCount: number, preserveInsights: boolean): Promise<void> {
     if (posts.length === 0) return;
+    // A single bulk INSERT...ON CONFLICT DO UPDATE fails in Postgres ("cannot affect
+    // row a second time") if a page repeats an externalPostId; keep the last one.
+    const deduped = [...new Map(posts.map((post) => [post.externalPostId, post])).values()];
     const now = new Date();
-    const rows = posts.map((post) => ({
+    const rows = deduped.map((post) => ({
       accountId,
       ...post,
       er: calculateEr(post.likes, post.comments, post.shares, followersCount),

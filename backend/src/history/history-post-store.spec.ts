@@ -58,6 +58,20 @@ describe('HistoryPostStore.write', () => {
     await new HistoryPostStore(repo as any).write('acc-1', [], 200, false);
     expect(repo.createQueryBuilder).not.toHaveBeenCalled();
   });
+
+  it('dedupes a page that repeats the same externalPostId, keeping the last occurrence', async () => {
+    // A single bulk INSERT...ON CONFLICT DO UPDATE fails in Postgres ("cannot affect
+    // row a second time") when the same externalPostId appears twice in one page.
+    const qb = chain();
+    const store = new HistoryPostStore({ createQueryBuilder: jest.fn().mockReturnValue(qb) } as any);
+
+    await store.write('acc-1', [post('1', { likes: 1 }), post('2'), post('1', { likes: 99 })], 200, false);
+
+    const rows = qb.values.mock.calls[0][0];
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r: any) => r.externalPostId).sort()).toEqual(['1', '2']);
+    expect(rows.find((r: any) => r.externalPostId === '1')).toMatchObject({ likes: 99 });
+  });
 });
 
 describe('HistoryPostStore insight targets', () => {

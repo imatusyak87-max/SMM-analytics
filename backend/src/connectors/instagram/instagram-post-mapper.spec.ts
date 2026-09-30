@@ -14,7 +14,7 @@ const baseMedia: InstagramMedia = {
   likeCount: 40,
   commentsCount: 3,
 };
-const insights: InstagramMediaInsights = { reach: 500, saved: 12, shares: 4 };
+const insights: InstagramMediaInsights = { reach: 500, saved: 12, shares: 4, views: 900 };
 
 describe('mapInstagramPost', () => {
   it('maps an image post', () => {
@@ -30,7 +30,7 @@ describe('mapInstagramPost', () => {
       likes: 40,
       comments: 3,
       shares: 4,
-      views: null,
+      views: 900,
       reach: 500,
     });
   });
@@ -55,10 +55,11 @@ describe('mapInstagramPost', () => {
   });
 
   it('treats a missing insights metric as null, not zero', () => {
-    const noReach = { reach: null, saved: 5, shares: null };
+    const noReach = { reach: null, saved: 5, shares: null, views: null };
 
     const post = mapInstagramPost(baseMedia, noReach);
 
     expect(post.reach).toBeNull();
+    expect(post.views).toBeNull();
   });
 });

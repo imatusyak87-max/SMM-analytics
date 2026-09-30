@@ -10,7 +10,7 @@ import { HistoryPauseError, isNetworkError, MINUTE_MS, networkPause } from '../h
 import { HistoryPauseReason } from '../../db/entities/history-load.entity';
 import { mapInstagramPost } from './instagram-post-mapper';
 
-const NO_INSIGHTS: InstagramMediaInsights = { reach: null, saved: null, shares: null };
+const NO_INSIGHTS: InstagramMediaInsights = { reach: null, saved: null, shares: null, views: null };
 
 function instagramRateLimitPause(): HistoryPauseError {
   return new HistoryPauseError(
@@ -76,7 +76,7 @@ export class InstagramConnector implements SocialConnector {
       return await this.api.getMediaInsights(token, mediaId);
     } catch (error) {
       if (isInstagramAuthError(error) || isInstagramRateLimitError(error) || isNetworkError(error)) throw error;
-      return { reach: null, saved: null, shares: null };
+      return { reach: null, saved: null, shares: null, views: null };
     }
   }
 
@@ -92,12 +92,12 @@ export class InstagramConnector implements SocialConnector {
     return this.call(account, async (token) => {
       try {
         const insights = await this.api.getMediaInsights(token, externalPostId);
-        return { reach: insights.reach, shares: insights.shares };
+        return { reach: insights.reach, shares: insights.shares, views: insights.views };
       } catch (error) {
         // Media from before the account became Business/Creator has no insights;
         // that is an answer, not a failure. Everything temporary goes to `call`.
         if (isInstagramAuthError(error) || isInstagramRateLimitError(error) || isNetworkError(error)) throw error;
-        return { reach: null, shares: null };
+        return { reach: null, shares: null, views: null };
       }
     });
   }

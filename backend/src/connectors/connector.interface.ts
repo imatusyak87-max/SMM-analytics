@@ -46,6 +46,7 @@ export interface HistoryPage {
 export interface PostInsights {
   reach: number | null;
   shares: number | null;
+  views: number | null;
 }
 
 /**

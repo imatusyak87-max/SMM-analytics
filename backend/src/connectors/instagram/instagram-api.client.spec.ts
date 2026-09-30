@@ -151,15 +151,45 @@ describe('InstagramApiClient', () => {
 
   it('fetches media insights, tolerating a metric Instagram does not return', async () => {
     mockedGet.mockResolvedValue({
-      data: { data: [{ name: 'reach', values: [{ value: 500 }] }, { name: 'saved', values: [{ value: 12 }] }] },
+      data: {
+        data: [
+          { name: 'reach', values: [{ value: 500 }] },
+          { name: 'saved', values: [{ value: 12 }] },
+          { name: 'views', values: [{ value: 900 }] },
+        ],
+      },
     } as any);
     const client = new InstagramApiClient('app-id', 'app-secret', 'https://example.com/callback');
 
     const insights = await client.getMediaInsights('a-token', 'media-1');
 
-    expect(insights).toEqual({ reach: 500, saved: 12, shares: null });
+    expect(insights).toEqual({ reach: 500, saved: 12, shares: null, views: 900 });
     const [, config] = mockedGet.mock.calls[0];
-    expect(config).toMatchObject({ timeout: REQUEST_TIMEOUT_MS });
+    expect(config).toMatchObject({ timeout: REQUEST_TIMEOUT_MS, params: { metric: 'reach,saved,shares,views' } });
+  });
+
+  it('asks again without views when Instagram rejects that metric for a post, keeping its reach', async () => {
+    mockedGet
+      .mockRejectedValueOnce({ response: { status: 400, data: { error: { type: 'OAuthException', code: 100 } } } })
+      .mockResolvedValueOnce({ data: { data: [{ name: 'reach', values: [{ value: 500 }] }] } } as any);
+    const client = new InstagramApiClient('app-id', 'app-secret', 'https://example.com/callback');
+
+    const insights = await client.getMediaInsights('a-token', 'media-1');
+
+    expect(insights).toEqual({ reach: 500, saved: null, shares: null, views: null });
+    expect(mockedGet.mock.calls[1][1]).toMatchObject({ params: { metric: 'reach,saved,shares' } });
+  });
+
+  it.each([
+    ['an expired token', { response: { status: 400, data: { error: { type: 'OAuthException', code: 190 } } } }],
+    ['a rate limit', { response: { status: 400, data: { error: { type: 'OAuthException', code: 4 } } } }],
+    ['a timeout', { code: 'ECONNABORTED' }],
+  ])('does not ask again after %s', async (_name, failure) => {
+    mockedGet.mockRejectedValue(failure);
+    const client = new InstagramApiClient('app-id', 'app-secret', 'https://example.com/callback');
+
+    await expect(client.getMediaInsights('a-token', 'media-1')).rejects.toBe(failure);
+    expect(mockedGet).toHaveBeenCalledTimes(1);
   });
 
   it('lets a failed request propagate untranslated — the caller classifies and translates it', async () => {

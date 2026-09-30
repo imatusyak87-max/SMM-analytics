@@ -21,7 +21,7 @@ const UPDATABLE_COLUMNS = [
   'lastSyncedAt',
 ];
 /** Filled by the insights phase or the nightly sync; a history page must not blank them. */
-const INSIGHT_COLUMNS = new Set(['reach', 'shares', 'er']);
+const INSIGHT_COLUMNS = new Set(['reach', 'shares', 'views', 'er', 'erViews']);
 
 export function insightCursor(post: Pick<Post, 'publishedAt' | 'externalPostId'>): string {
   return `${post.publishedAt.toISOString()}|${post.externalPostId}`;
@@ -82,9 +82,16 @@ export class HistoryPostStore {
     // null means Instagram had nothing for this post; keep whatever is stored.
     const reach = insights.reach ?? post.reach;
     const shares = insights.shares ?? post.shares;
+    const views = insights.views ?? post.views;
     await this.postsRepo.update(
       { id: post.id },
-      { reach, shares, er: calculateEr(post.likes, post.comments, shares, followersCount) },
+      {
+        reach,
+        shares,
+        views,
+        er: calculateEr(post.likes, post.comments, shares, followersCount),
+        erViews: calculateErByViews(post.likes, views),
+      },
     );
   }
 }

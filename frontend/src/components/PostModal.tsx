@@ -6,12 +6,19 @@ import type { PostItem } from './PostList';
 
 interface PostModalProps {
   post: PostItem | null;
+  /** The account's platform; names where the outbound link leads. */
+  platform: string;
   onClose: () => void;
 }
 
+const LINK_LABELS: Record<string, string> = {
+  telegram: 'Открыть в Telegram',
+  instagram: 'Открыть в Instagram',
+};
+
 const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 
-export function PostModal({ post, onClose }: PostModalProps) {
+export function PostModal({ post, platform, onClose }: PostModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<Element | null>(null);
 
@@ -88,7 +95,7 @@ export function PostModal({ post, onClose }: PostModalProps) {
           target="_blank"
           rel="noopener noreferrer"
         >
-          Открыть в Telegram
+          {LINK_LABELS[platform] ?? 'Открыть публикацию'}
         </a>
       </div>
     </div>

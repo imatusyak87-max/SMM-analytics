@@ -41,7 +41,7 @@ const connectorPost = (id: string, daysAgo: number) => ({
 });
 
 function setup({ load = makeLoad(), platform = AccountPlatform.TELEGRAM, connector = {} as any, followers = 500 } = {}) {
-  const loadsRepo = { findOneBy: jest.fn().mockResolvedValue(load), update: jest.fn() };
+  const loadsRepo = { findOneBy: jest.fn().mockResolvedValue(load), update: jest.fn().mockResolvedValue({ affected: 1 }) };
   const accountsRepo = { findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1', platform }) };
   const snapshotsRepo = { findOne: jest.fn().mockResolvedValue(followers === null ? null : { followersCount: followers }) };
   const registry = { get: jest.fn().mockReturnValue(connector) };
@@ -214,6 +214,27 @@ describe('HistoryRunner.runSlice — pauses and failures', () => {
     await runner.runSlice('acc-1');
 
     expect(lastWrite(loadsRepo)).toMatchObject({ status: HistoryLoadStatus.PAUSED, cursor: 'p:9', postsLoaded: 1 });
+  });
+
+  it('stops silently, without logging, when the history_loads row is gone before a later page persists', async () => {
+    // Account (and its history_loads row) deleted mid-slice: posts has no FK, so store.write
+    // for the remaining pages would otherwise keep running against a deleted account while
+    // update() silently affects 0 rows.
+    const connector = {
+      loadHistoryPage: jest
+        .fn()
+        .mockResolvedValueOnce({ posts: [connectorPost('9', 400)], nextCursor: 'p:9' })
+        .mockResolvedValueOnce({ posts: [connectorPost('8', 410)], nextCursor: 'p:8' }),
+    };
+    const { runner, loadsRepo, store } = setup({ connector });
+    loadsRepo.update.mockResolvedValueOnce({ affected: 1 }).mockResolvedValueOnce({ affected: 0 });
+
+    const next = await runner.runSlice('acc-1');
+
+    expect(next).toBeNull();
+    expect(store.write).toHaveBeenCalledTimes(1);
+    expect(loadsRepo.update).toHaveBeenCalledTimes(2);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('does nothing when the load was finished, failed or deleted meanwhile', async () => {

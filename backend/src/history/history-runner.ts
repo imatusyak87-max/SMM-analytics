@@ -29,6 +29,13 @@ export const INSIGHTS_PER_SLICE = 60;
 const DAY_MS = 86_400_000;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Sentinel thrown by persist() when the history_loads row is gone (the account was
+ * deleted mid-slice; posts has no FK to it). runSlice catches this before the
+ * pause/failure handling and stops quietly — no further writes, no log noise.
+ */
+class LoadGone extends Error {}
+
 /** The panel shows errorMessage verbatim; fall back rather than leak an English/driver error to the user. */
 const userFacingMessage = (message: string): string => (/[А-Яа-яЁё]/.test(message) ? message : 'непредвиденная ошибка');
 
@@ -73,6 +80,7 @@ export class HistoryRunner {
       // postsSlice/insightsSlice mutate load.status; TS doesn't see through the call, so widen the narrowed literal.
       return (load.status as HistoryLoadStatus) === HistoryLoadStatus.DONE ? null : 0;
     } catch (error) {
+      if (error instanceof LoadGone) return null;
       if (error instanceof HistoryPauseError) {
         load.status = HistoryLoadStatus.PAUSED;
         load.pauseReason = error.reason;
@@ -160,6 +168,8 @@ export class HistoryRunner {
     const fields: Partial<HistoryLoad> = { ...load };
     delete fields.id;
     delete fields.accountId;
-    await this.loadsRepo.update({ id: load.id }, fields);
+    const result = await this.loadsRepo.update({ id: load.id }, fields);
+    // Some drivers omit `affected`; only an explicit 0 means the row is really gone.
+    if (result.affected === 0) throw new LoadGone();
   }
 }

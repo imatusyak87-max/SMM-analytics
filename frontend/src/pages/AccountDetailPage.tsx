@@ -21,7 +21,7 @@ import styles from './AccountDetailPage.module.css';
 const TOP_COUNT = 10;
 
 interface DetailData {
-  account: { id: string; name: string };
+  account: { id: string; name: string; platform: string };
   latestSnapshot: { followersCount: number; avgEr: number | null } | null;
   trend: Array<{ date: string; followersCount: number }>;
   summary: AccountSummary;
@@ -220,7 +220,7 @@ export function AccountDetailPage() {
           )}
         </section>
       )}
-      <PostModal post={openPost} onClose={() => setOpenPost(null)} />
+      <PostModal post={openPost} platform={account.platform} onClose={() => setOpenPost(null)} />
     </div>
   );
 }

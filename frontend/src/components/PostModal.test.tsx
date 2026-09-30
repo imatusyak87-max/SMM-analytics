@@ -31,19 +31,19 @@ function Harness() {
       >
         Открыть карточку
       </button>
-      <PostModal post={openPost} onClose={() => setOpenPost(null)} />
+      <PostModal post={openPost} platform="telegram" onClose={() => setOpenPost(null)} />
     </div>
   );
 }
 
 describe('PostModal', () => {
   it('renders nothing when no post is open', () => {
-    const { container } = render(<PostModal post={null} onClose={() => {}} />);
+    const { container } = render(<PostModal post={null} platform="telegram" onClose={() => {}} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('shows the full text, image and every metric', () => {
-    const { container } = render(<PostModal post={post} onClose={() => {}} />);
+    const { container } = render(<PostModal post={post} platform="telegram" onClose={() => {}} />);
     expect(screen.getByText('Полный текст поста')).toBeInTheDocument();
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://cdn/p1');
     expect(screen.getByText(digits('12300'))).toBeInTheDocument();
@@ -51,40 +51,51 @@ describe('PostModal', () => {
   });
 
   it('marks the image decorative, since the full caption is already shown right beside it as text', () => {
-    const { container } = render(<PostModal post={post} onClose={() => {}} />);
+    const { container } = render(<PostModal post={post} platform="telegram" onClose={() => {}} />);
     expect(container.querySelector('img')).toHaveAttribute('alt', '');
   });
 
   it('shows the date AND the time of publication', () => {
-    render(<PostModal post={post} onClose={() => {}} />);
+    render(<PostModal post={post} platform="telegram" onClose={() => {}} />);
     expect(screen.getByText(/02\.09\.2026/)).toBeInTheDocument();
     expect(screen.getByText(/12:30/)).toBeInTheDocument();
   });
 
   it('links out to the post on Telegram', () => {
-    render(<PostModal post={post} onClose={() => {}} />);
+    render(<PostModal post={post} platform="telegram" onClose={() => {}} />);
     expect(screen.getByRole('link', { name: /Открыть в Telegram/ })).toHaveAttribute(
       'href',
       'https://t.me/testchannel/102',
     );
   });
 
+  it('links out to the post on Instagram for an Instagram account', () => {
+    render(<PostModal post={{ ...post, permalink: 'https://instagram.com/p/abc' }} platform="instagram" onClose={() => {}} />);
+    expect(screen.getByRole('link', { name: 'Открыть в Instagram' })).toHaveAttribute('href', 'https://instagram.com/p/abc');
+    expect(screen.queryByText(/Telegram/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to a neutral link label for a platform it does not know', () => {
+    render(<PostModal post={post} platform="vk" onClose={() => {}} />);
+    expect(screen.getByRole('link', { name: 'Открыть публикацию' })).toBeInTheDocument();
+  });
+
   it('closes on Escape', () => {
     const onClose = vi.fn();
-    render(<PostModal post={post} onClose={onClose} />);
+    render(<PostModal post={post} platform="telegram" onClose={onClose} />);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
   });
 
   it('closes when the backdrop is clicked', () => {
     const onClose = vi.fn();
-    render(<PostModal post={post} onClose={onClose} />);
+    render(<PostModal post={post} platform="telegram" onClose={onClose} />);
     fireEvent.click(screen.getByTestId('post-modal-backdrop'));
     expect(onClose).toHaveBeenCalled();
   });
 
   it('shows each engagement figure next to its own label, not swapped', () => {
-    render(<PostModal post={post} onClose={() => {}} />);
+    render(<PostModal post={post} platform="telegram" onClose={() => {}} />);
     const errTerm = screen.getByText('ERR к просмотрам');
     const errRow = errTerm.closest('div') ?? errTerm.parentElement!;
     expect(within(errRow).getByText(formatPercent(post.erViews))).toBeInTheDocument();

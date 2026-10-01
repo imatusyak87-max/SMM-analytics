@@ -2,20 +2,16 @@ import { ConnectorPost } from '../connector.interface';
 import { PostType } from '../../db/entities/post.entity';
 import { InstagramMedia, InstagramMediaInsights } from './instagram-api.client';
 
+/**
+ * Instagram posts come in three kinds the user tells apart: «Рилс», «Каруселька»
+ * (two or more media items) and «Пост» — a single photo or ordinary video.
+ */
 function mapType(media: InstagramMedia): PostType {
   // media_product_type distinguishes a Reel from an ordinary video upload;
   // media_type alone cannot, since both report VIDEO.
   if (media.mediaProductType === 'REELS') return PostType.REEL;
-  switch (media.mediaType) {
-    case 'IMAGE':
-      return PostType.IMAGE;
-    case 'VIDEO':
-      return PostType.VIDEO;
-    case 'CAROUSEL_ALBUM':
-      return PostType.CAROUSEL;
-    default:
-      return PostType.POST;
-  }
+  if (media.mediaType === 'CAROUSEL_ALBUM') return PostType.CAROUSEL;
+  return PostType.POST;
 }
 
 export function mapInstagramPost(media: InstagramMedia, insights: InstagramMediaInsights): ConnectorPost {

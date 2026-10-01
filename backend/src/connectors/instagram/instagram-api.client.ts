@@ -1,12 +1,17 @@
+import { Logger } from '@nestjs/common';
 import axios from 'axios';
 import { isInstagramAuthError, isInstagramRateLimitError } from './instagram-error';
 
-const GRAPH_VERSION = 'v21.0';
+// Under v21.0 only Reels came back with `views`; newer versions are expected to
+// return it for photos and carousels too. Refusals are logged in getMediaInsights.
+const GRAPH_VERSION = 'v23.0';
 const GRAPH_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
 
 // Matches the Telegram preview client's timeout. Without it a stalled connection never
 // rejects, so the concurrency-1 history queue stalls app-wide instead of pausing.
 const REQUEST_TIMEOUT_MS = 15_000;
+
+const logger = new Logger('InstagramApiClient');
 
 export interface InstagramProfile {
   id: string;
@@ -142,6 +147,9 @@ export class InstagramApiClient {
       // a media item; a post without `views` must not lose its reach as well.
       const rejected = (error as { response?: { status?: number } })?.response?.status === 400;
       if (!rejected || isInstagramAuthError(error) || isInstagramRateLimitError(error)) throw error;
+      // Only Meta's own explanation is logged — never the request, which carries the token.
+      const reason = (error as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      logger.warn(`Instagram refused the views metric for media ${mediaId}: ${reason ?? 'no reason given'}`);
       ({ data } = await request(INSIGHT_METRICS));
     }
     const byName = new Map<string, number>(

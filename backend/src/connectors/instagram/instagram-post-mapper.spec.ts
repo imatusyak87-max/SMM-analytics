@@ -17,12 +17,12 @@ const baseMedia: InstagramMedia = {
 const insights: InstagramMediaInsights = { reach: 500, saved: 12, shares: 4, views: 900 };
 
 describe('mapInstagramPost', () => {
-  it('maps an image post', () => {
+  it('maps a single photo as a «Пост»', () => {
     const post = mapInstagramPost(baseMedia, insights);
 
     expect(post).toEqual({
       externalPostId: 'media-1',
-      type: PostType.IMAGE,
+      type: PostType.POST,
       publishedAt: new Date('2026-09-01T10:00:00+0000'),
       permalink: 'https://instagram.com/p/abc',
       thumbnailUrl: 'https://cdn/img.jpg',
@@ -39,7 +39,8 @@ describe('mapInstagramPost', () => {
     const video = { ...baseMedia, mediaType: 'VIDEO', mediaUrl: 'https://cdn/vid.mp4', thumbnailUrl: 'https://cdn/thumb.jpg' };
 
     expect(mapInstagramPost(video, insights).thumbnailUrl).toBe('https://cdn/thumb.jpg');
-    expect(mapInstagramPost(video, insights).type).toBe(PostType.VIDEO);
+    // An ordinary feed video is a «Пост» too; only Reels get their own type.
+    expect(mapInstagramPost(video, insights).type).toBe(PostType.POST);
   });
 
   it('maps a reel by media_product_type, not media_type', () => {

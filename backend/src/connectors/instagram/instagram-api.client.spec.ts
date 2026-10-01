@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import axios from 'axios';
 import { InstagramApiClient } from './instagram-api.client';
 
@@ -45,7 +46,7 @@ describe('InstagramApiClient', () => {
     expect(result).toEqual({ accessToken: 'long-tok', expiresInSeconds: 5184000 });
     const [url, config] = mockedGet.mock.calls[0];
     // Secret and token go through axios params (URL-encoded), never concatenated into the URL.
-    expect(url).toBe('https://graph.instagram.com/v21.0/access_token');
+    expect(url).toBe('https://graph.instagram.com/v23.0/access_token');
     expect(config).toEqual({
       params: { grant_type: 'ig_exchange_token', client_secret: 'app-secret', access_token: 'short-tok' },
       timeout: REQUEST_TIMEOUT_MS,
@@ -169,6 +170,7 @@ describe('InstagramApiClient', () => {
   });
 
   it('asks again without views when Instagram rejects that metric for a post, keeping its reach', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
     mockedGet
       .mockRejectedValueOnce({ response: { status: 400, data: { error: { type: 'OAuthException', code: 100 } } } })
       .mockResolvedValueOnce({ data: { data: [{ name: 'reach', values: [{ value: 500 }] }] } } as any);
@@ -178,6 +180,9 @@ describe('InstagramApiClient', () => {
 
     expect(insights).toEqual({ reach: 500, saved: null, shares: null, views: null });
     expect(mockedGet.mock.calls[1][1]).toMatchObject({ params: { metric: 'reach,saved,shares' } });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('media-1'));
+    expect(warn.mock.calls[0][0]).not.toContain('a-token');
+    warn.mockRestore();
   });
 
   it.each([

@@ -172,7 +172,7 @@ export function AccountDetailPage() {
             Топ-10 постов
           </h3>
           <div className={styles.toolbar}>
-            <PostTypeFilter value={typeFilter} onChange={changeType} />
+            <PostTypeFilter platform={account.platform} value={typeFilter} onChange={changeType} />
             <PostSortSelect value={sort} onChange={changeSort} />
           </div>
         </div>

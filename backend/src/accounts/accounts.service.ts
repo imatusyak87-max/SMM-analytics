@@ -20,10 +20,14 @@ import { ConnectorRegistry } from '../connectors/connector-registry.service';
 import { AccountInfo, AccountStats, AvatarImage, SocialConnector } from '../connectors/connector.interface';
 import { SyncJobService } from '../sync/sync-job.service';
 import { CreateAccountDto } from './dto/create-account.dto';
-import { ParsedAccountLink, parseAccountLink } from './parse-account-link';
+import { ParsedAccountLink, isInstagramLink, parseAccountLink } from './parse-account-link';
+import {
+  InstagramDiscoveryUnavailableError,
+  InstagramProfileNotFoundError,
+} from '../connectors/instagram/instagram-discovery.errors';
 
 const ALREADY_ADDED = 'Этот аккаунт уже добавлен';
-const INSTAGRAM_NOT_BY_LINK = 'Instagram-аккаунты подключаются через вкладку Instagram — по ссылке их добавить нельзя';
+const INSTAGRAM_NOT_A_PROFILE = 'Вставьте ссылку на профиль Instagram, а не на пост';
 const PG_UNIQUE_VIOLATION = '23505';
 
 @Injectable()
@@ -38,7 +42,7 @@ export class AccountsService {
 
   async preview(link: string) {
     const { parsed, connector } = this.resolveLink(link);
-    const draft = { platform: parsed.platform, externalId: parsed.externalId } as Account;
+    const draft = this.draftOf(parsed);
 
     let info: AccountInfo;
     let stats: AccountStats;
@@ -70,7 +74,7 @@ export class AccountsService {
       avatarDataUri,
       // Lets the add dialog say so before the user clicks; the 409 on create is
       // still what enforces it.
-      alreadyAdded: (await this.findExisting(parsed)) !== null,
+      alreadyAdded: (await this.findExisting(parsed)) !== null || (await this.matchesConnectedAccount(parsed.platform, info)),
     };
   }
 
@@ -91,10 +95,12 @@ export class AccountsService {
 
     let info: AccountInfo;
     try {
-      info = await connector.getAccountInfo(parsed as Account);
+      info = await connector.getAccountInfo(this.draftOf(parsed));
     } catch (error) {
       throw this.unresolvable(parsed.platform, parsed.externalId, error as Error);
     }
+
+    if (await this.matchesConnectedAccount(parsed.platform, info)) throw new ConflictException(ALREADY_ADDED);
 
     let account: Account;
     try {
@@ -125,16 +131,25 @@ export class AccountsService {
     return this.repo.findOneBy({ platform: parsed.platform, externalId: parsed.externalId });
   }
 
+  // Every account added by link is a competitor; the connector reads the type
+  // to pick its access path (Instagram competitors go through Business Discovery).
+  private draftOf(parsed: ParsedAccountLink): Account {
+    return { platform: parsed.platform, externalId: parsed.externalId, type: AccountType.PUBLIC_NO_ACCESS } as Account;
+  }
+
+  /** An Instagram competitor lookup can reveal the user's own connected account under its numeric id. */
+  private async matchesConnectedAccount(platform: AccountPlatform, info: AccountInfo): Promise<boolean> {
+    if (!info.platformUserId) return false;
+    return (await this.repo.findOneBy({ platform, externalId: info.platformUserId })) !== null;
+  }
+
   private resolveLink(link: string): { parsed: ParsedAccountLink; connector: SocialConnector } {
     const parsed = parseAccountLink(link);
     if (!parsed) {
+      if (isInstagramLink(link)) throw new BadRequestException(INSTAGRAM_NOT_A_PROFILE);
       throw new BadRequestException(
         'Unsupported link. Paste a Telegram, Instagram, VK, YouTube or LinkedIn account URL.',
       );
-    }
-    // Instagram needs the owner's OAuth token, which a pasted link cannot carry.
-    if (parsed.platform === AccountPlatform.INSTAGRAM) {
-      throw new BadRequestException(INSTAGRAM_NOT_BY_LINK);
     }
 
     try {
@@ -145,6 +160,11 @@ export class AccountsService {
   }
 
   private unresolvable(platform: string, externalId: string, error: Error): BadRequestException {
+    if (error instanceof InstagramDiscoveryUnavailableError) {
+      const code = error.reason === 'not_connected' ? 'instagram_discovery_not_connected' : 'instagram_discovery_reconnect';
+      return new BadRequestException({ message: error.message, code });
+    }
+    if (error instanceof InstagramProfileNotFoundError) return new BadRequestException(error.message);
     this.logger.warn(`Could not resolve ${platform} account ${externalId}: ${error.message}`);
     return new BadRequestException(`Couldn't add that account — ${platform} said: ${error.message}`);
   }

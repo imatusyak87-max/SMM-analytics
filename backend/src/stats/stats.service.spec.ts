@@ -1,4 +1,4 @@
-import { AccountPlatform } from '../db/entities/account.entity';
+import { AccountPlatform, AccountType } from '../db/entities/account.entity';
 import { NotFoundException } from '@nestjs/common';
 import { StatsService, summarise } from './stats.service';
 
@@ -143,6 +143,15 @@ describe('StatsService.getAccountDetail', () => {
     });
 
     expect((await service.getAccountDetail('acc-tg', period)).needsReconnect).toBe(false);
+  });
+
+  it('keeps needsReconnect false for an Instagram competitor, which never has a credential row', async () => {
+    const { service } = setup({
+      account: { id: 'acc-c', name: 'Brand', platform: AccountPlatform.INSTAGRAM, type: AccountType.PUBLIC_NO_ACCESS, createdAt: new Date('2026-09-10T12:00:00Z') } as any,
+      credential: null,
+    });
+
+    expect((await service.getAccountDetail('acc-c', period)).needsReconnect).toBe(false);
   });
 });
 

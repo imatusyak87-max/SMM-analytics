@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Repository } from 'typeorm';
-import { Account, AccountPlatform } from '../../db/entities/account.entity';
+import { Account, AccountPlatform, AccountType } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { AccountInfo, AccountStats, AvatarImage, ConnectorPost, HistoryPage, PostInsights, SocialConnector } from '../connector.interface';
 import { InstagramApiClient, InstagramMediaInsights } from './instagram-api.client';
@@ -8,11 +8,10 @@ import { decryptToken } from './instagram-token-crypto';
 import { isInstagramAuthError, isInstagramRateLimitError, translateInstagramError } from './instagram-error';
 import { HistoryPauseError, isNetworkError, MINUTE_MS, networkPause } from '../history-pause.error';
 import { HistoryPauseReason } from '../../db/entities/history-load.entity';
-import { mapInstagramPost } from './instagram-post-mapper';
+import { mapInstagramPost, NO_INSIGHTS } from './instagram-post-mapper';
+import type { InstagramDiscoverySource } from './instagram-discovery.source';
 
-const NO_INSIGHTS: InstagramMediaInsights = { reach: null, saved: null, shares: null, views: null };
-
-function instagramRateLimitPause(): HistoryPauseError {
+export function instagramRateLimitPause(): HistoryPauseError {
   return new HistoryPauseError(
     HistoryPauseReason.INSTAGRAM_RATE_LIMIT,
     60 * MINUTE_MS,
@@ -27,9 +26,16 @@ export class InstagramConnector implements SocialConnector {
     private api: InstagramApiClient,
     private credentialsRepo: Repository<AccountCredential>,
     private encryptionKey: string,
+    private discovery: InstagramDiscoverySource,
   ) {}
 
+  /** Competitors have no token of their own; they are read through the shared Facebook connection. */
+  private isCompetitor(account: Account): boolean {
+    return account.type === AccountType.PUBLIC_NO_ACCESS;
+  }
+
   async getAccountInfo(account: Account): Promise<AccountInfo> {
+    if (this.isCompetitor(account)) return this.discovery.getAccountInfo(account);
     const profile = await this.call(account, (token) => this.api.getProfile(token));
     return {
       // Business/Creator accounts are not required to set a display name — the
@@ -41,11 +47,13 @@ export class InstagramConnector implements SocialConnector {
   }
 
   async getAccountStats(account: Account): Promise<AccountStats> {
+    if (this.isCompetitor(account)) return this.discovery.getAccountStats(account);
     const profile = await this.call(account, (token) => this.api.getProfile(token));
     return { followersCount: profile.followersCount, followingCount: profile.followsCount, postsCount: profile.mediaCount };
   }
 
   async getPosts(account: Account, sinceDate: Date): Promise<ConnectorPost[]> {
+    if (this.isCompetitor(account)) return this.discovery.getPosts(account, sinceDate);
     return this.call(account, async (token) => {
       const collected: ConnectorPost[] = [];
       let after: string | undefined;
@@ -81,6 +89,7 @@ export class InstagramConnector implements SocialConnector {
   }
 
   async loadHistoryPage(account: Account, cursor: string | null): Promise<HistoryPage> {
+    if (this.isCompetitor(account)) return this.discovery.loadHistoryPage(account, cursor);
     return this.call(account, async (token) => {
       const { items, nextCursor } = await this.api.getMedia(token, cursor ?? undefined);
       // Insights are a separate, paced phase; the page only carries likes/comments.
@@ -89,6 +98,8 @@ export class InstagramConnector implements SocialConnector {
   }
 
   async loadPostInsights(account: Account, externalPostId: string): Promise<PostInsights> {
+    // Business Discovery exposes no per-post insights for other people's accounts.
+    if (this.isCompetitor(account)) return { reach: null, shares: null, views: null };
     return this.call(account, async (token) => {
       try {
         const insights = await this.api.getMediaInsights(token, externalPostId);

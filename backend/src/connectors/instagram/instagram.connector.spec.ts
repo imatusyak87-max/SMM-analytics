@@ -24,7 +24,7 @@ describe('InstagramConnector', () => {
 
   it('getAccountInfo maps the decrypted profile', async () => {
     const api = { getProfile: jest.fn().mockResolvedValue({ username: 'agency_client', name: 'Client', profilePictureUrl: 'https://x/pic.jpg', biography: 'Bio' }) };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     const info = await connector.getAccountInfo(account);
 
@@ -34,14 +34,14 @@ describe('InstagramConnector', () => {
 
   it('falls back to the username when Instagram has no display name', async () => {
     const api = { getProfile: jest.fn().mockResolvedValue({ username: 'agency_client', name: null, profilePictureUrl: null, biography: null }) };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     expect((await connector.getAccountInfo(account)).name).toBe('agency_client');
   });
 
   it('getAccountStats maps follower/following/post counts', async () => {
     const api = { getProfile: jest.fn().mockResolvedValue({ followersCount: 4200, followsCount: 180, mediaCount: 96 }) };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     expect(await connector.getAccountStats(account)).toEqual({ followersCount: 4200, followingCount: 180, postsCount: 96 });
   });
@@ -53,7 +53,7 @@ describe('InstagramConnector', () => {
       getMedia: jest.fn().mockResolvedValue({ items: [newPost, oldPost], nextCursor: null }),
       getMediaInsights: jest.fn().mockResolvedValue({ reach: 10, saved: 1, shares: 0 }),
     };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     const posts = await connector.getPosts(account, new Date('2026-09-01'));
 
@@ -73,7 +73,7 @@ describe('InstagramConnector', () => {
         .mockResolvedValueOnce({ reach: 10, saved: 1, shares: 2 }),
     };
     const credentialRepo = makeCredentialRepo();
-    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY, {} as any);
 
     const posts = await connector.getPosts(account, new Date('2026-09-01'));
 
@@ -90,7 +90,7 @@ describe('InstagramConnector', () => {
       getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 400, data: { error: { type: 'OAuthException', code: 190 } } } }),
     };
     const credentialRepo = makeCredentialRepo();
-    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY, {} as any);
 
     await expect(connector.getPosts(account, new Date('2026-09-01'))).rejects.toThrow('Instagram отклонил доступ, нужно переподключить аккаунт');
     expect(credentialRepo.update).toHaveBeenCalledWith({ accountId: 'acc-1' }, { needsReconnect: true });
@@ -99,7 +99,7 @@ describe('InstagramConnector', () => {
   it('getAvatar downloads bytes from the profile_picture_url', async () => {
     const axios = require('axios');
     jest.spyOn(axios, 'get').mockResolvedValue({ data: Buffer.from('img-bytes'), headers: { 'content-type': 'image/jpeg' } });
-    const connector = new InstagramConnector({} as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector({} as any, makeCredentialRepo(), KEY, {} as any);
 
     const avatar = await connector.getAvatar('https://scontent.cdninstagram.com/pic.jpg');
 
@@ -110,7 +110,7 @@ describe('InstagramConnector', () => {
   it('refuses an account without an id instead of loading some other account credential', async () => {
     const api = { getProfile: jest.fn() };
     const credentialRepo = makeCredentialRepo();
-    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY, {} as any);
     const draft = { platform: AccountPlatform.INSTAGRAM, externalId: 'someone' } as any;
 
     await expect(connector.getAccountInfo(draft)).rejects.toThrow();
@@ -124,7 +124,7 @@ describe('InstagramConnector', () => {
     const authError = { response: { status: 400, data: { error: { type: 'OAuthException', code: 190, message: 'Error validating access token' } } } };
     const api = { getProfile: jest.fn().mockRejectedValue(authError) };
     const credentialRepo = makeCredentialRepo();
-    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY, {} as any);
 
     await expect(connector.getAccountInfo(account)).rejects.toThrow('Instagram отклонил доступ, нужно переподключить аккаунт');
     expect(credentialRepo.update).toHaveBeenCalledWith({ accountId: 'acc-1' }, { needsReconnect: true });
@@ -134,7 +134,7 @@ describe('InstagramConnector', () => {
     const rateLimited = { response: { status: 429, data: { error: { type: 'OAuthException', code: 4 } } } };
     const api = { getProfile: jest.fn().mockRejectedValue(rateLimited) };
     const credentialRepo = makeCredentialRepo();
-    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY, {} as any);
 
     await expect(connector.getAccountInfo(account)).rejects.toThrow();
     expect(credentialRepo.update).not.toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe('InstagramConnector', () => {
 
   it('loadHistoryPage reads one media page from the given cursor, without insights', async () => {
     const api = { getMedia: jest.fn().mockResolvedValue({ items: [historyMedia('m1'), historyMedia('m2')], nextCursor: 'CUR2' }), getMediaInsights: jest.fn() };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     const page = await connector.loadHistoryPage(account, 'CUR1');
 
@@ -157,7 +157,7 @@ describe('InstagramConnector', () => {
 
   it('loadHistoryPage starts from the newest page when there is no cursor', async () => {
     const api = { getMedia: jest.fn().mockResolvedValue({ items: [], nextCursor: null }) };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     const page = await connector.loadHistoryPage(account, null);
 
@@ -168,7 +168,7 @@ describe('InstagramConnector', () => {
   it('loadHistoryPage turns an Instagram rate limit into a one-hour pause', async () => {
     const api = { getMedia: jest.fn().mockRejectedValue({ response: { status: 400, data: { error: { type: 'OAuthException', code: 4 } } } }) };
     const credentialRepo = makeCredentialRepo();
-    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY, {} as any);
 
     const error = await connector.loadHistoryPage(account, null).catch((e) => e);
 
@@ -180,7 +180,7 @@ describe('InstagramConnector', () => {
 
   it('loadHistoryPage turns a network timeout into a network pause', async () => {
     const api = { getMedia: jest.fn().mockRejectedValue({ code: 'ETIMEDOUT', message: 'timeout of 15000ms exceeded' }) };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     const error = await connector.loadHistoryPage(account, null).catch((e) => e);
 
@@ -190,7 +190,7 @@ describe('InstagramConnector', () => {
 
   it('loadPostInsights returns reach, shares and views for one post', async () => {
     const api = { getMediaInsights: jest.fn().mockResolvedValue({ reach: 120, saved: 3, shares: 4, views: 800 }) };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     expect(await connector.loadPostInsights(account, 'm1')).toEqual({ reach: 120, shares: 4, views: 800 });
     expect(api.getMediaInsights).toHaveBeenCalledWith('plain-token', 'm1');
@@ -198,14 +198,14 @@ describe('InstagramConnector', () => {
 
   it('loadPostInsights gives null insights for a post Instagram has no insights for', async () => {
     const api = { getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 400, data: { error: { type: 'OAuthException', code: 100, message: 'media posted before business conversion' } } } }) };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     expect(await connector.loadPostInsights(account, 'm1')).toEqual({ reach: null, shares: null, views: null });
   });
 
   it('loadPostInsights pauses on a rate limit instead of recording null insights', async () => {
     const api = { getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 429, data: { error: { code: 32 } } } }) };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     await expect(connector.loadPostInsights(account, 'm1')).rejects.toBeInstanceOf(HistoryPauseError);
   });
@@ -213,7 +213,7 @@ describe('InstagramConnector', () => {
   it('loadPostInsights still flags reconnect on an auth error', async () => {
     const api = { getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 400, data: { error: { type: 'OAuthException', code: 190 } } } }) };
     const credentialRepo = makeCredentialRepo();
-    const connector = new InstagramConnector(api as any, credentialRepo, KEY);
+    const connector = new InstagramConnector(api as any, credentialRepo, KEY, {} as any);
 
     await expect(connector.loadPostInsights(account, 'm1')).rejects.toThrow('Instagram отклонил доступ, нужно переподключить аккаунт');
     expect(credentialRepo.update).toHaveBeenCalledWith({ accountId: 'acc-1' }, { needsReconnect: true });
@@ -224,8 +224,49 @@ describe('InstagramConnector', () => {
       getMedia: jest.fn().mockResolvedValue({ items: [{ ...historyMedia('a'), timestamp: '2026-09-10T00:00:00+0000' }], nextCursor: null }),
       getMediaInsights: jest.fn().mockRejectedValue({ response: { status: 429, data: { error: { code: 4 } } } }),
     };
-    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY);
+    const connector = new InstagramConnector(api as any, makeCredentialRepo(), KEY, {} as any);
 
     await expect(connector.getPosts(account, new Date('2026-09-01'))).rejects.toBeInstanceOf(HistoryPauseError);
+  });
+});
+
+describe('InstagramConnector with a competitor account', () => {
+  const competitor = { platform: AccountPlatform.INSTAGRAM, externalId: '@brand', type: 'public_no_access' } as any;
+
+  function setup() {
+    const discovery = {
+      getAccountInfo: jest.fn().mockResolvedValue({ name: 'brand' }),
+      getAccountStats: jest.fn().mockResolvedValue({ followersCount: 1 }),
+      getPosts: jest.fn().mockResolvedValue([]),
+      loadHistoryPage: jest.fn().mockResolvedValue({ posts: [], nextCursor: null }),
+    };
+    const api = { getProfile: jest.fn(), getMedia: jest.fn(), getMediaInsights: jest.fn() };
+    const credentials = makeCredentialRepo();
+    const connector = new InstagramConnector(api as any, credentials, 'a'.repeat(64), discovery as any);
+    return { connector, discovery, api, credentials };
+  }
+
+  it('reads it through Business Discovery, without a stored token', async () => {
+    const { connector, discovery, api, credentials } = setup();
+    const since = new Date('2026-09-01');
+
+    await connector.getAccountInfo(competitor);
+    await connector.getAccountStats(competitor);
+    await connector.getPosts(competitor, since);
+    await connector.loadHistoryPage(competitor, 'C1');
+
+    expect(discovery.getAccountInfo).toHaveBeenCalledWith(competitor);
+    expect(discovery.getAccountStats).toHaveBeenCalledWith(competitor);
+    expect(discovery.getPosts).toHaveBeenCalledWith(competitor, since);
+    expect(discovery.loadHistoryPage).toHaveBeenCalledWith(competitor, 'C1');
+    expect(api.getProfile).not.toHaveBeenCalled();
+    expect(credentials.findOneBy).not.toHaveBeenCalled();
+  });
+
+  it('has no insights to load for it', async () => {
+    const { connector, api } = setup();
+
+    expect(await connector.loadPostInsights(competitor, 'm1')).toEqual({ reach: null, shares: null, views: null });
+    expect(api.getMediaInsights).not.toHaveBeenCalled();
   });
 });

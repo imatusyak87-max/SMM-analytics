@@ -31,3 +31,6 @@ export function mapInstagramPost(media: InstagramMedia, insights: InstagramMedia
     reach: insights.reach,
   };
 }
+
+/** For posts whose insights are not (yet) known: history pages and competitors. */
+export const NO_INSIGHTS: InstagramMediaInsights = { reach: null, saved: null, shares: null, views: null };

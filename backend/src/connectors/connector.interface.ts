@@ -6,6 +6,8 @@ export interface AccountInfo {
   avatarUrl: string | null;
   /** The channel's "about" text, when the platform exposes one. */
   description: string | null;
+  /** The platform's own id for the account, when a lookup by handle returns it (Instagram competitors). */
+  platformUserId?: string;
   /** False when the handle names a group or a person, not a channel; absent when the platform cannot tell. */
   isChannel?: boolean;
 }

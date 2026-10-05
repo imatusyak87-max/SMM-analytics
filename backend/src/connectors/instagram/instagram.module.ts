@@ -5,6 +5,7 @@ import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { InstagramOauthState } from '../../db/entities/instagram-oauth-state.entity';
 import { InstagramDiscoveryConnection } from '../../db/entities/instagram-discovery-connection.entity';
 import { InstagramDiscoveryClient } from './instagram-discovery.client';
+import { InstagramDiscoverySource } from './instagram-discovery.source';
 import { InstagramDiscoveryConnectionService } from './instagram-discovery-connection.service';
 import { InstagramDiscoveryOauthService } from './instagram-discovery-oauth.service';
 import { InstagramDiscoveryController } from './instagram-discovery.controller';
@@ -101,10 +102,16 @@ function instagramConfigProblems(env: NodeJS.ProcessEnv): string[] {
       inject: [InstagramOauthStateService, INSTAGRAM_API_CLIENT, getRepositoryToken(Account), getRepositoryToken(AccountCredential)],
     },
     {
+      provide: InstagramDiscoverySource,
+      useFactory: (client: InstagramDiscoveryClient, connection: InstagramDiscoveryConnectionService) =>
+        new InstagramDiscoverySource(client, connection),
+      inject: [InstagramDiscoveryClient, InstagramDiscoveryConnectionService],
+    },
+    {
       provide: InstagramConnector,
-      useFactory: (api: InstagramApiClient, credentialsRepo: any) =>
-        new InstagramConnector(api, credentialsRepo, process.env.CREDENTIAL_ENCRYPTION_KEY as string),
-      inject: [INSTAGRAM_API_CLIENT, getRepositoryToken(AccountCredential)],
+      useFactory: (api: InstagramApiClient, credentialsRepo: any, discovery: InstagramDiscoverySource) =>
+        new InstagramConnector(api, credentialsRepo, process.env.CREDENTIAL_ENCRYPTION_KEY as string, discovery),
+      inject: [INSTAGRAM_API_CLIENT, getRepositoryToken(AccountCredential), InstagramDiscoverySource],
     },
     {
       provide: InstagramTokenRefreshService,

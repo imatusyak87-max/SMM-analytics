@@ -143,6 +143,10 @@ is queued, as for Telegram.
     `needsReconnect` on the **discovery connection**; rate limits and
     network errors become the existing `HistoryPauseError`s.
 
+One adjacent fix: the account page currently reports `needsReconnect`
+for any Instagram account without a credential row, which would show a
+reconnect banner on every competitor. Competitors are excluded.
+
 No changes to the sync scheduler, history runner, snapshots, ER
 calculation (followers-based ER works on likes + comments) or the post
 UI — views/reach simply show as empty, as they already can.

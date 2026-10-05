@@ -2,12 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
-import { Account, AccountPlatform } from '../../db/entities/account.entity';
+import { Account, AccountPlatform, AccountType } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { InstagramApiClient } from './instagram-api.client';
 import { decryptToken, encryptToken } from './instagram-token-crypto';
 import { isInstagramAuthError } from './instagram-error';
 import { InstagramOauthStateService } from './instagram-oauth-state.service';
+import { InstagramDiscoverySource } from './instagram-discovery.source';
+import { InstagramDiscoveryUnavailableError } from './instagram-discovery.errors';
 
 const REFRESH_WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -22,6 +24,7 @@ export class InstagramTokenRefreshService {
     private api: InstagramApiClient,
     private encryptionKey: string,
     private stateService: InstagramOauthStateService,
+    private discovery: InstagramDiscoverySource,
   ) {}
 
   /**
@@ -67,6 +70,21 @@ export class InstagramTokenRefreshService {
         } else {
           this.logger.warn(`Could not refresh Instagram profile for account ${credential.accountId}: ${(error as Error).message}`);
         }
+      }
+    }
+
+    // Competitors have no credential of their own; their name and avatar come
+    // through the shared Facebook connection.
+    for (const account of accounts.filter((a) => a.type === AccountType.PUBLIC_NO_ACCESS)) {
+      try {
+        const info = await this.discovery.getAccountInfo(account);
+        await this.accountsRepo.update({ id: account.id }, { name: info.name, avatarUrl: info.avatarUrl });
+      } catch (error) {
+        if (error instanceof InstagramDiscoveryUnavailableError) {
+          this.logger.warn('Skipping Instagram competitor profile refresh: the Facebook connection is unavailable');
+          break;
+        }
+        this.logger.warn(`Could not refresh Instagram competitor ${account.id}: ${(error as Error).message}`);
       }
     }
   }

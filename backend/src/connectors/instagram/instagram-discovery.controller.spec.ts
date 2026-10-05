@@ -1,3 +1,6 @@
+import { Reflector } from '@nestjs/core';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { InstagramDiscoveryController } from './instagram-discovery.controller';
 
 function makeRes() {
@@ -5,6 +8,20 @@ function makeRes() {
 }
 
 describe('InstagramDiscoveryController', () => {
+  describe('guards', () => {
+    const guardsOf = (handler: unknown) => new Reflector().get(GUARDS_METADATA, handler as any) ?? [];
+
+    it('protects connect and status with the JWT guard', () => {
+      expect(guardsOf(InstagramDiscoveryController.prototype.connect)).toContain(JwtAuthGuard);
+      expect(guardsOf(InstagramDiscoveryController.prototype.status)).toContain(JwtAuthGuard);
+    });
+
+    it('leaves the Facebook callback open (the browser redirect carries no JWT)', () => {
+      expect(guardsOf(InstagramDiscoveryController.prototype.callback)).toEqual([]);
+      expect(guardsOf(InstagramDiscoveryController)).toEqual([]);
+    });
+  });
+
   const connection = { status: jest.fn().mockResolvedValue({ connected: true, needsReconnect: false, username: 'fdagency' }) };
 
   it('returns the dialog URL', async () => {

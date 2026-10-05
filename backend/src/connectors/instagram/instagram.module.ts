@@ -115,15 +115,22 @@ function instagramConfigProblems(env: NodeJS.ProcessEnv): string[] {
     },
     {
       provide: InstagramTokenRefreshService,
-      useFactory: (accountsRepo: any, credentialsRepo: any, api: InstagramApiClient, stateService: InstagramOauthStateService) =>
+      useFactory: (
+        accountsRepo: any,
+        credentialsRepo: any,
+        api: InstagramApiClient,
+        stateService: InstagramOauthStateService,
+        discovery: InstagramDiscoverySource,
+      ) =>
         new InstagramTokenRefreshService(
           accountsRepo,
           credentialsRepo,
           api,
           process.env.CREDENTIAL_ENCRYPTION_KEY as string,
           stateService,
+          discovery,
         ),
-      inject: [getRepositoryToken(Account), getRepositoryToken(AccountCredential), INSTAGRAM_API_CLIENT, InstagramOauthStateService],
+      inject: [getRepositoryToken(Account), getRepositoryToken(AccountCredential), INSTAGRAM_API_CLIENT, InstagramOauthStateService, InstagramDiscoverySource],
     },
   ],
   // InstagramConnector for ConnectorsModule (Task 12); InstagramOauthService

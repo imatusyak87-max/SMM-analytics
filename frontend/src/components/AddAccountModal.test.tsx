@@ -98,16 +98,16 @@ describe('AddAccountModal', () => {
   });
 });
 
-describe('Instagram tab', () => {
+
+describe('Свой аккаунт tab', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows only a connect button, with no link field and no own/client choice', async () => {
+  it('shows only the Instagram connect button, with no link field', () => {
     render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Instagram' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Свой аккаунт' }));
 
     expect(screen.queryByLabelText('Ссылка на аккаунт')).not.toBeInTheDocument();
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Подключить' })).toBeInTheDocument();
   });
 
@@ -119,7 +119,7 @@ describe('Instagram tab', () => {
     try {
       render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
-      fireEvent.click(screen.getByRole('tab', { name: 'Instagram' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Свой аккаунт' }));
       fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
 
       await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/accounts/instagram/connect', { params: { type: 'own' } }));
@@ -133,18 +133,83 @@ describe('Instagram tab', () => {
     (apiClient.get as any).mockRejectedValue({ response: { data: { message: 'Не удалось начать подключение' } } });
     render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Instagram' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Свой аккаунт' }));
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось начать подключение');
   });
 
-  it('switching back to the Telegram tab restores the link field', async () => {
+  it('switching back to the competitor tab restores the link field', () => {
     render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Instagram' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Telegram' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Свой аккаунт' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Аккаунт конкурента' }));
 
     expect(screen.getByLabelText('Ссылка на аккаунт')).toBeInTheDocument();
+  });
+});
+
+describe('Instagram competitors', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('opens on the competitor tab and says both networks are accepted', () => {
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(screen.getByRole('tab', { name: 'Аккаунт конкурента' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Вставьте ссылку на Telegram-канал или Instagram-аккаунт.')).toBeInTheDocument();
+  });
+
+  it('previews an Instagram competitor with the Instagram icon', async () => {
+    (apiClient.post as any).mockResolvedValue({
+      data: { platform: 'instagram', externalId: '@brand', name: 'Brand', followersCount: 5000, avatarDataUri: null, alreadyAdded: false },
+    });
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    pasteLink('https://instagram.com/brand');
+
+    expect(await screen.findByText('Brand')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'instagram' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['instagram_discovery_not_connected', 'Подключить Facebook'],
+    ['instagram_discovery_reconnect', 'Переподключить Facebook'],
+  ])('offers Facebook login on %s', async (code, buttonName) => {
+    (apiClient.post as any).mockRejectedValue({ response: { data: { message: 'server text', code } } });
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    pasteLink('https://instagram.com/brand');
+
+    expect(await screen.findByRole('button', { name: buttonName })).toBeInTheDocument();
+    expect(screen.queryByText('Добавить')).not.toBeInTheDocument();
+  });
+
+  it('starts the Facebook login and navigates to it', async () => {
+    const originalLocation = window.location;
+    (apiClient.post as any).mockRejectedValue({ response: { data: { code: 'instagram_discovery_not_connected' } } });
+    (apiClient.get as any).mockResolvedValue({ data: { redirectUrl: 'https://www.facebook.com/v23.0/dialog/oauth?state=s' } });
+    delete (window as any).location;
+    (window as any).location = { href: '' };
+    try {
+      render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+      pasteLink('https://instagram.com/brand');
+      fireEvent.click(await screen.findByRole('button', { name: 'Подключить Facebook' }));
+
+      await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/instagram/discovery/connect'));
+      await waitFor(() => expect(window.location.href).toBe('https://www.facebook.com/v23.0/dialog/oauth?state=s'));
+    } finally {
+      (window as any).location = originalLocation;
+    }
+  });
+
+  it('shows an error carried back from the Facebook login until the user types', () => {
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} initialError="Вход через Facebook отменён" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Вход через Facebook отменён');
+
+    fireEvent.change(screen.getByLabelText('Ссылка на аккаунт'), { target: { value: 'h' } });
+
+    expect(screen.queryByText('Вход через Facebook отменён')).not.toBeInTheDocument();
   });
 });

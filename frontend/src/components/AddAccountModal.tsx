@@ -6,6 +6,8 @@ import styles from './AddAccountModal.module.css';
 interface AddAccountModalProps {
   onClose: () => void;
   onCreated: () => void;
+  /** An error carried back in the URL from the Facebook login redirect. */
+  initialError?: string | null;
 }
 
 interface AccountPreview {
@@ -17,23 +19,33 @@ interface AccountPreview {
   alreadyAdded: boolean;
 }
 
-type Platform = 'telegram' | 'instagram';
+type Tab = 'competitor' | 'own';
+type FacebookPrompt = 'connect' | 'reconnect';
 
-export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
-  const [platform, setPlatform] = useState<Platform>('telegram');
+// Codes the backend sends when an Instagram competitor needs the Facebook login first.
+const FACEBOOK_PROMPTS: Record<string, FacebookPrompt> = {
+  instagram_discovery_not_connected: 'connect',
+  instagram_discovery_reconnect: 'reconnect',
+};
 
-  // --- Telegram tab state (unchanged behaviour from before this task) ---
+export function AddAccountModal({ onClose, onCreated, initialError = null }: AddAccountModalProps) {
+  const [tab, setTab] = useState<Tab>('competitor');
+
+  // --- Competitor tab: one link field for every network the backend can read ---
   const [link, setLink] = useState('');
   const [preview, setPreview] = useState<AccountPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(initialError);
+  const [facebookPrompt, setFacebookPrompt] = useState<FacebookPrompt | null>(null);
   const [resolving, setResolving] = useState(false);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    if (platform !== 'telegram') return;
+    if (tab !== 'competitor') return;
     const trimmed = link.trim();
     setPreview(null);
     setError(null);
+    setFacebookPrompt(null);
     if (trimmed === '') return;
 
     let cancelled = false;
@@ -45,7 +57,10 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
           if (!cancelled) setPreview(res.data);
         })
         .catch((err) => {
-          if (!cancelled) setError(err.response?.data?.message ?? 'Не удалось найти аккаунт');
+          if (cancelled) return;
+          const prompt = FACEBOOK_PROMPTS[err.response?.data?.code];
+          if (prompt) setFacebookPrompt(prompt);
+          else setError(err.response?.data?.message ?? 'Не удалось найти аккаунт');
         })
         .finally(() => {
           if (!cancelled) setResolving(false);
@@ -56,7 +71,7 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [link, platform]);
+  }, [link, tab]);
 
   async function handleAdd() {
     setAdding(true);
@@ -71,24 +86,29 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
     }
   }
 
-  // --- Instagram tab state ---
+  // --- Redirect-based logins (Facebook for competitors, Instagram for own accounts) ---
   const [connecting, setConnecting] = useState(false);
-  const [instagramError, setInstagramError] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
-  async function handleConnectInstagram() {
+  async function startLogin(request: () => Promise<{ data: { redirectUrl: string } }>) {
     setConnecting(true);
-    setInstagramError(null);
+    setConnectError(null);
     try {
-      // Always 'own' until the own/client split is used somewhere in the app.
-      const { data } = await apiClient.get('/accounts/instagram/connect', { params: { type: 'own' } });
-      // Full-page navigation, not an in-app route: Instagram's own login screen
-      // is outside the SPA, and the callback lands back on /accounts/:id once done.
+      const { data } = await request();
+      // Full-page navigation: the login screen is outside the SPA, and the
+      // callback brings the browser back into the app once done.
       window.location.href = data.redirectUrl;
     } catch (err: any) {
-      setInstagramError(err.response?.data?.message ?? 'Не удалось начать подключение');
+      setConnectError(err.response?.data?.message ?? 'Не удалось начать подключение');
       setConnecting(false);
     }
   }
+
+  const connectFacebook = () => startLogin(() => apiClient.get('/instagram/discovery/connect'));
+  // Always 'own' until the own/client split is used somewhere in the app.
+  const connectInstagram = () => startLogin(() => apiClient.get('/accounts/instagram/connect', { params: { type: 'own' } }));
+
+  const shownError = error ?? connectError ?? notice;
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -99,26 +119,26 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
           <button
             type="button"
             role="tab"
-            aria-selected={platform === 'telegram'}
-            className={platform === 'telegram' ? styles.tabActive : styles.tab}
-            onClick={() => setPlatform('telegram')}
+            aria-selected={tab === 'competitor'}
+            className={tab === 'competitor' ? styles.tabActive : styles.tab}
+            onClick={() => setTab('competitor')}
           >
-            Telegram
+            Аккаунт конкурента
           </button>
           <button
             type="button"
             role="tab"
-            aria-selected={platform === 'instagram'}
-            className={platform === 'instagram' ? styles.tabActive : styles.tab}
-            onClick={() => setPlatform('instagram')}
+            aria-selected={tab === 'own'}
+            className={tab === 'own' ? styles.tabActive : styles.tab}
+            onClick={() => setTab('own')}
           >
-            Instagram
+            Свой аккаунт
           </button>
         </div>
 
-        {platform === 'telegram' ? (
+        {tab === 'competitor' ? (
           <>
-            <p className={styles.helperText}>Вставьте ссылку на публичный канал конкурента.</p>
+            <p className={styles.helperText}>Вставьте ссылку на Telegram-канал или Instagram-аккаунт.</p>
 
             <label className={styles.label} htmlFor="account-link">
               Ссылка на аккаунт
@@ -126,17 +146,33 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
             <input
               id="account-link"
               className={styles.input}
-              placeholder="https://t.me/channelname"
+              placeholder="https://t.me/channel или https://instagram.com/brand"
               value={link}
-              onChange={(e) => setLink(e.target.value)}
+              onChange={(e) => {
+                setNotice(null);
+                setLink(e.target.value);
+              }}
             />
 
             {resolving && <p className={styles.resolving}>Проверяем…</p>}
 
-            {error && (
+            {shownError && (
               <p className={styles.error} role="alert">
-                {error}
+                {shownError}
               </p>
+            )}
+
+            {facebookPrompt && (
+              <div className={styles.facebookPrompt}>
+                <p className={styles.helperText}>
+                  {facebookPrompt === 'connect'
+                    ? 'Чтобы добавлять конкурентов из Instagram, один раз подключите Facebook — страницу, к которой привязан ваш профессиональный аккаунт Instagram.'
+                    : 'Доступ к Facebook истёк — переподключите его, чтобы добавлять конкурентов из Instagram.'}
+                </p>
+                <button type="button" className={styles.connectButton} onClick={connectFacebook} disabled={connecting}>
+                  {connecting ? 'Переходим…' : facebookPrompt === 'connect' ? 'Подключить Facebook' : 'Переподключить Facebook'}
+                </button>
+              </div>
             )}
 
             {preview && (
@@ -154,9 +190,7 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
                   <div className={styles.previewFollowers}>
                     <span className={styles.previewCount}>{preview.followersCount}</span> подписчиков
                   </div>
-                  {preview.alreadyAdded && (
-                    <p className={styles.duplicate}>Этот аккаунт уже добавлен</p>
-                  )}
+                  {preview.alreadyAdded && <p className={styles.duplicate}>Этот аккаунт уже добавлен</p>}
                 </div>
                 <button
                   type="button"
@@ -175,13 +209,13 @@ export function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
               Потребуется войти в Instagram владельцу аккаунта. Мы не увидим и не сохраним его пароль.
             </p>
 
-            {instagramError && (
+            {connectError && (
               <p className={styles.error} role="alert">
-                {instagramError}
+                {connectError}
               </p>
             )}
 
-            <button type="button" className={styles.connectButton} onClick={handleConnectInstagram} disabled={connecting}>
+            <button type="button" className={styles.connectButton} onClick={connectInstagram} disabled={connecting}>
               {connecting ? 'Переходим…' : 'Подключить'}
             </button>
           </>

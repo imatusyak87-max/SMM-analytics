@@ -3,6 +3,8 @@ import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm';
 export enum InstagramAccountKind {
   OWN = 'own',
   CLIENT = 'client',
+  /** The Facebook Login that powers competitor lookups; never creates an account. */
+  DISCOVERY = 'discovery',
 }
 
 /**

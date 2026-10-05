@@ -1,5 +1,5 @@
 interface InstagramApiError {
-  response?: { status?: number; data?: { error?: { type?: string; code?: number; message?: string } } };
+  response?: { status?: number; data?: { error?: { type?: string; code?: number; error_subcode?: number; message?: string } } };
   message?: string;
 }
 
@@ -45,4 +45,14 @@ export function translateInstagramError(error: unknown): Error {
     return new Error(`Instagram не ответил (HTTP ${status}): ${message}`);
   }
   return new Error(`Instagram не ответил: ${(error as InstagramApiError).message ?? 'неизвестная ошибка'}`);
+}
+
+/**
+ * Business Discovery's answer for a username that does not exist, is a
+ * personal account, or is age-gated: code 110 with subcode 2207013. To be
+ * confirmed against the live API (plan Task 0); adjust here only.
+ */
+export function isInstagramProfileNotFoundError(error: unknown): boolean {
+  const e = igError(error);
+  return e?.code === 110 && e?.error_subcode === 2207013;
 }

@@ -49,8 +49,24 @@ const PROFILE_FIELDS =
   'id,username,name,account_type,followers_count,follows_count,media_count,profile_picture_url,biography';
 const INSIGHT_METRICS = 'reach,saved,shares';
 
-const MEDIA_FIELDS =
+export const MEDIA_FIELDS =
   'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count';
+
+/** Maps one raw Graph API media object; shared by /me/media and business_discovery. */
+export function mapRawMedia(raw: any): InstagramMedia {
+  return {
+    id: raw.id,
+    caption: raw.caption ?? null,
+    mediaType: raw.media_type,
+    mediaProductType: raw.media_product_type ?? null,
+    mediaUrl: raw.media_url ?? null,
+    thumbnailUrl: raw.thumbnail_url ?? null,
+    permalink: raw.permalink ?? null,
+    timestamp: raw.timestamp,
+    likeCount: raw.like_count ?? 0,
+    commentsCount: raw.comments_count ?? 0,
+  };
+}
 
 export class InstagramApiClient {
   constructor(
@@ -115,18 +131,7 @@ export class InstagramApiClient {
       params: { fields: MEDIA_FIELDS, access_token: accessToken, ...(after ? { after } : {}) },
       timeout: REQUEST_TIMEOUT_MS,
     });
-    const items: InstagramMedia[] = (data.data ?? []).map((raw: any) => ({
-      id: raw.id,
-      caption: raw.caption ?? null,
-      mediaType: raw.media_type,
-      mediaProductType: raw.media_product_type ?? null,
-      mediaUrl: raw.media_url ?? null,
-      thumbnailUrl: raw.thumbnail_url ?? null,
-      permalink: raw.permalink ?? null,
-      timestamp: raw.timestamp,
-      likeCount: raw.like_count ?? 0,
-      commentsCount: raw.comments_count ?? 0,
-    }));
+    const items: InstagramMedia[] = (data.data ?? []).map(mapRawMedia);
     // Instagram includes a cursor even on the last page; `next` (the follow-up
     // URL) is only present when there truly is another page to fetch.
     const nextCursor = data.paging?.next ? (data.paging?.cursors?.after ?? null) : null;

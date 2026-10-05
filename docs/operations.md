@@ -574,3 +574,33 @@ patch inline while running an operational check.
   - `GET /api/instagram/callback` — browser redirect after user approves the login
   - `POST /api/instagram/deauthorize` — notification when user revokes the app in Meta settings
   - `POST /api/instagram/data-deletion` — GDPR data deletion request
+
+### Instagram competitors (Facebook login)
+
+Competitor accounts from Instagram are read through the Business Discovery API,
+which needs one shared Facebook login (done once from the add dialog).
+
+- Requires these variables in `/opt/smm-dashboard/app/.env`:
+  - `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET` — from the Meta app's
+    **App settings → Basic**. This is the app's own id and secret, **not** the
+    Instagram app id/secret used above.
+  - `FACEBOOK_REDIRECT_URI` — `https://fdagency.duckdns.org/api/instagram/discovery/callback`.
+    The same URL must be added under **Facebook Login → Settings → Valid OAuth
+    Redirect URIs** in the Meta app.
+  - `FACEBOOK_LOGIN_CONFIG_ID` — optional; set it only if the Meta app uses
+    Facebook Login for Business with a login configuration.
+- As above, new values only take effect once the backend container is
+  **recreated** (`up -d --build`). When one of the first three is missing the
+  backend only logs a warning at startup and keeps running; adding Instagram
+  competitors will fail until it is set.
+- The migration `1789800000000-AddInstagramDiscovery` must run on deploy (the
+  normal redeploy sequence runs migrations); it creates the table that stores the
+  Facebook connection.
+- The Facebook user token lasts about 60 days and is not refreshed
+  automatically. When it expires, competitor names and avatars stop updating and
+  adding new Instagram competitors fails. Reconnect through the red banner
+  «Доступ к Facebook истёк…» on the Overview page, or through the add dialog
+  («Переподключить Facebook»).
+- The nightly 2:30am job also refreshes the name and avatar of every Instagram
+  competitor through this connection; if the connection is unavailable it skips
+  them with a single warning.

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { AccountCard } from '../components/AccountCard';
 import { AddAccountModal } from '../components/AddAccountModal';
@@ -13,9 +14,21 @@ export function OverviewPage() {
   const [items, setItems] = useState<OverviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [isAdding, setIsAdding] = useState(false);
+
+  // The Facebook login (for Instagram competitors) redirects back to /?add=competitor,
+  // optionally with the error it failed with; reopen the dialog where the user left it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [isAdding, setIsAdding] = useState(searchParams.get('add') === 'competitor');
+  const [addError] = useState(searchParams.get('discoveryError'));
 
   const mounted = useRef(true);
+
+  useEffect(() => {
+    // Drop the params so a reload or a later visit does not reopen the dialog.
+    if (searchParams.has('add') || searchParams.has('discoveryError')) setSearchParams({}, { replace: true });
+    // Only on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = useCallback(() => {
     return apiClient
@@ -70,7 +83,7 @@ export function OverviewPage() {
           ))}
         </div>
       )}
-      {isAdding && <AddAccountModal onClose={() => setIsAdding(false)} onCreated={handleCreated} />}
+      {isAdding && <AddAccountModal onClose={() => setIsAdding(false)} onCreated={handleCreated} initialError={addError} />}
     </div>
   );
 }

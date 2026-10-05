@@ -49,4 +49,27 @@ describe('OverviewPage', () => {
     await waitFor(() => expect(screen.getByText('Chan')).toBeInTheDocument());
     expect(screen.getByText('1234')).toBeInTheDocument();
   });
+
+  it('reopens the add dialog when the Facebook login sends the user back', async () => {
+    (apiClient.get as any).mockResolvedValue({ data: [] });
+    render(<MemoryRouter initialEntries={['/?add=competitor']}><OverviewPage /></MemoryRouter>);
+
+    expect(await screen.findByRole('dialog', { name: 'Добавьте аккаунт' })).toBeInTheDocument();
+  });
+
+  it('shows the error the Facebook login came back with', async () => {
+    (apiClient.get as any).mockResolvedValue({ data: [] });
+    const entry = `/?add=competitor&discoveryError=${encodeURIComponent('Вход через Facebook отменён')}`;
+    render(<MemoryRouter initialEntries={[entry]}><OverviewPage /></MemoryRouter>);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Вход через Facebook отменён');
+  });
+
+  it('does not open the dialog on a plain visit', async () => {
+    (apiClient.get as any).mockResolvedValue({ data: [] });
+    render(<MemoryRouter><OverviewPage /></MemoryRouter>);
+
+    await screen.findByText(/No accounts yet|Loading/);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

@@ -121,7 +121,10 @@ export function AddAccountModal({ onClose, onCreated, initialError = null }: Add
             role="tab"
             aria-selected={tab === 'competitor'}
             className={tab === 'competitor' ? styles.tabActive : styles.tab}
-            onClick={() => setTab('competitor')}
+            onClick={() => {
+              setConnectError(null);
+              setTab('competitor');
+            }}
           >
             Аккаунт конкурента
           </button>
@@ -130,7 +133,10 @@ export function AddAccountModal({ onClose, onCreated, initialError = null }: Add
             role="tab"
             aria-selected={tab === 'own'}
             className={tab === 'own' ? styles.tabActive : styles.tab}
-            onClick={() => setTab('own')}
+            onClick={() => {
+              setConnectError(null);
+              setTab('own');
+            }}
           >
             Свой аккаунт
           </button>
@@ -150,6 +156,7 @@ export function AddAccountModal({ onClose, onCreated, initialError = null }: Add
               value={link}
               onChange={(e) => {
                 setNotice(null);
+                setConnectError(null);
                 setLink(e.target.value);
               }}
             />

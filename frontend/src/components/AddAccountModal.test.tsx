@@ -139,6 +139,19 @@ describe('Свой аккаунт tab', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось начать подключение');
   });
 
+  it('does not carry a failed own-account login over to the competitor tab', async () => {
+    (apiClient.get as any).mockRejectedValue({ response: { data: { message: 'Не удалось начать подключение' } } });
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Свой аккаунт' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Аккаунт конкурента' }));
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('switching back to the competitor tab restores the link field', () => {
     render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
 

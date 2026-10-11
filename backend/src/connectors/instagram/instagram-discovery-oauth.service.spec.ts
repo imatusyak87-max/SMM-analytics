@@ -32,7 +32,7 @@ describe('InstagramDiscoveryOauthService', () => {
     expect(url.searchParams.get('redirect_uri')).toBe(REDIRECT);
     expect(url.searchParams.get('state')).toBe('state-uuid');
     expect(url.searchParams.get('response_type')).toBe('code');
-    expect(url.searchParams.get('scope')).toBe('instagram_basic,instagram_manage_insights,pages_read_engagement,pages_show_list');
+    expect(url.searchParams.get('scope')).toBe('instagram_basic,instagram_manage_insights,pages_read_engagement,pages_show_list,business_management');
   });
 
   it('uses a Facebook Login for Business configuration instead of scopes when one is set', async () => {

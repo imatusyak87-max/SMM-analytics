@@ -5,9 +5,10 @@ import { InstagramOauthStateService } from './instagram-oauth-state.service';
 import { translateInstagramError } from './instagram-error';
 
 const DIALOG_URL = 'https://www.facebook.com/v23.0/dialog/oauth';
-// pages_show_list lets /me/accounts find the Page; the other three are what
-// business_discovery itself requires.
-const SCOPES = 'instagram_basic,instagram_manage_insights,pages_read_engagement,pages_show_list';
+// pages_show_list lets /me/accounts find the Page, and business_management lets
+// it see a Page owned by a business portfolio (otherwise /me/accounts comes back
+// empty). The other three are what business_discovery itself requires.
+const SCOPES = 'instagram_basic,instagram_manage_insights,pages_read_engagement,pages_show_list,business_management';
 
 /** The one-time Facebook Login whose token every competitor lookup uses. */
 export class InstagramDiscoveryOauthService {

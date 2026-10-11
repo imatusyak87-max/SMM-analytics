@@ -589,6 +589,15 @@ which needs one shared Facebook login (done once from the add dialog).
     Redirect URIs** in the Meta app.
   - `FACEBOOK_LOGIN_CONFIG_ID` — optional; set it only if the Meta app uses
     Facebook Login for Business with a login configuration.
+- The Meta app's Instagram use case (its **Facebook login** setup → Permissions)
+  must have all five requested permissions added: `instagram_basic`,
+  `instagram_manage_insights`, `pages_read_engagement`, `pages_show_list`,
+  `business_management`. A missing one makes the Facebook dialog fail with
+  "Invalid Scopes". `business_management` is what lets the login see a Page owned
+  by a business portfolio; without it the login ends with «К вашим страницам
+  Facebook не привязан профессиональный аккаунт Instagram». In the Facebook
+  dialog, tick the Page **and** the Instagram account. To redo that choice,
+  remove the app under Facebook → Settings → Business integrations first.
 - As above, new values only take effect once the backend container is
   **recreated** (`up -d --build`). When one of the first three is missing the
   backend only logs a warning at startup and keeps running; adding Instagram

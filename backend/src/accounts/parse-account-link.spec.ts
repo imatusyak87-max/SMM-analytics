@@ -1,4 +1,4 @@
-import { parseAccountLink } from './parse-account-link';
+import { isInstagramLink, parseAccountLink } from './parse-account-link';
 import { AccountPlatform } from '../db/entities/account.entity';
 
 describe('parseAccountLink', () => {
@@ -69,6 +69,46 @@ describe('parseAccountLink', () => {
     expect(parseAccountLink('https://vk.com/SomeGroup')?.externalId).toBe(
       '@somegroup',
     );
+  });
+
+  describe('Instagram', () => {
+    it('takes the username from the first path segment, not the last', () => {
+      expect(parseAccountLink('https://www.instagram.com/brand/reels/')).toEqual({
+        platform: AccountPlatform.INSTAGRAM,
+        externalId: '@brand',
+      });
+    });
+
+    it('ignores the share query string and lowercases the username', () => {
+      expect(parseAccountLink('https://instagram.com/Brand.Shop_1?igsh=abc123')?.externalId).toBe('@brand.shop_1');
+    });
+
+    it.each([
+      'https://www.instagram.com/p/C1a2B3c4D5/',
+      'https://www.instagram.com/reel/C1a2B3c4D5/',
+      'https://www.instagram.com/reels/C1a2B3c4D5/',
+      'https://www.instagram.com/stories/brand/3141592653/',
+      'https://www.instagram.com/explore/',
+      'https://www.instagram.com/accounts/login/',
+    ])('returns null for %s, which is not a profile', (link) => {
+      expect(parseAccountLink(link)).toBeNull();
+    });
+
+    it('returns null for a username Instagram would not allow', () => {
+      expect(parseAccountLink('https://instagram.com/not-a-name')).toBeNull();
+    });
+  });
+
+  describe('isInstagramLink', () => {
+    it('recognises any instagram.com URL, profile or not', () => {
+      expect(isInstagramLink('https://www.instagram.com/p/C1a2B3c4D5/')).toBe(true);
+      expect(isInstagramLink('https://instagram.com/brand')).toBe(true);
+    });
+
+    it('is false for other hosts and non-URLs', () => {
+      expect(isInstagramLink('https://t.me/somechannel')).toBe(false);
+      expect(isInstagramLink('instagram')).toBe(false);
+    });
   });
 });
 

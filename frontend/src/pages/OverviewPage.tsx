@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { AccountCard } from '../components/AccountCard';
 import { AddAccountModal } from '../components/AddAccountModal';
@@ -13,9 +14,54 @@ export function OverviewPage() {
   const [items, setItems] = useState<OverviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [isAdding, setIsAdding] = useState(false);
+
+  // The Facebook login (for Instagram competitors) redirects back to /?add=competitor,
+  // optionally with the error it failed with; reopen the dialog where the user left it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [isAdding, setIsAdding] = useState(searchParams.get('add') === 'competitor');
+  const [addError, setAddError] = useState<string | null>(searchParams.get('discoveryError'));
 
   const mounted = useRef(true);
+
+  // The Facebook token behind Instagram competitors lasts ~60 days; once it
+  // has expired their data silently stops updating, so say so here.
+  const [facebookExpired, setFacebookExpired] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get('/instagram/discovery/status')
+      .then((res) => {
+        if (!cancelled && res.data?.connected && res.data?.needsReconnect) setFacebookExpired(true);
+      })
+      .catch(() => {
+        // No status, no banner.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleReconnect() {
+    setReconnecting(true);
+    setReconnectError(null);
+    try {
+      const { data } = await apiClient.get('/instagram/discovery/connect');
+      window.location.href = data.redirectUrl;
+    } catch (err: any) {
+      setReconnectError(err.response?.data?.message ?? 'Не удалось начать подключение');
+      setReconnecting(false);
+    }
+  }
+
+  useEffect(() => {
+    // Drop the params so a reload or a later visit does not reopen the dialog.
+    if (searchParams.has('add') || searchParams.has('discoveryError')) setSearchParams({}, { replace: true });
+    // Only on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = useCallback(() => {
     return apiClient
@@ -39,8 +85,13 @@ export function OverviewPage() {
     };
   }, [load]);
 
-  function handleCreated() {
+  function closeAdding() {
     setIsAdding(false);
+    setAddError(null);
+  }
+
+  function handleCreated() {
+    closeAdding();
     load();
   }
 
@@ -52,6 +103,15 @@ export function OverviewPage() {
           Добавить аккаунт
         </button>
       </div>
+      {facebookExpired && (
+        <div className={styles.reconnectBanner} role="alert">
+          <span>Доступ к Facebook истёк — конкуренты из Instagram не обновляются.</span>
+          <button type="button" onClick={handleReconnect} disabled={reconnecting}>
+            {reconnecting ? 'Переходим…' : 'Переподключить Facebook'}
+          </button>
+          {reconnectError && <span>{reconnectError}</span>}
+        </div>
+      )}
       {loading ? (
         <p className={styles.loading}>Loading accounts…</p>
       ) : error ? (
@@ -70,7 +130,7 @@ export function OverviewPage() {
           ))}
         </div>
       )}
-      {isAdding && <AddAccountModal onClose={() => setIsAdding(false)} onCreated={handleCreated} />}
+      {isAdding && <AddAccountModal onClose={closeAdding} onCreated={handleCreated} initialError={addError} />}
     </div>
   );
 }

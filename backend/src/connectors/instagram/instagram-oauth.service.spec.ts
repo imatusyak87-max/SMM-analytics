@@ -139,4 +139,13 @@ describe('InstagramOauthService.completeLogin', () => {
       'Instagram отклонил доступ, нужно переподключить аккаунт',
     );
   });
+
+  it('refuses a state that was issued for the Facebook discovery login', async () => {
+    const stateService = { consume: jest.fn().mockResolvedValue(InstagramAccountKind.DISCOVERY) };
+    const api = { exchangeCodeForToken: jest.fn() };
+    const service = new InstagramOauthService(stateService as any, api as any, {} as any, {} as any, 'app-id', 'a'.repeat(64));
+
+    await expect(service.completeLogin('code', 'state')).rejects.toThrow('Ссылка для входа устарела');
+    expect(api.exchangeCodeForToken).not.toHaveBeenCalled();
+  });
 });

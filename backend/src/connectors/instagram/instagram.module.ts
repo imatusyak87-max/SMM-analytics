@@ -3,6 +3,12 @@ import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { Account } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { InstagramOauthState } from '../../db/entities/instagram-oauth-state.entity';
+import { InstagramDiscoveryConnection } from '../../db/entities/instagram-discovery-connection.entity';
+import { InstagramDiscoveryClient } from './instagram-discovery.client';
+import { InstagramDiscoverySource } from './instagram-discovery.source';
+import { InstagramDiscoveryConnectionService } from './instagram-discovery-connection.service';
+import { InstagramDiscoveryOauthService } from './instagram-discovery-oauth.service';
+import { InstagramDiscoveryController } from './instagram-discovery.controller';
 import { InstagramApiClient } from './instagram-api.client';
 import { InstagramConnector } from './instagram.connector';
 import { INSTAGRAM_APP_SECRET } from './instagram-oauth.controller';
@@ -10,6 +16,7 @@ import { InstagramOauthService } from './instagram-oauth.service';
 import { InstagramOauthStateService } from './instagram-oauth-state.service';
 import { InstagramTokenRefreshService } from './instagram-token-refresh.service';
 
+const DISCOVERY_ENV = ['FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET', 'FACEBOOK_REDIRECT_URI'] as const;
 const INSTAGRAM_API_CLIENT = 'INSTAGRAM_API_CLIENT';
 const REQUIRED_ENV = ['INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET', 'INSTAGRAM_REDIRECT_URI'] as const;
 
@@ -28,9 +35,12 @@ function instagramConfigProblems(env: NodeJS.ProcessEnv): string[] {
  * OAuth/webhook controller's file lives here but AccountsModule registers
  * it. Exports InstagramConnector so ConnectorsModule can add it to the
  * platform-agnostic CONNECTORS registry — this module does not depend on ConnectorsModule, only the other way around.
+ * It also hosts the Facebook discovery controller (competitor lookups), which,
+ * unlike the Instagram OAuth controller, needs nothing from SyncModule.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Account, AccountCredential, InstagramOauthState])],
+  imports: [TypeOrmModule.forFeature([Account, AccountCredential, InstagramOauthState, InstagramDiscoveryConnection])],
+  controllers: [InstagramDiscoveryController],
   providers: [
     {
       provide: INSTAGRAM_API_CLIENT,
@@ -46,6 +56,33 @@ function instagramConfigProblems(env: NodeJS.ProcessEnv): string[] {
       useFactory: () => process.env.INSTAGRAM_APP_SECRET as string,
     },
     InstagramOauthStateService,
+    {
+      provide: InstagramDiscoveryClient,
+      useFactory: () =>
+        new InstagramDiscoveryClient(
+          process.env.FACEBOOK_APP_ID as string,
+          process.env.FACEBOOK_APP_SECRET as string,
+          process.env.FACEBOOK_REDIRECT_URI as string,
+        ),
+    },
+    {
+      provide: InstagramDiscoveryConnectionService,
+      useFactory: (repo: any) => new InstagramDiscoveryConnectionService(repo, process.env.CREDENTIAL_ENCRYPTION_KEY as string),
+      inject: [getRepositoryToken(InstagramDiscoveryConnection)],
+    },
+    {
+      provide: InstagramDiscoveryOauthService,
+      useFactory: (stateService: InstagramOauthStateService, client: InstagramDiscoveryClient, connection: InstagramDiscoveryConnectionService) =>
+        new InstagramDiscoveryOauthService(
+          stateService,
+          client,
+          connection,
+          process.env.FACEBOOK_APP_ID as string,
+          process.env.FACEBOOK_REDIRECT_URI as string,
+          process.env.FACEBOOK_LOGIN_CONFIG_ID || null,
+        ),
+      inject: [InstagramOauthStateService, InstagramDiscoveryClient, InstagramDiscoveryConnectionService],
+    },
     {
       provide: InstagramOauthService,
       useFactory: (
@@ -65,22 +102,35 @@ function instagramConfigProblems(env: NodeJS.ProcessEnv): string[] {
       inject: [InstagramOauthStateService, INSTAGRAM_API_CLIENT, getRepositoryToken(Account), getRepositoryToken(AccountCredential)],
     },
     {
+      provide: InstagramDiscoverySource,
+      useFactory: (client: InstagramDiscoveryClient, connection: InstagramDiscoveryConnectionService) =>
+        new InstagramDiscoverySource(client, connection),
+      inject: [InstagramDiscoveryClient, InstagramDiscoveryConnectionService],
+    },
+    {
       provide: InstagramConnector,
-      useFactory: (api: InstagramApiClient, credentialsRepo: any) =>
-        new InstagramConnector(api, credentialsRepo, process.env.CREDENTIAL_ENCRYPTION_KEY as string),
-      inject: [INSTAGRAM_API_CLIENT, getRepositoryToken(AccountCredential)],
+      useFactory: (api: InstagramApiClient, credentialsRepo: any, discovery: InstagramDiscoverySource) =>
+        new InstagramConnector(api, credentialsRepo, process.env.CREDENTIAL_ENCRYPTION_KEY as string, discovery),
+      inject: [INSTAGRAM_API_CLIENT, getRepositoryToken(AccountCredential), InstagramDiscoverySource],
     },
     {
       provide: InstagramTokenRefreshService,
-      useFactory: (accountsRepo: any, credentialsRepo: any, api: InstagramApiClient, stateService: InstagramOauthStateService) =>
+      useFactory: (
+        accountsRepo: any,
+        credentialsRepo: any,
+        api: InstagramApiClient,
+        stateService: InstagramOauthStateService,
+        discovery: InstagramDiscoverySource,
+      ) =>
         new InstagramTokenRefreshService(
           accountsRepo,
           credentialsRepo,
           api,
           process.env.CREDENTIAL_ENCRYPTION_KEY as string,
           stateService,
+          discovery,
         ),
-      inject: [getRepositoryToken(Account), getRepositoryToken(AccountCredential), INSTAGRAM_API_CLIENT, InstagramOauthStateService],
+      inject: [getRepositoryToken(Account), getRepositoryToken(AccountCredential), INSTAGRAM_API_CLIENT, InstagramOauthStateService, InstagramDiscoverySource],
     },
   ],
   // InstagramConnector for ConnectorsModule (Task 12); InstagramOauthService
@@ -99,6 +149,9 @@ export class InstagramModule implements OnModuleInit {
   onModuleInit(): void {
     for (const problem of instagramConfigProblems(process.env)) {
       this.logger.warn(`Instagram is not fully configured: ${problem}`);
+    }
+    for (const name of DISCOVERY_ENV.filter((n) => !process.env[n])) {
+      this.logger.warn(`Instagram competitors are not configured: ${name} is not set`);
     }
   }
 }

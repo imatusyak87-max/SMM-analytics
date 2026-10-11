@@ -32,6 +32,12 @@ const TELEGRAM_RESERVED = new Set([
   'giftcode',
 ]);
 
+// What Instagram accepts as a username: letters, digits, dots and underscores.
+const INSTAGRAM_USERNAME = /^[a-z0-9._]{1,30}$/i;
+
+// instagram.com paths that are not profiles: posts, reels, stories and app pages.
+const INSTAGRAM_RESERVED = new Set(['p', 'reel', 'reels', 'tv', 'stories', 'explore', 'accounts', 'direct']);
+
 export interface ParsedAccountLink {
   platform: AccountPlatform;
   externalId: string;
@@ -50,6 +56,24 @@ function telegramHandle(pathname: string): string | null {
   return TELEGRAM_USERNAME.test(first) ? first.toLowerCase() : null;
 }
 
+// The profile is always the first segment: /brand/reels/ and /brand/tagged/ are tabs of @brand.
+function instagramHandle(pathname: string): string | null {
+  const [head] = pathname.split('/').filter(Boolean);
+  if (!head) return null;
+  const name = head.replace(/^@/, '');
+  if (INSTAGRAM_RESERVED.has(name.toLowerCase())) return null;
+  return INSTAGRAM_USERNAME.test(name) ? name.toLowerCase() : null;
+}
+
+/** True for any instagram.com URL, so a post link can get its own error instead of "unsupported". */
+export function isInstagramLink(link: string): boolean {
+  try {
+    return new URL(link.trim()).hostname.replace(/^www\./, '') === 'instagram.com';
+  } catch {
+    return false;
+  }
+}
+
 export function parseAccountLink(link: string): ParsedAccountLink | null {
   let url: URL;
   try {
@@ -64,6 +88,11 @@ export function parseAccountLink(link: string): ParsedAccountLink | null {
 
   if (platform === AccountPlatform.TELEGRAM) {
     const handle = telegramHandle(url.pathname);
+    return handle ? { platform, externalId: `@${handle}` } : null;
+  }
+
+  if (platform === AccountPlatform.INSTAGRAM) {
+    const handle = instagramHandle(url.pathname);
     return handle ? { platform, externalId: `@${handle}` } : null;
   }
 

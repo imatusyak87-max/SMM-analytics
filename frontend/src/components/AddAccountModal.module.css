@@ -207,3 +207,11 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.facebookPrompt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 12px;
+}

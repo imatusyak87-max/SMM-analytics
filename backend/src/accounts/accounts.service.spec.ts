@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AccountPlatform, AccountType } from '../db/entities/account.entity';
+import { InstagramDiscoveryUnavailableError, InstagramProfileNotFoundError } from '../connectors/instagram/instagram-discovery.errors';
 import { CompetitorRun } from '../db/entities/competitor-run.entity';
 import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
 
@@ -321,36 +322,85 @@ describe('AccountsService', () => {
   });
 
   describe('Instagram links', () => {
-    const MESSAGE = 'Instagram-аккаунты подключаются через вкладку Instagram — по ссылке их добавить нельзя';
-
-    function setup() {
-      const repo = makeRepo();
-      const connector = { getAccountInfo: jest.fn(), getAccountStats: jest.fn(), getAvatar: jest.fn() };
+    function setup(opts: { info?: object; infoError?: Error; existing?: (where: any) => unknown } = {}) {
+      const repo = {
+        save: jest.fn((x) => Promise.resolve({ id: 'acc-new', ...x })),
+        create: jest.fn((x) => x),
+        findOneBy: jest.fn((where) => Promise.resolve(opts.existing ? opts.existing(where) : null)),
+      } as any;
+      const connector = {
+        getAccountInfo: opts.infoError
+          ? jest.fn().mockRejectedValue(opts.infoError)
+          : jest.fn().mockResolvedValue(opts.info ?? { name: 'Brand', avatarUrl: null, description: null, platformUserId: '9001' }),
+        getAccountStats: jest.fn().mockResolvedValue({ followersCount: 5000, followingCount: 10, postsCount: 300 }),
+        getAvatar: jest.fn(),
+      };
       const registry = { get: jest.fn().mockReturnValue(connector) } as any;
       const syncJobs = { createManual: jest.fn() };
-      const service = new AccountsService(repo, registry, syncJobs as any);
-      return { service, repo, connector, syncJobs };
+      return { service: new AccountsService(repo, registry, syncJobs as any), repo, connector, syncJobs };
     }
 
-    it('refuses to preview an Instagram link without calling the connector', async () => {
+    it('previews a competitor profile, asking the connector as a competitor', async () => {
       const { service, connector } = setup();
 
-      const attempt = service.preview('https://www.instagram.com/someone');
+      const preview = await service.preview('https://www.instagram.com/brand/');
 
-      await expect(attempt).rejects.toBeInstanceOf(BadRequestException);
-      await expect(service.preview('https://www.instagram.com/someone')).rejects.toThrow(MESSAGE);
-      expect(connector.getAccountInfo).not.toHaveBeenCalled();
-      expect(connector.getAccountStats).not.toHaveBeenCalled();
+      expect(preview).toMatchObject({ platform: AccountPlatform.INSTAGRAM, externalId: '@brand', name: 'Brand', followersCount: 5000, alreadyAdded: false });
+      expect(connector.getAccountInfo).toHaveBeenCalledWith(
+        expect.objectContaining({ externalId: '@brand', type: AccountType.PUBLIC_NO_ACCESS }),
+      );
     });
 
-    it('refuses to add an Instagram account from a link', async () => {
-      const { service, repo, connector, syncJobs } = setup();
+    it('adds the competitor and queues its first sync', async () => {
+      const { service, repo, syncJobs } = setup();
 
-      await expect(service.createFromLink('https://instagram.com/someone')).rejects.toThrow(MESSAGE);
-      await expect(service.createFromLink('https://instagram.com/someone')).rejects.toBeInstanceOf(BadRequestException);
+      await service.createFromLink('https://instagram.com/brand');
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ platform: AccountPlatform.INSTAGRAM, externalId: '@brand', type: AccountType.PUBLIC_NO_ACCESS }),
+      );
+      expect(syncJobs.createManual).toHaveBeenCalledWith('acc-new');
+    });
+
+    it('asks for a profile link when given a post link', async () => {
+      const { service, connector } = setup();
+
+      await expect(service.preview('https://www.instagram.com/p/C1a2B3c4D5/')).rejects.toThrow(
+        'Вставьте ссылку на профиль Instagram, а не на пост',
+      );
       expect(connector.getAccountInfo).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['not_connected', 'instagram_discovery_not_connected'],
+      ['reconnect', 'instagram_discovery_reconnect'],
+    ] as const)('returns code %s → %s so the dialog can offer Facebook login', async (reason, code) => {
+      const { service } = setup({ infoError: new InstagramDiscoveryUnavailableError(reason) });
+
+      const error = await service.preview('https://instagram.com/brand').catch((e) => e);
+
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect(error.getResponse()).toEqual({ message: new InstagramDiscoveryUnavailableError(reason).message, code });
+    });
+
+    it('says plainly when the profile is not a business account', async () => {
+      const { service } = setup({ infoError: new InstagramProfileNotFoundError() });
+
+      await expect(service.createFromLink('https://instagram.com/someone')).rejects.toThrow(
+        'Аккаунт не найден или это не бизнес-аккаунт Instagram',
+      );
+    });
+
+    it('treats the user\'s own connected account as already added', async () => {
+      const own = { id: 'acc-own', externalId: '9001' };
+      const existing = (where: any) => (where.externalId === '9001' ? own : null);
+
+      const { service } = setup({ existing });
+      expect((await service.preview('https://instagram.com/brand')).alreadyAdded).toBe(true);
+
+      const { service: again, repo } = setup({ existing });
+      await expect(again.createFromLink('https://instagram.com/brand')).rejects.toBeInstanceOf(ConflictException);
       expect(repo.save).not.toHaveBeenCalled();
-      expect(syncJobs.createManual).not.toHaveBeenCalled();
     });
   });
 

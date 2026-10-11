@@ -1,6 +1,7 @@
 import { InstagramTokenRefreshService } from './instagram-token-refresh.service';
-import { AccountPlatform } from '../../db/entities/account.entity';
+import { AccountPlatform, AccountType } from '../../db/entities/account.entity';
 import { encryptToken } from './instagram-token-crypto';
+import { InstagramDiscoveryUnavailableError } from './instagram-discovery.errors';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const KEY = 'a'.repeat(64);
@@ -13,8 +14,9 @@ function makeDeps() {
     getProfile: jest.fn().mockResolvedValue({ id: 'ig-1', username: 'user', name: 'Name', profilePictureUrl: 'https://cdn/p.jpg' }),
   };
   const stateService = { purgeExpired: jest.fn() };
-  const service = new InstagramTokenRefreshService(accountsRepo as any, credentialsRepo as any, api as any, KEY, stateService as any);
-  return { service, accountsRepo, credentialsRepo, api, stateService };
+  const discovery = { getAccountInfo: jest.fn().mockResolvedValue({ name: 'Comp', avatarUrl: 'https://cdn/c.jpg' }) };
+  const service = new InstagramTokenRefreshService(accountsRepo as any, credentialsRepo as any, api as any, KEY, stateService as any, discovery as any);
+  return { service, accountsRepo, credentialsRepo, api, stateService, discovery };
 }
 
 describe('InstagramTokenRefreshService.refreshExpiring', () => {
@@ -182,5 +184,58 @@ describe('InstagramTokenRefreshService nightly cleanup', () => {
     await service.refreshExpiring();
 
     expect(stateService.purgeExpired).toHaveBeenCalled();
+  });
+});
+
+describe('InstagramTokenRefreshService.refreshProfiles for competitors', () => {
+  const competitor = (id: string) => ({ id, platform: AccountPlatform.INSTAGRAM, type: AccountType.PUBLIC_NO_ACCESS });
+
+  it('refreshes name and avatar of competitors through discovery', async () => {
+    const { service, accountsRepo, credentialsRepo, discovery } = makeDeps();
+    const acc = competitor('c-1');
+    accountsRepo.find.mockResolvedValue([acc, { id: 'own', platform: AccountPlatform.INSTAGRAM, type: AccountType.OWN }]);
+    credentialsRepo.find.mockResolvedValue([]);
+
+    await service.refreshProfiles();
+
+    expect(discovery.getAccountInfo).toHaveBeenCalledTimes(1);
+    expect(discovery.getAccountInfo).toHaveBeenCalledWith(acc);
+    expect(accountsRepo.update).toHaveBeenCalledWith({ id: 'c-1' }, { name: 'Comp', avatarUrl: 'https://cdn/c.jpg' });
+  });
+
+  it('leaves the credential path unchanged', async () => {
+    const { service, accountsRepo, credentialsRepo, api, discovery } = makeDeps();
+    accountsRepo.find.mockResolvedValue([{ id: 'acc-1', platform: AccountPlatform.INSTAGRAM, type: AccountType.OWN }]);
+    credentialsRepo.find.mockResolvedValue([{ accountId: 'acc-1', encryptedToken: encryptToken('tok-1', KEY), needsReconnect: false }]);
+
+    await service.refreshProfiles();
+
+    expect(api.getProfile).toHaveBeenCalledWith('tok-1');
+    expect(discovery.getAccountInfo).not.toHaveBeenCalled();
+  });
+
+  it('stops the competitor loop when the Facebook connection is unavailable', async () => {
+    const { service, accountsRepo, credentialsRepo, discovery } = makeDeps();
+    accountsRepo.find.mockResolvedValue([competitor('c-1'), competitor('c-2')]);
+    credentialsRepo.find.mockResolvedValue([]);
+    discovery.getAccountInfo.mockRejectedValue(new InstagramDiscoveryUnavailableError('reconnect'));
+
+    await service.refreshProfiles();
+
+    expect(discovery.getAccountInfo).toHaveBeenCalledTimes(1);
+    expect(accountsRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps going after another error on one competitor', async () => {
+    const { service, accountsRepo, credentialsRepo, discovery } = makeDeps();
+    accountsRepo.find.mockResolvedValue([competitor('c-1'), competitor('c-2')]);
+    credentialsRepo.find.mockResolvedValue([]);
+    discovery.getAccountInfo.mockRejectedValueOnce(new Error('ETIMEDOUT'));
+
+    await service.refreshProfiles();
+
+    expect(discovery.getAccountInfo).toHaveBeenCalledTimes(2);
+    expect(accountsRepo.update).toHaveBeenCalledTimes(1);
+    expect(accountsRepo.update).toHaveBeenCalledWith({ id: 'c-2' }, { name: 'Comp', avatarUrl: 'https://cdn/c.jpg' });
   });
 });

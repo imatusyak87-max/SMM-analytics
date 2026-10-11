@@ -9,6 +9,9 @@ import { InstagramTokenRefreshService } from './instagram-token-refresh.service'
 import { Account } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { InstagramOauthState } from '../../db/entities/instagram-oauth-state.entity';
+import { InstagramDiscoveryConnection } from '../../db/entities/instagram-discovery-connection.entity';
+import { InstagramDiscoveryController } from './instagram-discovery.controller';
+import { InstagramDiscoveryOauthService } from './instagram-discovery-oauth.service';
 import { SyncJobService } from '../../sync/sync-job.service';
 import { AccountsModule } from '../../accounts/accounts.module';
 
@@ -21,6 +24,9 @@ describe('InstagramModule', () => {
       INSTAGRAM_APP_ID: 'app-id',
       INSTAGRAM_APP_SECRET: 'app-secret',
       INSTAGRAM_REDIRECT_URI: 'https://fdagency.duckdns.org/api/instagram/callback',
+      FACEBOOK_APP_ID: 'fb-app',
+      FACEBOOK_APP_SECRET: 'fb-secret',
+      FACEBOOK_REDIRECT_URI: 'https://fdagency.duckdns.org/api/instagram/discovery/callback',
       CREDENTIAL_ENCRYPTION_KEY: 'a'.repeat(64),
     };
   });
@@ -36,6 +42,8 @@ describe('InstagramModule', () => {
       .overrideProvider(getRepositoryToken(AccountCredential))
       .useValue({})
       .overrideProvider(getRepositoryToken(InstagramOauthState))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(InstagramDiscoveryConnection))
       .useValue({})
       .compile();
   }
@@ -67,6 +75,8 @@ describe('InstagramModule', () => {
       .useValue({})
       .overrideProvider(getRepositoryToken(InstagramOauthState))
       .useValue({})
+      .overrideProvider(getRepositoryToken(InstagramDiscoveryConnection))
+      .useValue({})
       .compile();
 
     expect(moduleRef.get(InstagramOauthController)).toBeInstanceOf(InstagramOauthController);
@@ -82,6 +92,16 @@ describe('InstagramModule', () => {
     const moduleRef = await compileModule();
 
     expect(moduleRef.get(InstagramTokenRefreshService)).toBeInstanceOf(InstagramTokenRefreshService);
+  });
+
+  it('hosts the Facebook discovery controller', () => {
+    expect(Reflect.getMetadata('controllers', InstagramModule)).toContain(InstagramDiscoveryController);
+  });
+
+  it('provides the discovery OAuth service', async () => {
+    const moduleRef = await compileModule();
+
+    expect(moduleRef.get(InstagramDiscoveryOauthService)).toBeInstanceOf(InstagramDiscoveryOauthService);
   });
 
   describe('startup configuration warning', () => {

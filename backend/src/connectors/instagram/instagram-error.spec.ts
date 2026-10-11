@@ -1,4 +1,4 @@
-import { translateInstagramError, isInstagramAuthError, isInstagramRateLimitError } from './instagram-error';
+import { translateInstagramError, isInstagramAuthError, isInstagramRateLimitError, isInstagramProfileNotFoundError } from './instagram-error';
 
 function axiosError(status: number, body: unknown, message = 'Request failed') {
   return { message, response: { status, data: body } };
@@ -65,5 +65,18 @@ describe('isInstagramRateLimitError', () => {
     expect(isInstagramRateLimitError(graphError(400, 190))).toBe(false);
     expect(isInstagramRateLimitError(graphError(400, 100))).toBe(false);
     expect(isInstagramRateLimitError({ code: 'ETIMEDOUT' })).toBe(false);
+  });
+});
+
+describe('isInstagramProfileNotFoundError', () => {
+  const graphError = (error: object) => ({ response: { status: 400, data: { error } } });
+
+  it('recognises Business Discovery\'s "cannot find user" answer', () => {
+    expect(isInstagramProfileNotFoundError(graphError({ type: 'OAuthException', code: 110, error_subcode: 2207013 }))).toBe(true);
+  });
+
+  it('does not mistake an expired token or a rate limit for a missing profile', () => {
+    expect(isInstagramProfileNotFoundError(graphError({ type: 'OAuthException', code: 190 }))).toBe(false);
+    expect(isInstagramProfileNotFoundError(graphError({ code: 4 }))).toBe(false);
   });
 });

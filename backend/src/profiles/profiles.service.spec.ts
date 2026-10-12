@@ -20,8 +20,12 @@ function setup({
     overviewItem('a2', 'p2', 5),
     overviewItem('a3', 'p2', 7),
   ],
-  account = { id: 'a2', name: 'Acc', profileId: 'p2' },
-  target = { id: 'p1', name: 'One' },
+  account = { id: 'a2', name: 'Acc', profileId: 'p2' } as {
+    id: string;
+    name: string;
+    profileId: string;
+  } | null,
+  target = { id: 'p1', name: 'One' } as { id: string; name: string } | null,
   remaining = 0,
 } = {}) {
   const em = {

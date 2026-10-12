@@ -14,7 +14,7 @@ export function ProfileCard({ profile }: { profile: ProfileSummary }) {
     <Link to={profileHref(profile)} className={styles.card} data-testid="profile-card">
       <div className={styles.identity}>
         {avatarSrc ? (
-          <img className={styles.avatar} src={avatarSrc} alt={profile.name} />
+          <img className={styles.avatar} src={avatarSrc} alt="" />
         ) : (
           <div className={styles.avatarFallback} aria-hidden="true" />
         )}

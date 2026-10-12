@@ -90,7 +90,7 @@ describe('OverviewPage', () => {
     mockGets();
     render(<MemoryRouter><OverviewPage /></MemoryRouter>);
 
-    await screen.findByText(/No accounts yet|Loading/);
+    await screen.findByText(/Пока нет ни одного аккаунта|Загрузка/);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -128,7 +128,7 @@ describe('OverviewPage', () => {
       render(<MemoryRouter><OverviewPage /></MemoryRouter>);
 
       await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/instagram/discovery/status'));
-      await screen.findByText(/No accounts yet/);
+      await screen.findByText(/Пока нет ни одного аккаунта/);
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 

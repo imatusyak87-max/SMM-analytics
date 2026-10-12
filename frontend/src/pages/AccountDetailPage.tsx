@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
+import { ProfileSwitcher } from '../components/ProfileSwitcher';
 import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
 import { CompetitorsSection } from '../components/CompetitorsSection';
@@ -21,6 +22,7 @@ import styles from './AccountDetailPage.module.css';
 const TOP_COUNT = 10;
 
 interface DetailData {
+  profile: { id: string; name: string; accountCount: number };
   account: { id: string; name: string; platform: string };
   latestSnapshot: { followersCount: number; avgEr: number | null } | null;
   trend: Array<{ date: string; followersCount: number }>;
@@ -113,14 +115,20 @@ export function AccountDetailPage() {
 
   if (!detail.data) return <p className={styles.loading}>Загрузка…</p>;
 
-  const { account, trend, summary, coverage } = detail.data;
+  const { account, trend, summary, coverage, profile } = detail.data;
   const showCoverage = period.from < coverage.postsFrom || period.from < coverage.followersFrom;
   const total = top.data?.total ?? 0;
 
   return (
     <div className={styles.page}>
+      {profile.accountCount > 1 && (
+        <Link to={`/profiles/${profile.id}`} className={styles.breadcrumb}>
+          ← {profile.name}
+        </Link>
+      )}
       <div className={styles.header}>
         <h2 className={styles.heading}>{account.name}</h2>
+        <ProfileSwitcher accountId={account.id} profile={profile} onMoved={() => setReloadKey((key) => key + 1)} />
         <RefreshButton
           accountId={account.id}
           onSynced={() => {

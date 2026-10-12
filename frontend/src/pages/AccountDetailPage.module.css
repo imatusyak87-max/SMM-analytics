@@ -172,3 +172,16 @@
     transition: none;
   }
 }
+
+.breadcrumb {
+  align-self: flex-start;
+  margin-bottom: -12px;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.breadcrumb:hover,
+.breadcrumb:focus-visible {
+  color: var(--accent);
+}

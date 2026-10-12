@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AccountDetailPage } from './AccountDetailPage';
 import { apiClient } from '../api/client';
 
-vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn() } }));
+vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }));
 
 const get = apiClient.get as any;
 
@@ -21,6 +21,7 @@ const summary = {
 function detail(coverage = { postsFrom: '2026-06-12', followersFrom: '2026-06-12' }) {
   return {
     account: { id: 'acc-1', name: 'Chan' },
+    profile: { id: 'prof-1', name: 'Coffee Lab', accountCount: 1 },
     latestSnapshot: { followersCount: 1000, avgEr: null },
     trend: [],
     summary,
@@ -344,5 +345,29 @@ describe('AccountDetailPage', () => {
     mockApi();
     renderPage();
     expect(await screen.findByRole('button', { name: 'Загрузить все посты' })).toBeInTheDocument();
+  });
+});
+
+describe('profile', () => {
+  it('shows which profile the account is in', async () => {
+    mockApi();
+    renderPage();
+
+    expect(await screen.findByLabelText('Профиль:')).toHaveValue('prof-1');
+  });
+
+  it('links back to a profile that holds several accounts', async () => {
+    mockApi({ detailData: { ...detail(), profile: { id: 'prof-1', name: 'Coffee Lab', accountCount: 3 } } });
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: '← Coffee Lab' })).toHaveAttribute('href', '/profiles/prof-1');
+  });
+
+  it('has no breadcrumb for an account alone in its profile', async () => {
+    mockApi();
+    renderPage();
+
+    await screen.findByLabelText('Профиль:');
+    expect(screen.queryByRole('link', { name: '← Coffee Lab' })).not.toBeInTheDocument();
   });
 });

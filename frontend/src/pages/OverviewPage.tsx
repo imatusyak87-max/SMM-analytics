@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
-import { AccountCard } from '../components/AccountCard';
 import { AddAccountModal } from '../components/AddAccountModal';
+import { ProfileCard } from '../components/ProfileCard';
+import type { ProfileSummary } from '../profiles';
 import styles from './OverviewPage.module.css';
 
-interface OverviewItem {
-  account: { id: string; platform: string; name: string; avatarUrl: string | null; type: string };
-  latestSnapshot: { followersCount: number; avgEr: number | null } | null;
-}
-
 export function OverviewPage() {
-  const [items, setItems] = useState<OverviewItem[]>([]);
+  const [items, setItems] = useState<ProfileSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -65,7 +61,7 @@ export function OverviewPage() {
 
   const load = useCallback(() => {
     return apiClient
-      .get('/stats/overview')
+      .get('/profiles')
       .then((res) => {
         if (mounted.current) setItems(res.data);
       })
@@ -120,17 +116,19 @@ export function OverviewPage() {
         <p className={styles.empty}>No accounts yet.</p>
       ) : (
         <div className={styles.grid}>
-          {items.map((item) => (
-            <AccountCard
-              key={item.account.id}
-              account={item.account}
-              latestSnapshot={item.latestSnapshot}
-              onDeleted={load}
-            />
+          {items.map((profile) => (
+            <ProfileCard key={profile.id} profile={profile} />
           ))}
         </div>
       )}
-      {isAdding && <AddAccountModal onClose={closeAdding} onCreated={handleCreated} initialError={addError} />}
+      {isAdding && (
+        <AddAccountModal
+          onClose={closeAdding}
+          onCreated={handleCreated}
+          initialError={addError}
+          profiles={items.map(({ id, name }) => ({ id, name }))}
+        />
+      )}
     </div>
   );
 }

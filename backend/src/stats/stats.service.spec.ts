@@ -24,7 +24,7 @@ interface Setup {
 }
 
 function setup({
-  account = { id: 'acc-1', name: 'Chan', createdAt: new Date('2026-09-10T12:00:00Z') },
+  account = { id: 'acc-1', profileId: 'prof-1', name: 'Chan', createdAt: new Date('2026-09-10T12:00:00Z') },
   trend = [],
   firstSnapshot = null,
   raw,
@@ -32,7 +32,11 @@ function setup({
   oldestPost = null,
 }: Setup = {}) {
   const qb = totalsQuery(raw);
-  const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(account) } as any;
+  const accountsRepo = {
+    findOneBy: jest.fn().mockResolvedValue(account),
+    count: jest.fn().mockResolvedValue(2),
+    find: jest.fn().mockResolvedValue([]),
+  } as any;
   const snapshotsRepo = {
     find: jest.fn().mockResolvedValue(trend),
     findOne: jest.fn().mockResolvedValue(firstSnapshot),
@@ -42,8 +46,10 @@ function setup({
     findOne: jest.fn().mockResolvedValue(oldestPost),
   } as any;
   const credentialsRepo = { findOneBy: jest.fn().mockResolvedValue(credential) } as any;
+  const profilesRepo = { findOneBy: jest.fn().mockResolvedValue({ id: 'prof-1', name: 'Coffee Lab' }) } as any;
   return {
-    service: new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo),
+    service: new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo, profilesRepo),
+    accountsRepo,
     qb,
     snapshotsRepo,
     postsRepo,
@@ -270,7 +276,7 @@ describe('StatsService.getOverview', () => {
     } as any;
     const postsRepo = {} as any;
     const credentialsRepo = {} as any;
-    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo);
+    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo, { findOneBy: jest.fn() } as any);
 
     const result = await service.getOverview();
 
@@ -293,12 +299,39 @@ describe('StatsService.compare', () => {
     const snapshotsRepo = { find: jest.fn().mockResolvedValue([{ date: '2026-08-13', followersCount: 100 }]) } as any;
     const postsRepo = {} as any;
     const credentialsRepo = {} as any;
-    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo);
+    const service = new StatsService(accountsRepo, snapshotsRepo, postsRepo, credentialsRepo, { findOneBy: jest.fn() } as any);
 
     const result = await service.compare(['acc-1', 'acc-2'], period);
 
     expect(result).toHaveLength(2);
     expect(result[0].account?.id).toBe('acc-1');
     expect(result[0].trend).toEqual([{ date: '2026-08-13', followersCount: 100 }]);
+  });
+});
+
+describe('StatsService profiles', () => {
+  it("names the account's profile and how many active accounts it holds", async () => {
+    const { service, accountsRepo } = setup();
+
+    const result = await service.getAccountDetail('acc-1', period);
+
+    expect(result.profile).toEqual({ id: 'prof-1', name: 'Coffee Lab', accountCount: 2 });
+    expect(accountsRepo.count).toHaveBeenCalledWith({ where: { profileId: 'prof-1', isActive: true } });
+  });
+
+  it('limits the overview to one profile when asked', async () => {
+    const { service, accountsRepo } = setup();
+
+    await service.getOverview('prof-1');
+
+    expect(accountsRepo.find).toHaveBeenCalledWith({ where: { isActive: true, profileId: 'prof-1' } });
+  });
+
+  it('lists every active account without a profile filter', async () => {
+    const { service, accountsRepo } = setup();
+
+    await service.getOverview();
+
+    expect(accountsRepo.find).toHaveBeenCalledWith({ where: { isActive: true } });
   });
 });

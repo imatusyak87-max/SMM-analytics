@@ -172,3 +172,36 @@
     transition: none;
   }
 }
+
+.breadcrumb {
+  align-self: flex-start;
+  margin-bottom: -12px;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.breadcrumb:hover,
+.breadcrumb:focus-visible {
+  color: var(--accent);
+}
+
+.deleteButton {
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.deleteButton:hover,
+.deleteButton:focus-visible {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  outline: none;
+}

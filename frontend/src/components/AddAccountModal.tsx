@@ -8,6 +8,8 @@ interface AddAccountModalProps {
   onCreated: () => void;
   /** An error carried back in the URL from the Facebook login redirect. */
   initialError?: string | null;
+  /** Existing profiles the new account can join; empty means it always gets its own. */
+  profiles?: Array<{ id: string; name: string }>;
 }
 
 interface AccountPreview {
@@ -28,11 +30,12 @@ const FACEBOOK_PROMPTS: Record<string, FacebookPrompt> = {
   instagram_discovery_reconnect: 'reconnect',
 };
 
-export function AddAccountModal({ onClose, onCreated, initialError = null }: AddAccountModalProps) {
+export function AddAccountModal({ onClose, onCreated, initialError = null, profiles = [] }: AddAccountModalProps) {
   const [tab, setTab] = useState<Tab>('competitor');
 
   // --- Competitor tab: one link field for every network the backend can read ---
   const [link, setLink] = useState('');
+  const [profileId, setProfileId] = useState('');
   const [preview, setPreview] = useState<AccountPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(initialError);
@@ -77,7 +80,7 @@ export function AddAccountModal({ onClose, onCreated, initialError = null }: Add
     setAdding(true);
     setError(null);
     try {
-      await apiClient.post('/accounts/from-link', { link: link.trim() });
+      await apiClient.post('/accounts/from-link', profileId ? { link: link.trim(), profileId } : { link: link.trim() });
       onCreated();
     } catch (err: any) {
       setError(err.response?.data?.message ?? 'Не удалось добавить аккаунт');
@@ -160,6 +163,27 @@ export function AddAccountModal({ onClose, onCreated, initialError = null }: Add
                 setLink(e.target.value);
               }}
             />
+
+            {profiles.length > 0 && (
+              <>
+                <label className={styles.label} htmlFor="account-profile">
+                  Профиль
+                </label>
+                <select
+                  id="account-profile"
+                  className={styles.input}
+                  value={profileId}
+                  onChange={(e) => setProfileId(e.target.value)}
+                >
+                  <option value="">Новый профиль</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             {resolving && <p className={styles.resolving}>Проверяем…</p>}
 

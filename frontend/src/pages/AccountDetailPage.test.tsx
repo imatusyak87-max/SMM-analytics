@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AccountDetailPage } from './AccountDetailPage';
 import { apiClient } from '../api/client';
 
-vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn() } }));
+vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() } }));
 
 const get = apiClient.get as any;
 
@@ -21,6 +21,7 @@ const summary = {
 function detail(coverage = { postsFrom: '2026-06-12', followersFrom: '2026-06-12' }) {
   return {
     account: { id: 'acc-1', name: 'Chan' },
+    profile: { id: 'prof-1', name: 'Coffee Lab', accountCount: 1 },
     latestSnapshot: { followersCount: 1000, avgEr: null },
     trend: [],
     summary,
@@ -344,5 +345,106 @@ describe('AccountDetailPage', () => {
     mockApi();
     renderPage();
     expect(await screen.findByRole('button', { name: 'Загрузить все посты' })).toBeInTheDocument();
+  });
+});
+
+describe('profile', () => {
+  it('shows which profile the account is in', async () => {
+    mockApi();
+    renderPage();
+
+    expect(await screen.findByLabelText('Профиль:')).toHaveValue('prof-1');
+  });
+
+  it('links back to a profile that holds several accounts', async () => {
+    mockApi({ detailData: { ...detail(), profile: { id: 'prof-1', name: 'Coffee Lab', accountCount: 3 } } });
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: '← Coffee Lab' })).toHaveAttribute('href', '/profiles/prof-1');
+  });
+
+  it('has no breadcrumb for an account alone in its profile', async () => {
+    mockApi();
+    renderPage();
+
+    await screen.findByLabelText('Профиль:');
+    expect(screen.queryByRole('link', { name: '← Coffee Lab' })).not.toBeInTheDocument();
+  });
+});
+
+describe('delete account', () => {
+  function renderWithRoutes() {
+    return render(
+      <MemoryRouter initialEntries={['/accounts/acc-1']}>
+        <Routes>
+          <Route path="/accounts/:id" element={<AccountDetailPage />} />
+          <Route path="/" element={<p>Overview page</p>} />
+          <Route path="/profiles/:id" element={<p>Profile page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+  const del = apiClient.delete as any;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('deletes the account and goes to the overview when it was alone in its profile', async () => {
+    mockApi();
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    del.mockResolvedValue({});
+    renderWithRoutes();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
+
+    expect(confirm).toHaveBeenCalledWith('Удалить «Chan» и всю собранную статистику?');
+    expect(await screen.findByText('Overview page')).toBeInTheDocument();
+    expect(del).toHaveBeenCalledWith('/accounts/acc-1');
+  });
+
+  it('goes back to the profile when it still holds other accounts', async () => {
+    mockApi({ detailData: { ...detail(), profile: { id: 'prof-1', name: 'Coffee Lab', accountCount: 3 } } });
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    del.mockResolvedValue({});
+    renderWithRoutes();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
+
+    expect(await screen.findByText('Profile page')).toBeInTheDocument();
+  });
+
+  it('does nothing when the confirmation is declined', async () => {
+    mockApi();
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    renderWithRoutes();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
+
+    expect(del).not.toHaveBeenCalled();
+    expect(screen.queryByText('Overview page')).not.toBeInTheDocument();
+  });
+
+  it('shows the server message when the delete fails', async () => {
+    mockApi();
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    del.mockRejectedValue({ response: { data: { message: 'Нельзя удалить' } } });
+    renderWithRoutes();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Нельзя удалить');
+    expect(screen.queryByText('Overview page')).not.toBeInTheDocument();
+  });
+
+  it('falls back to a generic message when the failure carries none', async () => {
+    mockApi();
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    del.mockRejectedValue(new Error('network'));
+    renderWithRoutes();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось удалить аккаунт');
   });
 });

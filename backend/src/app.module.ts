@@ -7,6 +7,7 @@ import { DbModule } from './db/db.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { StatsModule } from './stats/stats.module';
+import { ProfilesModule } from './profiles/profiles.module';
 import { SyncModule } from './sync/sync.module';
 import { HistoryModule } from './history/history.module';
 import { ConnectorsModule } from './connectors/connectors.module';
@@ -19,6 +20,7 @@ import { CompetitorsModule } from './competitors/competitors.module';
     AuthModule,
     AccountsModule,
     StatsModule,
+    ProfilesModule,
     SyncModule,
     HistoryModule,
     ConnectorsModule,

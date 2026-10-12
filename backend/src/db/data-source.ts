@@ -8,11 +8,12 @@ import { InstagramDiscoveryConnection } from './entities/instagram-discovery-con
 import { Post } from './entities/post.entity';
 import { SyncJob } from './entities/sync-job.entity';
 import { HistoryLoad } from './entities/history-load.entity';
+import { Profile } from './entities/profile.entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  entities: [User, Account, AccountCredential, AccountSnapshot, InstagramOauthState, InstagramDiscoveryConnection, Post, SyncJob, HistoryLoad],
+  entities: [User, Account, AccountCredential, AccountSnapshot, InstagramOauthState, InstagramDiscoveryConnection, Post, SyncJob, HistoryLoad, Profile],
   migrations: [__dirname + '/migrations/*.{ts,js}'],
   synchronize: false,
 });

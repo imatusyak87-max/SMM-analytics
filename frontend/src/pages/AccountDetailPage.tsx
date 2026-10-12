@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ProfileSwitcher } from '../components/ProfileSwitcher';
 import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
 import { CompetitorsSection } from '../components/CompetitorsSection';
@@ -21,6 +22,7 @@ import styles from './AccountDetailPage.module.css';
 const TOP_COUNT = 10;
 
 interface DetailData {
+  profile: { id: string; name: string; accountCount: number };
   account: { id: string; name: string; platform: string };
   latestSnapshot: { followersCount: number; avgEr: number | null } | null;
   trend: Array<{ date: string; followersCount: number }>;
@@ -37,6 +39,7 @@ interface PostsPage {
 
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [period, setPeriod] = useState<SelectedPeriod>(() => selectPreset('last30', new Date()));
   const [typeFilter, setTypeFilter] = useState('all');
   const [sort, setSort] = useState<PostSort>('views');
@@ -47,6 +50,7 @@ export function AccountDetailPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const range = { from: period.from, to: period.to };
   const postFilter = { ...range, sort, type: typeFilter === 'all' ? undefined : typeFilter };
@@ -102,6 +106,18 @@ export function AccountDetailPage() {
     }
   }
 
+  async function handleDelete(target: { id: string; name: string }, profile: DetailData['profile']) {
+    if (!confirm(`Удалить «${target.name}» и всю собранную статистику?`)) return;
+    try {
+      setDeleteError(null);
+      await apiClient.delete(`/accounts/${target.id}`);
+      // A profile that still has other accounts is the natural place to land.
+      navigate(profile.accountCount > 1 ? `/profiles/${profile.id}` : '/');
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.message ?? 'Не удалось удалить аккаунт');
+    }
+  }
+
   if (detail.error) {
     const status = (detail.error as { response?: { status?: number } }).response?.status;
     return (
@@ -113,14 +129,20 @@ export function AccountDetailPage() {
 
   if (!detail.data) return <p className={styles.loading}>Загрузка…</p>;
 
-  const { account, trend, summary, coverage } = detail.data;
+  const { account, trend, summary, coverage, profile } = detail.data;
   const showCoverage = period.from < coverage.postsFrom || period.from < coverage.followersFrom;
   const total = top.data?.total ?? 0;
 
   return (
     <div className={styles.page}>
+      {profile.accountCount > 1 && (
+        <Link to={`/profiles/${profile.id}`} className={styles.breadcrumb}>
+          ← {profile.name}
+        </Link>
+      )}
       <div className={styles.header}>
         <h2 className={styles.heading}>{account.name}</h2>
+        <ProfileSwitcher accountId={account.id} profile={profile} onMoved={() => setReloadKey((key) => key + 1)} />
         <RefreshButton
           accountId={account.id}
           onSynced={() => {
@@ -135,7 +157,20 @@ export function AccountDetailPage() {
             setTablePage(1);
           }}
         />
+        <button
+          type="button"
+          className={styles.deleteButton}
+          aria-label="Удалить аккаунт"
+          onClick={() => handleDelete(account, profile)}
+        >
+          Удалить
+        </button>
       </div>
+      {deleteError && (
+        <p className={styles.error} role="alert">
+          {deleteError}
+        </p>
+      )}
       {detail.data.needsReconnect && (
         <div className={styles.reconnectBanner} role="alert">
           <span>Переподключите Instagram — доступ к аккаунту был потерян.</span>

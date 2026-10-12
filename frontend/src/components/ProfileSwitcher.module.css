@@ -1,0 +1,31 @@
+.switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.label {
+  color: var(--text);
+}
+
+.select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  max-width: 260px;
+}
+
+.select:focus-visible {
+  border-color: var(--accent-border);
+  outline: none;
+}
+
+.error {
+  color: var(--danger);
+}

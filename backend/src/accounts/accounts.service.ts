@@ -18,6 +18,7 @@ import { CompetitorRejection } from '../db/entities/competitor-rejection.entity'
 import { HistoryLoad } from '../db/entities/history-load.entity';
 import { ConnectorRegistry } from '../connectors/connector-registry.service';
 import { AccountInfo, AccountStats, AvatarImage, SocialConnector } from '../connectors/connector.interface';
+import { createProfile, deleteProfileIfEmpty, requireProfile, PROFILE_NOT_FOUND } from '../profiles/profile-store';
 import { SyncJobService } from '../sync/sync-job.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { ParsedAccountLink, isInstagramLink, parseAccountLink } from './parse-account-link';
@@ -29,6 +30,7 @@ import {
 const ALREADY_ADDED = 'Этот аккаунт уже добавлен';
 const INSTAGRAM_NOT_A_PROFILE = 'Вставьте ссылку на профиль Instagram, а не на пост';
 const PG_UNIQUE_VIOLATION = '23505';
+const PG_FOREIGN_KEY_VIOLATION = '23503';
 
 @Injectable()
 export class AccountsService {
@@ -85,13 +87,19 @@ export class AccountsService {
   }
 
   create(dto: CreateAccountDto) {
-    return this.repo.save(this.repo.create({ ...dto, avatarUrl: dto.avatarUrl ?? null, isActive: true }));
+    return this.repo.manager.transaction(async (em) => {
+      const profile = await createProfile(em, dto.name);
+      return em.save(Account, { ...dto, avatarUrl: dto.avatarUrl ?? null, isActive: true, profileId: profile.id });
+    });
   }
 
-  async createFromLink(link: string) {
+  async createFromLink(link: string, profileId?: string) {
     const { parsed, connector } = this.resolveLink(link);
 
     if (await this.findExisting(parsed)) throw new ConflictException(ALREADY_ADDED);
+
+    // Checked before the platform call so a stale choice fails fast and cheaply.
+    if (profileId) await requireProfile(this.repo.manager, profileId);
 
     let info: AccountInfo;
     try {
@@ -104,21 +112,26 @@ export class AccountsService {
 
     let account: Account;
     try {
-      account = await this.repo.save(
-        this.repo.create({
+      account = await this.repo.manager.transaction(async (em) => {
+        const targetProfileId = profileId ?? (await createProfile(em, info.name)).id;
+        return em.save(Account, {
           platform: parsed.platform,
           externalId: parsed.externalId,
           name: info.name,
           avatarUrl: info.avatarUrl,
           type: AccountType.PUBLIC_NO_ACCESS,
           isActive: true,
-        }),
-      );
+          profileId: targetProfileId,
+        });
+      });
     } catch (error) {
       // Two adds can race past the check above; the unique index is what actually
       // stops the second one, and it should read as the same conflict to the user.
       if ((error as { code?: string }).code === PG_UNIQUE_VIOLATION) {
         throw new ConflictException(ALREADY_ADDED);
+      }
+      if ((error as { code?: string }).code === PG_FOREIGN_KEY_VIOLATION) {
+        throw new NotFoundException(PROFILE_NOT_FOUND);
       }
       throw error;
     }
@@ -180,7 +193,7 @@ export class AccountsService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    const account = await this.findOne(id);
     await this.repo.manager.transaction(async (em) => {
       await em.delete(CompetitorRejection, { accountId: id });
       await em.delete(CompetitorSuggestion, { accountId: id });
@@ -191,6 +204,7 @@ export class AccountsService {
       await em.delete(AccountCredential, { accountId: id });
       await em.delete(HistoryLoad, { accountId: id });
       await em.delete(Account, { id });
+      await deleteProfileIfEmpty(em, account.profileId);
     });
   }
 

@@ -4,6 +4,7 @@ import { Between, Repository } from 'typeorm';
 import { Account, AccountPlatform, AccountType } from '../db/entities/account.entity';
 import { AccountCredential } from '../db/entities/account-credential.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
+import { Profile } from '../db/entities/profile.entity';
 import { Post, PostType } from '../db/entities/post.entity';
 import type { PostSortKey } from './dto/post-filter.dto';
 import { POST_HISTORY_DAYS } from '../sync/history-window';
@@ -11,6 +12,11 @@ import { POST_HISTORY_DAYS } from '../sync/history-window';
 interface Period {
   from: string;
   to: string;
+}
+
+export interface OverviewItem {
+  account: Account;
+  latestSnapshot: AccountSnapshot | null;
 }
 
 export interface AccountSummary {
@@ -95,6 +101,7 @@ export class StatsService {
     @InjectRepository(AccountSnapshot) private snapshotsRepo: Repository<AccountSnapshot>,
     @InjectRepository(Post) private postsRepo: Repository<Post>,
     @InjectRepository(AccountCredential) private credentialsRepo: Repository<AccountCredential>,
+    @InjectRepository(Profile) private profilesRepo: Repository<Profile>,
   ) {}
 
   async getAccountDetail(accountId: string, period: Period) {
@@ -102,6 +109,9 @@ export class StatsService {
     if (!account) throw new NotFoundException(`Account ${accountId} not found`);
 
     const credential = await this.credentialsRepo.findOneBy({ accountId });
+    // The page's profile switcher and breadcrumb need the name and the head count.
+    const profile = await this.profilesRepo.findOneBy({ id: account.profileId });
+    const accountCount = await this.accountsRepo.count({ where: { profileId: account.profileId, isActive: true } });
     const trend = await this.snapshotsRepo.find({
       where: { accountId, date: Between(period.from, period.to) },
       order: { date: 'ASC' },
@@ -119,6 +129,7 @@ export class StatsService {
 
     return {
       account,
+      profile: { id: account.profileId, name: profile?.name ?? account.name, accountCount },
       // An own Instagram account cannot sync without its stored token, so a
       // missing row (e.g. removed by Meta's data-deletion callback) means
       // reconnect. Telegram accounts and Instagram competitors never have one.
@@ -182,9 +193,11 @@ export class StatsService {
     return { total, items };
   }
 
-  async getOverview() {
-    const accounts = await this.accountsRepo.find({ where: { isActive: true } });
-    const result: { account: Account; latestSnapshot: AccountSnapshot | null }[] = [];
+  async getOverview(profileId?: string): Promise<OverviewItem[]> {
+    const accounts = await this.accountsRepo.find({
+      where: profileId ? { isActive: true, profileId } : { isActive: true },
+    });
+    const result: OverviewItem[] = [];
     for (const account of accounts) {
       const latestSnapshot = await this.snapshotsRepo.findOne({
         where: { accountId: account.id },

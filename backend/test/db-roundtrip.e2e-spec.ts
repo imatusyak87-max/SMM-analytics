@@ -2,21 +2,32 @@ import { Test } from '@nestjs/testing';
 import { DbModule } from '../src/db/db.module';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Account, AccountPlatform, AccountType } from '../src/db/entities/account.entity';
+import {
+  Account,
+  AccountPlatform,
+  AccountType,
+} from '../src/db/entities/account.entity';
 import { AccountSnapshot } from '../src/db/entities/account-snapshot.entity';
+import { Profile } from '../src/db/entities/profile.entity';
 
 describe('DB round-trip', () => {
   let accountRepo: Repository<Account>;
+  let profileRepo: Repository<Profile>;
   let snapshotRepo: Repository<AccountSnapshot>;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [DbModule] }).compile();
+    const moduleRef = await Test.createTestingModule({
+      imports: [DbModule],
+    }).compile();
     accountRepo = moduleRef.get(getRepositoryToken(Account));
+    profileRepo = moduleRef.get(getRepositoryToken(Profile));
     snapshotRepo = moduleRef.get(getRepositoryToken(AccountSnapshot));
   });
 
   it('creates an account and a snapshot referencing it', async () => {
+    const profile = await profileRepo.save({ name: 'Test Channel' });
     const account = await accountRepo.save({
+      profileId: profile.id,
       platform: AccountPlatform.TELEGRAM,
       externalId: '@testchannel',
       name: 'Test Channel',

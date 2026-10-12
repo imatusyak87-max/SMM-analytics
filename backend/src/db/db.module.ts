@@ -12,16 +12,17 @@ import { CompetitorRun } from './entities/competitor-run.entity';
 import { CompetitorSuggestion } from './entities/competitor-suggestion.entity';
 import { CompetitorRejection } from './entities/competitor-rejection.entity';
 import { HistoryLoad } from './entities/history-load.entity';
+import { Profile } from './entities/profile.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [User, Account, AccountCredential, AccountSnapshot, InstagramOauthState, InstagramDiscoveryConnection, Post, SyncJob, CompetitorRun, CompetitorSuggestion, CompetitorRejection, HistoryLoad],
+      entities: [User, Account, AccountCredential, AccountSnapshot, InstagramOauthState, InstagramDiscoveryConnection, Post, SyncJob, CompetitorRun, CompetitorSuggestion, CompetitorRejection, HistoryLoad, Profile],
       synchronize: process.env.NODE_ENV === 'test',
     }),
-    TypeOrmModule.forFeature([User, Account, AccountCredential, AccountSnapshot, InstagramOauthState, InstagramDiscoveryConnection, Post, SyncJob, CompetitorRun, CompetitorSuggestion, CompetitorRejection, HistoryLoad]),
+    TypeOrmModule.forFeature([User, Account, AccountCredential, AccountSnapshot, InstagramOauthState, InstagramDiscoveryConnection, Post, SyncJob, CompetitorRun, CompetitorSuggestion, CompetitorRejection, HistoryLoad, Profile]),
   ],
   exports: [TypeOrmModule],
 })

@@ -7,6 +7,7 @@ import { AccountDetailPage } from './pages/AccountDetailPage';
 import { ComparePage } from './pages/ComparePage';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { ProfilePage } from './pages/ProfilePage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { token } = useAuth();
@@ -40,6 +41,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <AccountDetailPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profiles/:id"
+            element={
+              <RequireAuth>
+                <ProfilePage />
               </RequireAuth>
             }
           />

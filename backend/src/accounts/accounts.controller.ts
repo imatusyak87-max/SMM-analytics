@@ -41,7 +41,7 @@ export class AccountsController {
 
   @Post('from-link')
   createFromLink(@Body() dto: CreateAccountFromLinkDto) {
-    return this.accountsService.createFromLink(dto.link);
+    return this.accountsService.createFromLink(dto.link, dto.profileId);
   }
 
   @Get()

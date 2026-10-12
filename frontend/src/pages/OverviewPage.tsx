@@ -109,11 +109,11 @@ export function OverviewPage() {
         </div>
       )}
       {loading ? (
-        <p className={styles.loading}>Loading accounts…</p>
+        <p className={styles.loading}>Загрузка…</p>
       ) : error ? (
-        <p className={styles.error}>Couldn't load accounts. Try again later.</p>
+        <p className={styles.error}>Не удалось загрузить аккаунты. Попробуйте позже.</p>
       ) : items.length === 0 ? (
-        <p className={styles.empty}>No accounts yet.</p>
+        <p className={styles.empty}>Пока нет ни одного аккаунта.</p>
       ) : (
         <div className={styles.grid}>
           {items.map((profile) => (

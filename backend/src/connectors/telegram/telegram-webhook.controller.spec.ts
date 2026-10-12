@@ -45,7 +45,9 @@ describe('TelegramWebhookController', () => {
   it('does nothing when the update has no channel_post', async () => {
     const { controller, postsRepo } = build();
 
-    await controller.handleUpdate('acc-1', { message: { message_id: 1 } });
+    // Telegram sends other update kinds too; the controller's parameter type only names the one it handles.
+    const update: Record<string, unknown> = { message: { message_id: 1 } };
+    await controller.handleUpdate('acc-1', update);
 
     expect(postsRepo.upsert).not.toHaveBeenCalled();
   });

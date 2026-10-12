@@ -1,0 +1,90 @@
+.page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.heading {
+  margin: 0;
+  font-family: var(--heading);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.rename {
+  display: flex;
+  padding: 5px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.rename:hover,
+.rename:focus-visible {
+  color: var(--accent);
+  background: var(--accent-bg);
+  outline: none;
+}
+
+.nameInput {
+  font-family: var(--heading);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  padding: 2px 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.total {
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.totalValue {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.loading,
+.error {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.error {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.back {
+  color: var(--accent);
+  font-size: 14px;
+}

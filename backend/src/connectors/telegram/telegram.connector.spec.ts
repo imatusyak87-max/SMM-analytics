@@ -17,6 +17,7 @@ describe('TelegramConnector', () => {
     avatarUrl: null,
     type: AccountType.OWN,
     isActive: true,
+    profileId: 'prof-1',
     createdAt: new Date(),
   };
 

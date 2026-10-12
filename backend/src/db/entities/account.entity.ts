@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Unique } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Unique, Index, JoinColumn, ManyToOne } from 'typeorm';
+import { Profile } from './profile.entity';
 
 export enum AccountPlatform {
   TELEGRAM = 'telegram',
@@ -26,5 +27,9 @@ export class Account {
   @Column({ nullable: true, type: 'text' }) avatarUrl: string | null;
   @Column({ type: 'enum', enum: AccountType }) type: AccountType;
   @Column({ default: true }) isActive: boolean;
+  @Index() @Column('uuid') profileId: string;
+  @ManyToOne(() => Profile, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'profileId' })
+  profile?: Profile;
   @CreateDateColumn() createdAt: Date;
 }

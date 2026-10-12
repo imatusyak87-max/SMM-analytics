@@ -8,6 +8,7 @@ import { InstagramApiClient, InstagramProfile } from './instagram-api.client';
 import { InstagramOauthStateService } from './instagram-oauth-state.service';
 import { encryptToken } from './instagram-token-crypto';
 import { translateInstagramError } from './instagram-error';
+import { createProfile } from '../../profiles/profile-store';
 
 const AUTHORIZE_URL = 'https://www.instagram.com/oauth/authorize';
 // Confirmed against the real consent screen in Task 0, step 1.
@@ -79,16 +80,21 @@ export class InstagramOauthService {
       return { ...existing, ...refreshed };
     }
 
-    const account = await this.accountsRepo.save({
-      platform: AccountPlatform.INSTAGRAM,
-      externalId: instagramUserId,
-      name: profile.name ?? profile.username,
-      avatarUrl: profile.profilePictureUrl,
-      type: type === InstagramAccountKind.OWN ? AccountType.OWN : AccountType.CLIENT,
-      isActive: true,
+    const name = profile.name ?? profile.username;
+    return this.accountsRepo.manager.transaction(async (em) => {
+      const group = await createProfile(em, name);
+      const account = await em.save(Account, {
+        platform: AccountPlatform.INSTAGRAM,
+        externalId: instagramUserId,
+        name,
+        avatarUrl: profile.profilePictureUrl,
+        type: type === InstagramAccountKind.OWN ? AccountType.OWN : AccountType.CLIENT,
+        isActive: true,
+        profileId: group.id,
+      });
+      await em.save(AccountCredential, { accountId: account.id, encryptedToken, tokenExpiresAt, needsReconnect: false });
+      return account;
     });
-    await this.credentialsRepo.save({ accountId: account.id, encryptedToken, tokenExpiresAt, needsReconnect: false });
-    return account;
   }
 
   private redirectUri(): string {

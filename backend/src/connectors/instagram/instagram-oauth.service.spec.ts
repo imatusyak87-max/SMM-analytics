@@ -1,6 +1,8 @@
 import { InstagramOauthService } from './instagram-oauth.service';
 import { InstagramAccountKind } from '../../db/entities/instagram-oauth-state.entity';
-import { AccountPlatform, AccountType } from '../../db/entities/account.entity';
+import { Account, AccountPlatform, AccountType } from '../../db/entities/account.entity';
+import { AccountCredential } from '../../db/entities/account-credential.entity';
+import { Profile } from '../../db/entities/profile.entity';
 
 function makeDeps() {
   const stateService = { create: jest.fn().mockResolvedValue('a-state-id'), consume: jest.fn() };
@@ -11,6 +13,16 @@ function makeDeps() {
   };
   const accountsRepo = { findOneBy: jest.fn(), save: jest.fn((row) => ({ id: 'acc-new', ...row })), update: jest.fn() };
   const credentialsRepo = { findOneBy: jest.fn(), save: jest.fn(), update: jest.fn() };
+  // Saves made inside the transaction land on the same repo mocks the tests assert on.
+  const em = {
+    save: jest.fn((target: unknown, row: any) => {
+      if (target === Profile) return Promise.resolve({ id: 'prof-new', ...row });
+      if (target === Account) return Promise.resolve(accountsRepo.save(row));
+      if (target === AccountCredential) return Promise.resolve(credentialsRepo.save(row));
+      throw new Error('unexpected save target');
+    }),
+  };
+  (accountsRepo as any).manager = { transaction: jest.fn((cb: (em: unknown) => unknown) => cb(em)) };
   const service = new InstagramOauthService(
     stateService as any,
     api as any,
@@ -19,7 +31,7 @@ function makeDeps() {
     'app-id',
     'a'.repeat(64),
   );
-  return { service, stateService, api, accountsRepo, credentialsRepo };
+  return { service, stateService, api, accountsRepo, credentialsRepo, em };
 }
 
 describe('InstagramOauthService.buildAuthorizeUrl', () => {
@@ -65,7 +77,7 @@ describe('InstagramOauthService.completeLogin', () => {
   });
 
   it('writes (upserts) the credential, and clears needsReconnect, when the Instagram id is already tracked', async () => {
-    const { service, stateService, api, accountsRepo, credentialsRepo } = makeDeps();
+    const { service, stateService, api, accountsRepo, credentialsRepo, em } = makeDeps();
     stateService.consume.mockResolvedValue(InstagramAccountKind.OWN);
     api.exchangeCodeForToken.mockResolvedValue({ accessToken: 'short-tok', instagramUserId: '17841400000000000' });
     api.exchangeForLongLivedToken.mockResolvedValue({ accessToken: 'long-tok', expiresInSeconds: 5184000 });
@@ -76,6 +88,7 @@ describe('InstagramOauthService.completeLogin', () => {
 
     expect(account.id).toBe('acc-existing');
     expect(accountsRepo.save).not.toHaveBeenCalled();
+    expect(em.save).not.toHaveBeenCalledWith(Profile, expect.anything());
     // save() keyed by the accountId primary key inserts the row when the
     // data-deletion webhook removed it, and updates it otherwise; update()
     // would silently touch 0 rows after a deletion.
@@ -83,6 +96,20 @@ describe('InstagramOauthService.completeLogin', () => {
       expect.objectContaining({ accountId: 'acc-existing', needsReconnect: false, encryptedToken: expect.any(String) }),
     );
     expect(credentialsRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('puts a newly connected account into a new profile named after it', async () => {
+    const { service, stateService, api, accountsRepo, em } = makeDeps();
+    stateService.consume.mockResolvedValue(InstagramAccountKind.OWN);
+    api.exchangeCodeForToken.mockResolvedValue({ accessToken: 'short-tok', instagramUserId: '1' });
+    api.exchangeForLongLivedToken.mockResolvedValue({ accessToken: 'long-tok', expiresInSeconds: 5184000 });
+    api.getProfile.mockResolvedValue({ id: '1', username: 'brand', name: 'Brand', profilePictureUrl: null, biography: null });
+    accountsRepo.findOneBy.mockResolvedValue(null);
+
+    await service.completeLogin('a-code', 'good-state');
+
+    expect(em.save).toHaveBeenCalledWith(Profile, { name: 'Brand' });
+    expect(accountsRepo.save).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'prof-new' }));
   });
 
   it('refreshes the name and avatar of an already tracked account from the fetched profile', async () => {

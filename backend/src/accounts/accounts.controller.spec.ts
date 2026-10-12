@@ -10,11 +10,10 @@ describe('AccountsController', () => {
 
     const result = await controller.createFromLink({
       link: 'https://t.me/somechannel',
+      profileId: 'prof-1',
     });
 
-    expect(service.createFromLink).toHaveBeenCalledWith(
-      'https://t.me/somechannel',
-    );
+    expect(service.createFromLink).toHaveBeenCalledWith('https://t.me/somechannel', 'prof-1');
     expect(result).toBe(created);
   });
 

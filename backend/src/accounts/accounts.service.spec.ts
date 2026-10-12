@@ -4,13 +4,36 @@ import { AccountPlatform, AccountType } from '../db/entities/account.entity';
 import { InstagramDiscoveryUnavailableError, InstagramProfileNotFoundError } from '../connectors/instagram/instagram-discovery.errors';
 import { CompetitorRun } from '../db/entities/competitor-run.entity';
 import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
+import { Profile } from '../db/entities/profile.entity';
+
+/**
+ * Gives a fake repo a manager whose transaction hands out an EntityManager.
+ * Account saves are routed to repo.save at call time, so the existing
+ * repo.save assertions (and tests that swap repo.save) keep working.
+ */
+function withTransactions(repo: any) {
+  const em = {
+    save: jest.fn((target: unknown, row: any) =>
+      target === Profile ? Promise.resolve({ id: 'prof-new', ...row }) : repo.save(row),
+    ),
+    count: jest.fn().mockResolvedValue(1),
+    delete: jest.fn(),
+    findOneBy: jest.fn().mockResolvedValue({ id: 'prof-1', name: 'Existing' }),
+  };
+  repo.em = em;
+  repo.manager = {
+    transaction: jest.fn((cb: (em: unknown) => unknown) => cb(em)),
+    findOneBy: em.findOneBy,
+  };
+  return repo;
+}
 
 function makeRepo(saved: unknown = { id: '1' }, existing: unknown = null) {
-  return {
+  return withTransactions({
     save: jest.fn().mockResolvedValue(saved),
     create: jest.fn((x) => x),
     findOneBy: jest.fn().mockResolvedValue(existing),
-  } as any;
+  });
 }
 
 describe('AccountsService', () => {
@@ -32,9 +55,19 @@ describe('AccountsService', () => {
     expect(result).toBe(saved);
   });
 
+  it('creates a profile named after a manually created account', async () => {
+    const repo = makeRepo({ id: 'acc-1' });
+    const service = new AccountsService(repo, { get: jest.fn() } as any, { createManual: jest.fn() } as any);
+
+    await service.create({ platform: AccountPlatform.TELEGRAM, externalId: '@chan', name: 'Chan', type: AccountType.OWN });
+
+    expect(repo.em.save).toHaveBeenCalledWith(Profile, { name: 'Chan' });
+    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'prof-new' }));
+  });
+
   describe('remove', () => {
     function makeRepoWithTransaction(account: unknown) {
-      const em = { delete: jest.fn() };
+      const em = { delete: jest.fn(), count: jest.fn().mockResolvedValue(1) };
       const repo = {
         findOneBy: jest.fn().mockResolvedValue(account),
         manager: {
@@ -45,7 +78,7 @@ describe('AccountsService', () => {
     }
 
     it('clears the data belonging to the account before removing it', async () => {
-      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1' });
+      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1', profileId: 'prof-1' });
       const service = new AccountsService(repo, { get: jest.fn() } as any, { createManual: jest.fn() } as any);
 
       await service.remove('acc-1');
@@ -69,6 +102,16 @@ describe('AccountsService', () => {
       });
     });
 
+    it('deletes the profile the account leaves empty', async () => {
+      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1', profileId: 'prof-1' });
+      em.count.mockResolvedValue(0);
+      const service = new AccountsService(repo, { get: jest.fn() } as any, { createManual: jest.fn() } as any);
+
+      await service.remove('acc-1');
+
+      expect(em.delete).toHaveBeenLastCalledWith(Profile, { id: 'prof-1' });
+    });
+
     it('does not delete anything for an account that does not exist', async () => {
       const { repo, em } = makeRepoWithTransaction(null);
       const service = new AccountsService(repo, { get: jest.fn() } as any, { createManual: jest.fn() } as any);
@@ -80,9 +123,9 @@ describe('AccountsService', () => {
     });
 
     it('deletes competitor runs and suggestions along with the account', async () => {
-      const em = { delete: jest.fn() };
+      const em = { delete: jest.fn(), count: jest.fn().mockResolvedValue(1) };
       const repo = {
-        findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1' }),
+        findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1', profileId: 'prof-1' }),
         manager: { transaction: jest.fn(async (cb: any) => cb(em)) },
       } as any;
       const service = new AccountsService(repo, {} as any, {} as any);
@@ -245,6 +288,49 @@ describe('AccountsService', () => {
       );
     });
 
+    it('puts a new account into a new profile named after it by default', async () => {
+      const repo = makeRepo();
+      const connector = { getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null, description: null }) };
+      const service = new AccountsService(repo, { get: jest.fn().mockReturnValue(connector) } as any, { createManual: jest.fn() } as any);
+
+      await service.createFromLink('https://t.me/somechannel');
+
+      expect(repo.em.save).toHaveBeenCalledWith(Profile, { name: 'Some Channel' });
+      expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'prof-new' }));
+    });
+
+    it('adds the account to the chosen profile', async () => {
+      const repo = makeRepo();
+      const connector = { getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null, description: null }) };
+      const service = new AccountsService(repo, { get: jest.fn().mockReturnValue(connector) } as any, { createManual: jest.fn() } as any);
+
+      await service.createFromLink('https://t.me/somechannel', 'prof-1');
+
+      expect(repo.em.save).not.toHaveBeenCalledWith(Profile, expect.anything());
+      expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'prof-1' }));
+    });
+
+    it('refuses an unknown profile before asking the platform', async () => {
+      const repo = makeRepo();
+      repo.manager.findOneBy.mockResolvedValue(null);
+      const connector = { getAccountInfo: jest.fn() };
+      const service = new AccountsService(repo, { get: jest.fn().mockReturnValue(connector) } as any, { createManual: jest.fn() } as any);
+
+      await expect(service.createFromLink('https://t.me/somechannel', 'gone')).rejects.toBeInstanceOf(NotFoundException);
+      expect(connector.getAccountInfo).not.toHaveBeenCalled();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    // The profile can be deleted between the check and the insert; the FK catches it.
+    it('maps a foreign-key violation to the same profile 404', async () => {
+      const repo = makeRepo();
+      repo.save = jest.fn().mockRejectedValue(Object.assign(new Error('fk'), { code: '23503' }));
+      const connector = { getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null, description: null }) };
+      const service = new AccountsService(repo, { get: jest.fn().mockReturnValue(connector) } as any, { createManual: jest.fn() } as any);
+
+      await expect(service.createFromLink('https://t.me/somechannel', 'prof-1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
     it('queues a sync so the new account gets its stats without a manual refresh', async () => {
       const repo = makeRepo({ id: 'acc-9' });
       const connector = {
@@ -323,11 +409,11 @@ describe('AccountsService', () => {
 
   describe('Instagram links', () => {
     function setup(opts: { info?: object; infoError?: Error; existing?: (where: any) => unknown } = {}) {
-      const repo = {
+      const repo = withTransactions({
         save: jest.fn((x) => Promise.resolve({ id: 'acc-new', ...x })),
         create: jest.fn((x) => x),
         findOneBy: jest.fn((where) => Promise.resolve(opts.existing ? opts.existing(where) : null)),
-      } as any;
+      } as any);
       const connector = {
         getAccountInfo: opts.infoError
           ? jest.fn().mockRejectedValue(opts.infoError)

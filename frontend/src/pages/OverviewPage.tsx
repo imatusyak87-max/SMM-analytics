@@ -121,7 +121,14 @@ export function OverviewPage() {
           ))}
         </div>
       )}
-      {isAdding && <AddAccountModal onClose={closeAdding} onCreated={handleCreated} initialError={addError} />}
+      {isAdding && (
+        <AddAccountModal
+          onClose={closeAdding}
+          onCreated={handleCreated}
+          initialError={addError}
+          profiles={items.map(({ id, name }) => ({ id, name }))}
+        />
+      )}
     </div>
   );
 }

@@ -226,3 +226,44 @@ describe('Instagram competitors', () => {
     expect(screen.queryByText('Вход через Facebook отменён')).not.toBeInTheDocument();
   });
 });
+
+describe('choosing a profile', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const profiles = [{ id: 'p1', name: 'Coffee Lab' }, { id: 'p2', name: 'Tea House' }];
+
+  it('adds to a new profile unless told otherwise', async () => {
+    (apiClient.post as any).mockResolvedValueOnce({ data: previewData }).mockResolvedValueOnce({ data: { id: 'acc-1' } });
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} profiles={profiles} />);
+
+    expect(screen.getByLabelText('Профиль')).toHaveValue('');
+    pasteLink();
+    fireEvent.click(await screen.findByText('Добавить'));
+
+    await waitFor(() =>
+      expect(apiClient.post).toHaveBeenLastCalledWith('/accounts/from-link', { link: 'https://t.me/somechannel' }),
+    );
+  });
+
+  it('adds to the chosen profile', async () => {
+    (apiClient.post as any).mockResolvedValueOnce({ data: previewData }).mockResolvedValueOnce({ data: { id: 'acc-1' } });
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} profiles={profiles} />);
+
+    fireEvent.change(screen.getByLabelText('Профиль'), { target: { value: 'p2' } });
+    pasteLink();
+    fireEvent.click(await screen.findByText('Добавить'));
+
+    await waitFor(() =>
+      expect(apiClient.post).toHaveBeenLastCalledWith('/accounts/from-link', {
+        link: 'https://t.me/somechannel',
+        profileId: 'p2',
+      }),
+    );
+  });
+
+  it('has no profile choice when there are no profiles yet', () => {
+    render(<AddAccountModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(screen.queryByLabelText('Профиль')).not.toBeInTheDocument();
+  });
+});

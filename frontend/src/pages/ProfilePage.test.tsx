@@ -89,6 +89,27 @@ describe('ProfilePage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Название профиля не может быть пустым');
   });
 
+  it('joins several validation messages into one line', async () => {
+    mockProfile();
+    patch.mockRejectedValue({ response: { data: { message: ['Первое', 'Второе'] } } });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Переименовать' }));
+    const input = screen.getByLabelText('Название профиля');
+    fireEvent.change(input, { target: { value: 'x' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Первое, Второе');
+  });
+
+  it('caps the name input at 100 characters', async () => {
+    mockProfile();
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Переименовать' }));
+    expect(screen.getByLabelText('Название профиля')).toHaveAttribute('maxlength', '100');
+  });
+
   it('says so when the profile does not exist', async () => {
     get.mockRejectedValue({ response: { status: 404 } });
     renderPage();

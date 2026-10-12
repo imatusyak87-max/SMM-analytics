@@ -51,7 +51,9 @@ export function ProfilePage() {
       await apiClient.patch(`/profiles/${id}`, { name: draft });
       setReloadKey((key) => key + 1);
     } catch (err: any) {
-      setRenameError(err.response?.data?.message ?? 'Не удалось переименовать профиль');
+      // class-validator reports several problems as an array of messages.
+      const message = err.response?.data?.message;
+      setRenameError(Array.isArray(message) ? message.join(', ') : (message ?? 'Не удалось переименовать профиль'));
     }
   }
 
@@ -63,6 +65,7 @@ export function ProfilePage() {
             className={styles.nameInput}
             aria-label="Название профиля"
             value={draft}
+            maxLength={100}
             autoFocus
             onChange={(e) => setDraft(e.target.value)}
             onBlur={finishEditing}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ProfileSwitcher } from '../components/ProfileSwitcher';
 import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
@@ -39,6 +39,7 @@ interface PostsPage {
 
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [period, setPeriod] = useState<SelectedPeriod>(() => selectPreset('last30', new Date()));
   const [typeFilter, setTypeFilter] = useState('all');
   const [sort, setSort] = useState<PostSort>('views');
@@ -49,6 +50,7 @@ export function AccountDetailPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const range = { from: period.from, to: period.to };
   const postFilter = { ...range, sort, type: typeFilter === 'all' ? undefined : typeFilter };
@@ -104,6 +106,18 @@ export function AccountDetailPage() {
     }
   }
 
+  async function handleDelete(target: { id: string; name: string }, profile: DetailData['profile']) {
+    if (!confirm(`Удалить «${target.name}» и всю собранную статистику?`)) return;
+    try {
+      setDeleteError(null);
+      await apiClient.delete(`/accounts/${target.id}`);
+      // A profile that still has other accounts is the natural place to land.
+      navigate(profile.accountCount > 1 ? `/profiles/${profile.id}` : '/');
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.message ?? 'Не удалось удалить аккаунт');
+    }
+  }
+
   if (detail.error) {
     const status = (detail.error as { response?: { status?: number } }).response?.status;
     return (
@@ -143,7 +157,20 @@ export function AccountDetailPage() {
             setTablePage(1);
           }}
         />
+        <button
+          type="button"
+          className={styles.deleteButton}
+          aria-label="Удалить аккаунт"
+          onClick={() => handleDelete(account, profile)}
+        >
+          Удалить
+        </button>
       </div>
+      {deleteError && (
+        <p className={styles.error} role="alert">
+          {deleteError}
+        </p>
+      )}
       {detail.data.needsReconnect && (
         <div className={styles.reconnectBanner} role="alert">
           <span>Переподключите Instagram — доступ к аккаунту был потерян.</span>

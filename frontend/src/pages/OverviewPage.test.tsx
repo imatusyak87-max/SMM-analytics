@@ -18,7 +18,7 @@ function mockGets(overview: unknown = [], status: unknown = NO_STATUS) {
   });
 }
 
-const overviewCalls = () => (apiClient.get as any).mock.calls.filter((c: unknown[]) => c[0] === '/stats/overview').length;
+const overviewCalls = () => (apiClient.get as any).mock.calls.filter((c: unknown[]) => c[0] === '/profiles').length;
 
 describe('OverviewPage', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -50,16 +50,25 @@ describe('OverviewPage', () => {
     expect(screen.queryByLabelText('Ссылка на аккаунт')).not.toBeInTheDocument();
   });
 
-  it('renders a card per account with followers and ER', async () => {
+  it('renders a card per profile with its total followers', async () => {
     mockGets([
-      { account: { id: 'acc-1', platform: 'telegram', name: 'Chan', avatarUrl: null, type: 'own' },
-        latestSnapshot: { followersCount: 1234, avgEr: 3.2 } },
+      {
+        id: 'p1', name: 'Coffee Lab', totalFollowers: 1234,
+        accounts: [
+          { account: { id: 'acc-1', platform: 'telegram', name: 'Chan', avatarUrl: null, type: 'own' },
+            latestSnapshot: { followersCount: 1000, avgEr: 3.2 } },
+          { account: { id: 'acc-2', platform: 'instagram', name: 'chan_ig', avatarUrl: null, type: 'own' },
+            latestSnapshot: { followersCount: 234, avgEr: 1.1 } },
+        ],
+      },
     ]);
 
     render(<MemoryRouter><OverviewPage /></MemoryRouter>);
 
-    await waitFor(() => expect(screen.getByText('Chan')).toBeInTheDocument());
-    expect(screen.getByText('1234')).toBeInTheDocument();
+    expect(await screen.findByText('Coffee Lab')).toBeInTheDocument();
+    expect(screen.getAllByTestId('profile-card')).toHaveLength(1);
+    expect(screen.getByText((text) => text.replace(/\s/g, '') === '1234')).toBeInTheDocument();
+    expect(screen.queryByText('Chan')).not.toBeInTheDocument();
   });
 
   it('reopens the add dialog when the Facebook login sends the user back', async () => {

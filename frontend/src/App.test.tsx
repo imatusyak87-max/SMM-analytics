@@ -32,6 +32,6 @@ describe('App', () => {
 
     expect(screen.getByRole('link', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Compare' })).toBeInTheDocument();
-    await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/stats/overview'));
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/profiles'));
   });
 });

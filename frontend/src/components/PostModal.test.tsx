@@ -3,11 +3,12 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PostModal } from './PostModal';
 import { formatPercent } from '../format';
+import { extraPostMetrics } from '../postMetrics';
 
 const post = {
   id: 'p1', type: 'image', caption: 'Полный текст поста',
   publishedAt: '2026-09-02T12:30:45Z', thumbnailUrl: 'https://cdn/p1',
-  permalink: 'https://t.me/testchannel/102', views: 12300, likes: 1248, er: 1.2, erViews: 10.1,
+  permalink: 'https://t.me/testchannel/102', views: 12300, likes: 1248, comments: 37, shares: 12, reach: 9800, er: 1.2, erViews: 10.1,
 };
 
 const digits = (expected: string) => (text: string) => text.replace(/\s/g, '') === expected;
@@ -48,6 +49,20 @@ describe('PostModal', () => {
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://cdn/p1');
     expect(screen.getByText(digits('12300'))).toBeInTheDocument();
     expect(screen.getByText(digits('1248'))).toBeInTheDocument();
+  });
+
+  it('shows the extra metrics it is given, and none by default', () => {
+    const { unmount } = render(
+      <PostModal post={post} platform="instagram" extraMetrics={extraPostMetrics({ platform: 'instagram', type: 'own' })} onClose={() => {}} />,
+    );
+    expect(screen.getByText('Комментарии').nextElementSibling).toHaveTextContent('37');
+    expect(screen.getByText('Репосты').nextElementSibling).toHaveTextContent('12');
+    expect(screen.getByText('Охват').nextElementSibling?.textContent?.replace(/\s/g, '')).toBe('9800');
+    unmount();
+
+    render(<PostModal post={post} platform="telegram" onClose={() => {}} />);
+    expect(screen.queryByText('Комментарии')).not.toBeInTheDocument();
+    expect(screen.queryByText('Охват')).not.toBeInTheDocument();
   });
 
   it('marks the image decorative, since the full caption is already shown right beside it as text', () => {

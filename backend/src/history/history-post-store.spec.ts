@@ -44,7 +44,8 @@ describe('HistoryPostStore.write', () => {
     const qb = chain();
     const store = new HistoryPostStore({ createQueryBuilder: jest.fn().mockReturnValue(qb) } as any);
 
-    await store.write('acc-1', [post('1')], 200, true);
+    // Own-account history pages carry no insights: views arrive as null.
+    await store.write('acc-1', [post('1', { views: null })], 200, true);
 
     const updated: string[] = qb.orUpdate.mock.calls[0][0];
     expect(updated).not.toContain('reach');
@@ -53,6 +54,30 @@ describe('HistoryPostStore.write', () => {
     expect(updated).not.toContain('views');
     expect(updated).not.toContain('erViews');
     expect(updated).toEqual(expect.arrayContaining(['likes', 'comments', 'caption', 'lastSyncedAt']));
+  });
+
+  it('still writes views and ERR for posts whose page carried views, even when insights are preserved', async () => {
+    // A competitor's Reel comes with its public view count on the page itself;
+    // no insights phase will fill it later.
+    const qb = chain();
+    const store = new HistoryPostStore({ createQueryBuilder: jest.fn().mockReturnValue(qb) } as any);
+
+    await store.write('acc-1', [post('reel', { views: 400 }), post('photo', { views: null })], 200, true);
+
+    expect(qb.values).toHaveBeenCalledTimes(2);
+    const calls = qb.values.mock.calls.map((c: any[], i: number) => ({
+      ids: c[0].map((r: any) => r.externalPostId),
+      updated: qb.orUpdate.mock.calls[i][0] as string[],
+    }));
+    const withViews = calls.find((c: any) => c.ids.includes('reel'))!;
+    const withoutViews = calls.find((c: any) => c.ids.includes('photo'))!;
+    expect(withViews.ids).toEqual(['reel']);
+    expect(withViews.updated).toEqual(expect.arrayContaining(['views', 'erViews', 'likes']));
+    expect(withViews.updated).not.toContain('reach');
+    expect(withViews.updated).not.toContain('shares');
+    expect(withViews.updated).not.toContain('er');
+    expect(withoutViews.ids).toEqual(['photo']);
+    expect(withoutViews.updated).not.toContain('views');
   });
 
   it('does nothing for an empty page', async () => {

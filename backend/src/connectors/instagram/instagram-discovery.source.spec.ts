@@ -11,7 +11,7 @@ const profile = {
 };
 const media = (id: string, timestamp: string) => ({
   id, timestamp, caption: null, mediaType: 'IMAGE', mediaProductType: 'FEED', mediaUrl: 'https://cdn/m.jpg',
-  thumbnailUrl: null, permalink: null, likeCount: 7, commentsCount: 2,
+  thumbnailUrl: null, permalink: null, likeCount: 7, commentsCount: 2, viewCount: null,
 });
 
 function setup(discover: jest.Mock) {
@@ -52,6 +52,17 @@ describe('InstagramDiscoverySource', () => {
     expect(posts[0]).toMatchObject({ likes: 7, comments: 2, views: null, reach: null, shares: 0 });
     expect(discover).toHaveBeenCalledTimes(2);
     expect(discover).toHaveBeenLastCalledWith('fb-token', '1784', 'brand', 'C1');
+  });
+
+  it('carries a Reel’s public view count into the post, on sync and history pages alike', async () => {
+    const reel = { ...media('r', '2026-09-20T00:00:00+0000'), mediaProductType: 'REELS', viewCount: 4334 };
+    const { source } = setup(jest.fn().mockResolvedValue({ profile, media: [reel], nextCursor: null }));
+
+    const [synced] = await source.getPosts(competitor, new Date('2026-09-01'));
+    const [paged] = (await source.loadHistoryPage(competitor, null)).posts;
+
+    expect(synced).toMatchObject({ views: 4334, reach: null, shares: 0 });
+    expect(paged).toMatchObject({ views: 4334, reach: null, shares: 0 });
   });
 
   it('returns one history page with its cursor', async () => {

@@ -1,6 +1,7 @@
 import { Account } from '../../db/entities/account.entity';
 import { AccountInfo, AccountStats, ConnectorPost, HistoryPage } from '../connector.interface';
 import { HistoryPauseError, isNetworkError, networkPause } from '../history-pause.error';
+import { InstagramMedia } from './instagram-api.client';
 import { DiscoveryPage, InstagramDiscoveryClient } from './instagram-discovery.client';
 import { InstagramDiscoveryConnectionService } from './instagram-discovery-connection.service';
 import { InstagramDiscoveryUnavailableError, InstagramProfileNotFoundError } from './instagram-discovery.errors';
@@ -8,10 +9,14 @@ import { isInstagramAuthError, isInstagramProfileNotFoundError, isInstagramRateL
 import { mapInstagramPost, NO_INSIGHTS } from './instagram-post-mapper';
 import { instagramRateLimitPause } from './instagram.connector';
 
+function toPost(media: InstagramMedia): ConnectorPost {
+  return mapInstagramPost(media, { ...NO_INSIGHTS, views: media.viewCount });
+}
+
 /**
  * Reads someone else's public Business/Creator account via Business Discovery,
  * made as the user's own Instagram account through the shared Facebook connection.
- * Likes and comments only — no insights exist for accounts we do not own.
+ * Likes, comments and Reels' public view count — no insights exist for accounts we do not own.
  */
 export class InstagramDiscoverySource {
   constructor(
@@ -42,7 +47,7 @@ export class InstagramDiscoverySource {
       const page: DiscoveryPage = await this.lookup(account, cursor);
       for (const media of page.media) {
         if (new Date(media.timestamp) < sinceDate) return collected;
-        collected.push(mapInstagramPost(media, NO_INSIGHTS));
+        collected.push(toPost(media));
       }
       if (!page.nextCursor) return collected;
       cursor = page.nextCursor;
@@ -51,7 +56,7 @@ export class InstagramDiscoverySource {
 
   async loadHistoryPage(account: Account, cursor: string | null): Promise<HistoryPage> {
     const page = await this.lookup(account, cursor);
-    return { posts: page.media.map((media) => mapInstagramPost(media, NO_INSIGHTS)), nextCursor: page.nextCursor };
+    return { posts: page.media.map(toPost), nextCursor: page.nextCursor };
   }
 
   private async lookup(account: Account, after: string | null): Promise<DiscoveryPage> {

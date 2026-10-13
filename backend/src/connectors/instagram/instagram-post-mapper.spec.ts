@@ -13,6 +13,7 @@ const baseMedia: InstagramMedia = {
   timestamp: '2026-09-01T10:00:00+0000',
   likeCount: 40,
   commentsCount: 3,
+  viewCount: null,
 };
 const insights: InstagramMediaInsights = { reach: 500, saved: 12, shares: 4, views: 900 };
 

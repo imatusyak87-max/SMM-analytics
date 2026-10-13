@@ -36,6 +36,8 @@ export interface InstagramMedia {
   timestamp: string;
   likeCount: number;
   commentsCount: number;
+  /** Public play count; only Business Discovery returns it, and only for Reels. */
+  viewCount: number | null;
 }
 
 export interface InstagramMediaInsights {
@@ -65,6 +67,7 @@ export function mapRawMedia(raw: any): InstagramMedia {
     timestamp: raw.timestamp,
     likeCount: raw.like_count ?? 0,
     commentsCount: raw.comments_count ?? 0,
+    viewCount: typeof raw.view_count === 'number' ? raw.view_count : null,
   };
 }
 

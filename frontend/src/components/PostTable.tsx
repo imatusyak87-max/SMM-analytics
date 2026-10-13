@@ -2,6 +2,7 @@ import styles from './PostTable.module.css';
 import { formatCount, formatPercent } from '../format';
 import { isRoundVideo } from '../postType';
 import type { PostItem } from './PostList';
+import type { ExtraPostMetric } from '../postMetrics';
 
 const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
@@ -15,9 +16,11 @@ interface PostTableProps {
   posts: PostItem[];
   total: number;
   onOpen: (post: PostItem) => void;
+  /** Columns after «Реакции», for the metrics this account really has. */
+  extraMetrics?: ExtraPostMetric[];
 }
 
-export function PostTable({ posts, total, onOpen }: PostTableProps) {
+export function PostTable({ posts, total, onOpen, extraMetrics = [] }: PostTableProps) {
   return (
     <div className={styles.wrap}>
       <p className={styles.total}>Всего постов: {formatCount(total)}</p>
@@ -29,6 +32,9 @@ export function PostTable({ posts, total, onOpen }: PostTableProps) {
               <th scope="col">Пост</th>
               <th scope="col" className={styles.num}>Просмотры</th>
               <th scope="col" className={styles.num}>Реакции</th>
+              {extraMetrics.map((metric) => (
+                <th key={metric.key} scope="col" className={styles.num}>{metric.label}</th>
+              ))}
               <th scope="col" className={styles.num}>ERR</th>
               <th scope="col" className={styles.num}>ER</th>
             </tr>
@@ -68,6 +74,9 @@ export function PostTable({ posts, total, onOpen }: PostTableProps) {
                 </td>
                 <td className={styles.num}>{formatCount(post.views)}</td>
                 <td className={styles.num}>{formatCount(post.likes)}</td>
+                {extraMetrics.map((metric) => (
+                  <td key={metric.key} className={styles.num}>{formatCount(post[metric.key])}</td>
+                ))}
                 <td className={styles.num}>{formatPercent(post.erViews)}</td>
                 <td className={styles.num}>{formatPercent(post.er)}</td>
               </tr>

@@ -22,6 +22,10 @@ const UPDATABLE_COLUMNS = [
 ];
 /** Filled by the insights phase or the nightly sync; a history page must not blank them. */
 const INSIGHT_COLUMNS = new Set(['reach', 'shares', 'views', 'er', 'erViews']);
+const PRESERVING_COLUMNS = UPDATABLE_COLUMNS.filter((c) => !INSIGHT_COLUMNS.has(c));
+// A competitor's Reel brings its public view count on the page itself, and no
+// insights phase will fill it later — so views from the page are written.
+const PRESERVING_WITH_VIEWS_COLUMNS = [...PRESERVING_COLUMNS, 'views', 'erViews'];
 
 export function insightCursor(post: Pick<Post, 'publishedAt' | 'externalPostId'>): string {
   return `${post.publishedAt.toISOString()}|${post.externalPostId}`;
@@ -45,7 +49,14 @@ export class HistoryPostStore {
       erViews: calculateErByViews(post.likes, post.views),
       lastSyncedAt: now,
     }));
-    const update = preserveInsights ? UPDATABLE_COLUMNS.filter((c) => !INSIGHT_COLUMNS.has(c)) : UPDATABLE_COLUMNS;
+    if (!preserveInsights) return this.upsert(rows, UPDATABLE_COLUMNS);
+    const withViews = rows.filter((row) => row.views !== null);
+    const withoutViews = rows.filter((row) => row.views === null);
+    if (withViews.length > 0) await this.upsert(withViews, PRESERVING_WITH_VIEWS_COLUMNS);
+    if (withoutViews.length > 0) await this.upsert(withoutViews, PRESERVING_COLUMNS);
+  }
+
+  private async upsert(rows: Partial<Post>[], update: string[]): Promise<void> {
     await this.postsRepo
       .createQueryBuilder()
       .insert()

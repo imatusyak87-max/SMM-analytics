@@ -14,6 +14,9 @@ export interface PostItem {
   permalink: string;
   views: number | null;
   likes: number;
+  comments: number;
+  shares: number;
+  reach: number | null;
   er: number | null;
   erViews: number | null;
 }

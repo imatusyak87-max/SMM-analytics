@@ -97,6 +97,23 @@ describe('InstagramDiscoveryClient', () => {
     expect((config as any).params.fields).toMatch(/^business_discovery\.username\(brand\)\{.*followers_count.*,media\.limit\(50\)\{.*like_count.*\}\}$/);
   });
 
+  it('asks for view_count and maps it, leaving posts without it at null', async () => {
+    mockedGet.mockResolvedValue({
+      data: {
+        business_discovery: {
+          id: '9001',
+          username: 'brand',
+          media: { data: [{ ...rawMedia, view_count: 4334 }, { ...rawMedia, id: 'm2', media_product_type: 'FEED' }] },
+        },
+      },
+    } as any);
+
+    const page = await client().discover('tok', '1784', 'brand', null);
+
+    expect(page.media.map((m) => m.viewCount)).toEqual([4334, null]);
+    expect((mockedGet.mock.calls[0][1] as any).params.fields).toMatch(/media\.limit\(50\)\{[^}]*,view_count[,}]/);
+  });
+
   it('passes the cursor to the media edge', async () => {
     mockedGet.mockResolvedValue({ data: { business_discovery: { id: '9001', username: 'brand', media: { data: [] } } } } as any);
 

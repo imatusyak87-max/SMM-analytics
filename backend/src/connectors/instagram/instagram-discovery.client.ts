@@ -7,6 +7,10 @@ const REQUEST_TIMEOUT_MS = 15_000;
 // limit regardless of size, so fewer, larger pages are cheaper.
 const PAGE_SIZE = 50;
 
+// view_count is Business Discovery's public play count: present on Reels,
+// silently omitted for feed posts and carousels (checked live 2026-10-12).
+const DISCOVERY_MEDIA_FIELDS = `${MEDIA_FIELDS},view_count`;
+
 const PROFILE_FIELDS = 'id,username,name,biography,profile_picture_url,followers_count,follows_count,media_count';
 
 export interface DiscoveredProfile {
@@ -71,7 +75,7 @@ export class InstagramDiscoveryClient {
   }
 
   async discover(token: string, igUserId: string, username: string, after: string | null): Promise<DiscoveryPage> {
-    const mediaEdge = `media${after ? `.after(${after})` : ''}.limit(${PAGE_SIZE}){${MEDIA_FIELDS}}`;
+    const mediaEdge = `media${after ? `.after(${after})` : ''}.limit(${PAGE_SIZE}){${DISCOVERY_MEDIA_FIELDS}}`;
     const { data } = await axios.get(`${GRAPH_BASE}/${igUserId}`, {
       params: { fields: `business_discovery.username(${username}){${PROFILE_FIELDS},${mediaEdge}}`, access_token: token },
       timeout: REQUEST_TIMEOUT_MS,

@@ -11,6 +11,7 @@ import { PostList, type PostItem, type PostSort } from '../components/PostList';
 import { PostModal } from '../components/PostModal';
 import { PostSortSelect } from '../components/PostSortSelect';
 import { PostTable } from '../components/PostTable';
+import { extraPostMetrics } from '../postMetrics';
 import { PostTypeFilter } from '../components/PostTypeFilter';
 import { RefreshButton } from '../components/RefreshButton';
 import { StatTiles, type AccountSummary } from '../components/StatTiles';
@@ -23,7 +24,7 @@ const TOP_COUNT = 10;
 
 interface DetailData {
   profile: { id: string; name: string; accountCount: number };
-  account: { id: string; name: string; platform: string };
+  account: { id: string; name: string; platform: string; type: string };
   latestSnapshot: { followersCount: number; avgEr: number | null } | null;
   trend: Array<{ date: string; followersCount: number }>;
   summary: AccountSummary;
@@ -130,6 +131,7 @@ export function AccountDetailPage() {
   if (!detail.data) return <p className={styles.loading}>Загрузка…</p>;
 
   const { account, trend, summary, coverage, profile } = detail.data;
+  const extraMetrics = extraPostMetrics(account);
   const showCoverage = period.from < coverage.postsFrom || period.from < coverage.followersFrom;
   const total = top.data?.total ?? 0;
 
@@ -241,7 +243,7 @@ export function AccountDetailPage() {
             </p>
           ) : table.data ? (
             <div className={styles.postsRegion} aria-busy={table.pending}>
-              <PostTable posts={table.data.items} total={table.data.total} onOpen={setOpenPost} />
+              <PostTable posts={table.data.items} total={table.data.total} onOpen={setOpenPost} extraMetrics={extraMetrics} />
               <Pagination
                 page={tablePage}
                 size={tableSize}
@@ -255,7 +257,7 @@ export function AccountDetailPage() {
           )}
         </section>
       )}
-      <PostModal post={openPost} platform={account.platform} onClose={() => setOpenPost(null)} />
+      <PostModal post={openPost} platform={account.platform} extraMetrics={extraMetrics} onClose={() => setOpenPost(null)} />
     </div>
   );
 }

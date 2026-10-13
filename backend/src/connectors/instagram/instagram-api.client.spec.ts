@@ -135,6 +135,7 @@ describe('InstagramApiClient', () => {
       timestamp: '2026-09-01T10:00:00+0000',
       likeCount: 40,
       commentsCount: 3,
+      viewCount: null,
     });
     expect(result.nextCursor).toBe('cursor-2');
     const [, config] = mockedGet.mock.calls[0];

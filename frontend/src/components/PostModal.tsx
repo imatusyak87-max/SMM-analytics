@@ -3,11 +3,14 @@ import styles from './PostModal.module.css';
 import { formatCount, formatPercent } from '../format';
 import { isRoundVideo } from '../postType';
 import type { PostItem } from './PostList';
+import type { ExtraPostMetric } from '../postMetrics';
 
 interface PostModalProps {
   post: PostItem | null;
   /** The account's platform; names where the outbound link leads. */
   platform: string;
+  /** Shown after «Реакции», for the metrics this account really has. */
+  extraMetrics?: ExtraPostMetric[];
   onClose: () => void;
 }
 
@@ -18,7 +21,7 @@ const LINK_LABELS: Record<string, string> = {
 
 const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 
-export function PostModal({ post, platform, onClose }: PostModalProps) {
+export function PostModal({ post, platform, extraMetrics = [], onClose }: PostModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<Element | null>(null);
 
@@ -79,6 +82,12 @@ export function PostModal({ post, platform, onClose }: PostModalProps) {
             <dt className={styles.label}>Реакции</dt>
             <dd className={styles.value}>{formatCount(post.likes)}</dd>
           </div>
+          {extraMetrics.map((metric) => (
+            <div key={metric.key} className={styles.metric}>
+              <dt className={styles.label}>{metric.label}</dt>
+              <dd className={styles.value}>{formatCount(post[metric.key])}</dd>
+            </div>
+          ))}
           <div className={styles.metric}>
             <dt className={styles.label}>ERR к просмотрам</dt>
             <dd className={styles.value}>{formatPercent(post.erViews)}</dd>

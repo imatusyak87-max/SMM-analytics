@@ -34,7 +34,7 @@ function post(id: string, caption: string) {
   return {
     id, type: 'post', caption, publishedAt: '2026-09-01T10:00:00Z',
     thumbnailUrl: null, permalink: `https://t.me/c/${id}`,
-    views: 100, likes: 5, er: 0.5, erViews: 5,
+    views: 100, likes: 5, comments: 2, shares: 0, reach: null, er: 0.5, erViews: 5,
   };
 }
 
@@ -160,6 +160,19 @@ describe('AccountDetailPage', () => {
 
     fireEvent.click(reveal);
     expect(screen.queryByText('Всего постов: 37')).not.toBeInTheDocument();
+  });
+
+  it('shows comments, but not shares or reach, in the full list of an Instagram competitor', async () => {
+    mockApi({ detailData: { ...detail(), account: { id: 'acc-1', name: 'Brand', platform: 'instagram', type: 'public_no_access' } } });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Показать все посты/ }));
+
+    await screen.findByText('Всего постов: 2');
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent);
+    expect(headers).toContain('Комментарии');
+    expect(headers).not.toContain('Репосты');
+    expect(headers).not.toContain('Охват');
   });
 
   it('pages through the full list and goes back to page 1 when what it holds changes', async () => {

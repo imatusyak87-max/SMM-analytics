@@ -4,8 +4,8 @@ import { PostList } from './PostList';
 import { formatPercent } from '../format';
 
 const posts = [
-  { id: 'p1', type: 'image', caption: 'Первый', publishedAt: '2026-09-01T10:00:00Z', thumbnailUrl: 'https://cdn/p1', permalink: 'https://t.me/c/1', views: 100, likes: 10, er: 1, erViews: 10 },
-  { id: 'p2', type: 'video', caption: 'Второй', publishedAt: '2026-09-02T10:00:00Z', thumbnailUrl: 'https://cdn/p2', permalink: 'https://t.me/c/2', views: 900, likes: 9, er: 0.9, erViews: 1 },
+  { id: 'p1', type: 'image', caption: 'Первый', publishedAt: '2026-09-01T10:00:00Z', thumbnailUrl: 'https://cdn/p1', permalink: 'https://t.me/c/1', views: 100, likes: 10, comments: 0, shares: 0, reach: null, er: 1, erViews: 10 },
+  { id: 'p2', type: 'video', caption: 'Второй', publishedAt: '2026-09-02T10:00:00Z', thumbnailUrl: 'https://cdn/p2', permalink: 'https://t.me/c/2', views: 900, likes: 9, comments: 0, shares: 0, reach: null, er: 0.9, erViews: 1 },
 ];
 
 describe('PostList', () => {

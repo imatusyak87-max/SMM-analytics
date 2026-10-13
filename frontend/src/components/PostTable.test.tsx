@@ -2,17 +2,18 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PostTable } from './PostTable';
 import { formatPercent } from '../format';
+import { extraPostMetrics } from '../postMetrics';
 
 const posts = [
   {
     id: 'p1', type: 'image', caption: 'Первый', publishedAt: '2026-06-30T15:50:00Z',
     thumbnailUrl: 'https://cdn/p1', permalink: 'https://t.me/c/1',
-    views: 266, likes: 7, er: 0.4, erViews: 2.6,
+    views: 266, likes: 7, comments: 3, shares: 2, reach: 150, er: 0.4, erViews: 2.6,
   },
   {
     id: 'p2', type: 'post', caption: null, publishedAt: '2026-06-26T14:16:00Z',
     thumbnailUrl: null, permalink: 'https://t.me/c/2',
-    views: null, likes: 0, er: null, erViews: null,
+    views: null, likes: 0, comments: 0, shares: 0, reach: null, er: null, erViews: null,
   },
 ];
 
@@ -36,6 +37,17 @@ describe('PostTable', () => {
       'ERR',
       'ER',
     ]);
+  });
+
+  it('adds a column for each extra metric it is given, after the reactions', () => {
+    render(<PostTable posts={posts} total={2} onOpen={noop} extraMetrics={extraPostMetrics({ platform: 'instagram', type: 'own' })} />);
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Дата и время', 'Пост', 'Просмотры', 'Реакции', 'Комментарии', 'Репосты', 'Охват', 'ERR', 'ER',
+    ]);
+    const first = within(bodyRow(0)).getAllByRole('cell').map((cell) => cell.textContent);
+    expect(first.slice(2, 7)).toEqual(['266', '7', '3', '2', '150']);
+    const second = within(bodyRow(1)).getAllByRole('cell').map((cell) => cell.textContent);
+    expect(second[6]).toBe('—');
   });
 
   it("shows each post's date and time, text and metrics in its row", () => {

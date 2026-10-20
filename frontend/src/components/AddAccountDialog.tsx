@@ -20,10 +20,11 @@ export function AddAccountDialog({ projectId, platform, onClose, onAdded }: AddA
     setAdding(true);
     setError(null);
     try {
-      await apiClient.post(`/profiles/${projectId}/accounts`, { link: link.trim() });
+      await apiClient.post(`/profiles/${projectId}/accounts`, { link: link.trim(), platform });
       onAdded();
     } catch (err: any) {
-      setError(err.response?.data?.message ?? 'Не удалось добавить аккаунт');
+      const message = err.response?.data?.message;
+      setError(Array.isArray(message) ? message.join(', ') : (message ?? 'Не удалось добавить аккаунт'));
       setAdding(false);
     }
   }
@@ -33,7 +34,7 @@ export function AddAccountDialog({ projectId, platform, onClose, onAdded }: AddA
       <div className={styles.dialog} role="dialog" aria-label={`Добавить ${network.name}`} onClick={(e) => e.stopPropagation()}>
         <h2 className={styles.title}>Добавить {network.name}</h2>
         <LinkField id="tile-link" platform={platform} value={link} onChange={setLink} autoFocus />
-        {error && <p className={styles.error}>{error}</p>}
+        {error && <p className={styles.error} role="alert">{error}</p>}
         <div className={styles.actions}>
           <button type="button" className={styles.cancel} onClick={onClose}>Отмена</button>
           <button type="button" className={styles.submit} onClick={handleAdd} disabled={adding || link.trim() === ''}>Добавить</button>

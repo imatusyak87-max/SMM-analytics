@@ -17,7 +17,7 @@ describe('AddAccountDialog', () => {
     fireEvent.change(screen.getByLabelText('Telegram'), { target: { value: 'https://t.me/abcde' } });
     fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
-    expect(post).toHaveBeenCalledWith('/profiles/p1/accounts', { link: 'https://t.me/abcde' });
+    expect(post).toHaveBeenCalledWith('/profiles/p1/accounts', { link: 'https://t.me/abcde', platform: 'telegram' });
   });
 
   it('shows why the account could not be added', async () => {
@@ -27,5 +27,15 @@ describe('AddAccountDialog', () => {
     fireEvent.change(screen.getByLabelText('Telegram'), { target: { value: 'https://t.me/abcde' } });
     fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     expect(await screen.findByText('В проекте уже есть Telegram')).toBeInTheDocument();
+  });
+
+  it('announces the failure and joins several validation messages', async () => {
+    post.mockImplementation((url: string) =>
+      url === '/accounts/preview' ? new Promise(() => {}) : Promise.reject({ response: { data: { message: ['первая', 'вторая'] } } }));
+    render(<AddAccountDialog projectId="p1" platform="instagram" onClose={vi.fn()} onAdded={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Instagram'), { target: { value: 'https://t.me/abcde' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('первая, вторая');
+    expect(post).toHaveBeenCalledWith('/profiles/p1/accounts', { link: 'https://t.me/abcde', platform: 'instagram' });
   });
 });

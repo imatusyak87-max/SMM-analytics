@@ -72,6 +72,36 @@ describe('ProjectPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось добавить: Telegram — Канал не найден');
   });
 
+  it('shows one line per failed link', async () => {
+    mockProfile();
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/projects/p1', state: { failed: [
+        { platform: 'telegram', message: 'Канал не найден' },
+        { platform: 'instagram', message: 'Аккаунт не найден' },
+      ] } }]}>
+        <Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    const alert = await screen.findByRole('alert');
+    expect(alert.querySelectorAll('p')).toHaveLength(2);
+    expect(alert).toHaveTextContent('Не удалось добавить: Instagram — Аккаунт не найден');
+  });
+
+  it('clears the failure notice after an account is added from a tile', async () => {
+    mockProfile({ ...twoAccounts, accounts: [twoAccounts.accounts[0]] });
+    (apiClient as any).post = vi.fn().mockResolvedValue({ data: { id: 'a9' } });
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/projects/p1', state: { failed: [{ platform: 'telegram', message: 'Канал не найден' }] } }]}>
+        <Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить Telegram' }));
+    fireEvent.change(screen.getByLabelText('Telegram'), { target: { value: 'https://t.me/abcde' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
   it('deletes the project after confirmation and goes to all projects', async () => {
     mockProfile();
     vi.spyOn(window, 'confirm').mockReturnValue(true);

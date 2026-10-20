@@ -118,9 +118,13 @@ export function ProjectPage() {
         <button type="button" className={styles.deleteButton} onClick={deleteProject}>Удалить проект</button>
       </div>
       {failed.length > 0 && (
-        <p className={styles.error} role="alert">
-          {failed.map((f) => `Не удалось добавить: ${NETWORKS.find((n) => n.platform === f.platform)?.name ?? f.platform} — ${f.message}`).join('. ')}
-        </p>
+        <div className={styles.error} role="alert">
+          {failed.map((f) => (
+            <p key={f.platform}>
+              Не удалось добавить: {NETWORKS.find((n) => n.platform === f.platform)?.name ?? f.platform} — {f.message}
+            </p>
+          ))}
+        </div>
       )}
       {deleteError && <p className={styles.error} role="alert">{deleteError}</p>}
       {renameError && (
@@ -140,7 +144,12 @@ export function ProjectPage() {
       </div>
       {adding && (
         <AddAccountDialog projectId={id!} platform={adding} onClose={() => setAdding(null)}
-          onAdded={() => { setAdding(null); reload(); }} />
+          onAdded={() => {
+            setAdding(null);
+            reload();
+            // The creation notice is stale once the user has added something.
+            navigate(location.pathname, { replace: true, state: null });
+          }} />
       )}
     </div>
   );

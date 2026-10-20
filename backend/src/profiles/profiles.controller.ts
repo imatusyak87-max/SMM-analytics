@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpStatus,
   Param,
@@ -44,6 +45,17 @@ export class ProfilesController {
     @Body() dto: RenameProfileDto,
   ) {
     return this.profilesService.rename(id, dto.name);
+  }
+
+  @Delete('profiles/:id')
+  remove(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND }),
+    )
+    id: string,
+  ) {
+    return this.profilesService.remove(id);
   }
 
   @Patch('accounts/:id/profile')

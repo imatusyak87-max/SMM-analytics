@@ -18,7 +18,7 @@ import { CompetitorRejection } from '../db/entities/competitor-rejection.entity'
 import { HistoryLoad } from '../db/entities/history-load.entity';
 import { ConnectorRegistry } from '../connectors/connector-registry.service';
 import { AccountInfo, AccountStats, AvatarImage, SocialConnector } from '../connectors/connector.interface';
-import { createProfile, deleteProfileIfEmpty, requireProfile, PROFILE_NOT_FOUND } from '../profiles/profile-store';
+import { createProfile, requireProfile, PROFILE_NOT_FOUND } from '../profiles/profile-store';
 import { SyncJobService } from '../sync/sync-job.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { ParsedAccountLink, isInstagramLink, parseAccountLink } from './parse-account-link';
@@ -193,7 +193,7 @@ export class AccountsService {
   }
 
   async remove(id: string) {
-    const account = await this.findOne(id);
+    await this.findOne(id);
     await this.repo.manager.transaction(async (em) => {
       await em.delete(CompetitorRejection, { accountId: id });
       await em.delete(CompetitorSuggestion, { accountId: id });
@@ -204,7 +204,6 @@ export class AccountsService {
       await em.delete(AccountCredential, { accountId: id });
       await em.delete(HistoryLoad, { accountId: id });
       await em.delete(Account, { id });
-      await deleteProfileIfEmpty(em, account.profileId);
     });
   }
 

@@ -11,6 +11,12 @@ describe('ProfilesController', () => {
     return { controller: new ProfilesController(service), service };
   }
 
+  it('deletes a project', async () => {
+    const service = { remove: jest.fn().mockResolvedValue(undefined) } as any;
+    await new ProfilesController(service).remove('p1');
+    expect(service.remove).toHaveBeenCalledWith('p1');
+  });
+
   it('lists profiles', async () => {
     const { controller, service } = build();
     await controller.list();

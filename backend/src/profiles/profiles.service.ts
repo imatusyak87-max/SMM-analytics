@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account } from '../db/entities/account.entity';
 import { Profile } from '../db/entities/profile.entity';
+import { AccountsService } from '../accounts/accounts.service';
 import { StatsService } from '../stats/stats.service';
 import {
   createProfile,
@@ -26,6 +27,7 @@ export class ProfilesService {
     @InjectRepository(Profile) private profilesRepo: Repository<Profile>,
     @InjectRepository(Account) private accountsRepo: Repository<Account>,
     private stats: StatsService,
+    private accounts: AccountsService,
   ) {}
 
   async list(): Promise<ProfileSummary[]> {
@@ -33,15 +35,21 @@ export class ProfilesService {
       this.profilesRepo.find({ order: { createdAt: 'ASC' } }),
       this.stats.getOverview(),
     ]);
-    // A profile whose accounts are all deactivated has nothing to show.
-    return profiles
-      .map((profile) =>
-        toProfileSummary(
-          profile,
-          items.filter((item) => item.account.profileId === profile.id),
-        ),
-      )
-      .filter((summary) => summary.accounts.length > 0);
+    // Empty projects are listed too: a project lives until it is deleted.
+    return profiles.map((profile) =>
+      toProfileSummary(
+        profile,
+        items.filter((item) => item.account.profileId === profile.id),
+      ),
+    );
+  }
+
+  /** Deletes the project and, through the normal account delete, all its data. */
+  async remove(id: string): Promise<void> {
+    await this.findOne(id);
+    const accounts = await this.accountsRepo.find({ where: { profileId: id } });
+    for (const account of accounts) await this.accounts.remove(account.id);
+    await this.profilesRepo.delete({ id });
   }
 
   async get(id: string): Promise<ProfileSummary> {

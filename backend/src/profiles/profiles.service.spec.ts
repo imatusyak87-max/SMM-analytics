@@ -27,6 +27,7 @@ function setup({
   } | null,
   target = { id: 'p1', name: 'One' } as { id: string; name: string } | null,
   remaining = 0,
+  projectAccounts = [{ id: 'a2' }, { id: 'a3' }],
 } = {}) {
   const em = {
     findOneBy: jest.fn((entity: unknown) =>
@@ -45,9 +46,12 @@ function setup({
       Promise.resolve(profiles.find((p) => p.id === id) ?? null),
     ),
     save: jest.fn((p: object) => Promise.resolve(p)),
+    delete: jest.fn(),
   } as any;
+  const accounts = { remove: jest.fn(), createFromLink: jest.fn() };
   const accountsRepo = {
     manager: { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) },
+    find: jest.fn().mockResolvedValue(projectAccounts),
   } as any;
   const stats = {
     getOverview: jest.fn((profileId?: string) =>
@@ -57,15 +61,16 @@ function setup({
     ),
   } as any;
   return {
-    service: new ProfilesService(profilesRepo, accountsRepo, stats),
+    service: new ProfilesService(profilesRepo, accountsRepo, stats, accounts as any),
     em,
+    accounts,
     profilesRepo,
     stats,
   };
 }
 
 describe('ProfilesService.list', () => {
-  it('groups active accounts under their profiles and skips profiles with none', async () => {
+  it('groups accounts under their profiles', async () => {
     const { service, profilesRepo } = setup();
 
     const result = await service.list();
@@ -82,7 +87,31 @@ describe('ProfilesService.list', () => {
     ).toEqual([
       ['p1', 10, ['a1']],
       ['p2', 12, ['a3', 'a2']],
+      ['p3', null, []],
     ]);
+  });
+
+  it('lists every project, including one with no accounts', async () => {
+    const { service } = setup();
+    const list = await service.list();
+    expect(list.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
+    expect(list[2].accounts).toEqual([]);
+  });
+});
+
+describe('ProfilesService.remove', () => {
+  it('deletes a project with every account in it', async () => {
+    const { service, accounts, profilesRepo } = setup();
+    await service.remove('p2');
+    expect(accounts.remove).toHaveBeenCalledWith('a2');
+    expect(accounts.remove).toHaveBeenCalledWith('a3');
+    expect(profilesRepo.delete).toHaveBeenCalledWith({ id: 'p2' });
+  });
+
+  it('answers 404 for deleting an unknown project', async () => {
+    const { service, accounts } = setup();
+    await expect(service.remove('nope')).rejects.toBeInstanceOf(NotFoundException);
+    expect(accounts.remove).not.toHaveBeenCalled();
   });
 });
 

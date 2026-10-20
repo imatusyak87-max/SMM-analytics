@@ -102,14 +102,14 @@ describe('AccountsService', () => {
       });
     });
 
-    it('deletes the profile the account leaves empty', async () => {
-      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1', profileId: 'prof-1' });
+    it('keeps the project the account leaves, even when it is now empty', async () => {
+      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1', profileId: 'p1' });
       em.count.mockResolvedValue(0);
       const service = new AccountsService(repo, { get: jest.fn() } as any, { createManual: jest.fn() } as any);
 
       await service.remove('acc-1');
 
-      expect(em.delete).toHaveBeenLastCalledWith(Profile, { id: 'prof-1' });
+      expect(em.delete).not.toHaveBeenCalledWith(Profile, expect.anything());
     });
 
     it('does not delete anything for an account that does not exist', async () => {

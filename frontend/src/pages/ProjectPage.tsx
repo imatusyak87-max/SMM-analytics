@@ -1,15 +1,21 @@
 import { useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
-import { AccountCard } from '../components/AccountCard';
+import { AddAccountDialog } from '../components/AddAccountDialog';
+import { NETWORKS, type LinkPlatform } from '../components/LinkField';
+import { NetworkTile } from '../components/NetworkTile';
 import { formatCount } from '../format';
 import type { ProfileSummary } from '../profiles';
-import styles from './ProfilePage.module.css';
+import styles from './ProjectPage.module.css';
 
-export function ProfilePage() {
+export function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const failed = (location.state as { failed?: Array<{ platform: string; message: string }> } | null)?.failed ?? [];
+  const [adding, setAdding] = useState<LinkPlatform | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const profile = useApiGet<ProfileSummary>(`/profiles/${id}`, {}, { reloadKey });
 
@@ -24,7 +30,7 @@ export function ProfilePage() {
     return (
       <div className={styles.page}>
         <p className={styles.error} role="alert">
-          {status === 404 ? 'Профиль не найден' : 'Не удалось загрузить профиль'}
+          {status === 404 ? 'Проект не найден' : 'Не удалось загрузить проект'}
         </p>
         <Link to="/projects" className={styles.back}>
           Вернуться ко всем проектам
@@ -36,6 +42,22 @@ export function ProfilePage() {
   if (!profile.data) return <p className={styles.loading}>Загрузка…</p>;
 
   const { name, totalFollowers, accounts } = profile.data;
+
+  // One tile per network; a legacy second account of a network gets an extra tile after the four.
+  const firsts = NETWORKS.map((network) => accounts.find((a) => a.account.platform === network.platform));
+  const extras = accounts.filter((a) => !firsts.includes(a));
+  const reload = () => setReloadKey((key) => key + 1);
+
+  async function deleteProject() {
+    if (!confirm(`Удалить проект «${name}» вместе со всеми аккаунтами и данными?`)) return;
+    try {
+      setDeleteError(null);
+      await apiClient.delete(`/profiles/${id}`);
+      navigate('/projects');
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.message ?? 'Не удалось удалить проект');
+    }
+  }
 
   function startEditing() {
     setDraft(name);
@@ -53,7 +75,7 @@ export function ProfilePage() {
     } catch (err: any) {
       // class-validator reports several problems as an array of messages.
       const message = err.response?.data?.message;
-      setRenameError(Array.isArray(message) ? message.join(', ') : (message ?? 'Не удалось переименовать профиль'));
+      setRenameError(Array.isArray(message) ? message.join(', ') : (message ?? 'Не удалось переименовать проект'));
     }
   }
 
@@ -63,7 +85,7 @@ export function ProfilePage() {
         {editing ? (
           <input
             className={styles.nameInput}
-            aria-label="Название профиля"
+            aria-label="Название проекта"
             value={draft}
             maxLength={100}
             autoFocus
@@ -93,23 +115,33 @@ export function ProfilePage() {
         <span className={styles.total}>
           Подписчики: <span className={styles.totalValue}>{formatCount(totalFollowers)}</span>
         </span>
+        <button type="button" className={styles.deleteButton} onClick={deleteProject}>Удалить проект</button>
       </div>
+      {failed.length > 0 && (
+        <p className={styles.error} role="alert">
+          {failed.map((f) => `Не удалось добавить: ${NETWORKS.find((n) => n.platform === f.platform)?.name ?? f.platform} — ${f.message}`).join('. ')}
+        </p>
+      )}
+      {deleteError && <p className={styles.error} role="alert">{deleteError}</p>}
       {renameError && (
         <p className={styles.error} role="alert">
           {renameError}
         </p>
       )}
       <div className={styles.grid}>
-        {accounts.map((item) => (
-          <AccountCard
-            key={item.account.id}
-            account={item.account}
-            latestSnapshot={item.latestSnapshot}
-            // The last account takes the profile with it, so there is nothing left to show here.
-            onDeleted={() => (accounts.length <= 1 ? navigate('/projects') : setReloadKey((key) => key + 1))}
-          />
+        {NETWORKS.map((network, i) => (
+          <NetworkTile key={network.platform} network={network} item={firsts[i]}
+            onAdd={() => setAdding(network.platform as LinkPlatform)} onRemoved={reload} />
         ))}
+        {extras.map((item) => {
+          const network = NETWORKS.find((n) => n.platform === item.account.platform) ?? NETWORKS[0];
+          return <NetworkTile key={item.account.id} network={network} item={item} onAdd={() => {}} onRemoved={reload} />;
+        })}
       </div>
+      {adding && (
+        <AddAccountDialog projectId={id!} platform={adding} onClose={() => setAdding(null)}
+          onAdded={() => { setAdding(null); reload(); }} />
+      )}
     </div>
   );
 }

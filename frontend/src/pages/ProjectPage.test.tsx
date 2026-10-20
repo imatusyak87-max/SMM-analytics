@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ProfilePage } from './ProfilePage';
+import { ProjectPage } from './ProjectPage';
 import { apiClient } from '../api/client';
 
 vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), patch: vi.fn(), delete: vi.fn() } }));
@@ -28,35 +28,67 @@ function mockProfile(data: unknown = twoAccounts) {
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={['/profiles/p1']}>
+    <MemoryRouter initialEntries={['/projects/p1']}>
       <Routes>
-        <Route path="/profiles/:id" element={<ProfilePage />} />
-        <Route path="/projects" element={<p>Overview page</p>} />
+        <Route path="/projects/:id" element={<ProjectPage />} />
+        <Route path="/projects" element={<p>All projects page</p>} />
       </Routes>
     </MemoryRouter>,
   );
 }
 
-describe('ProfilePage', () => {
+describe('ProjectPage', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows the profile and a card for each of its accounts', async () => {
+  it('shows a tile per network in a fixed order, filled or empty', async () => {
     mockProfile();
     renderPage();
-
     expect(await screen.findByRole('heading', { name: 'Coffee Lab' })).toBeInTheDocument();
-    expect(screen.getAllByTestId('account-card')).toHaveLength(2);
-    expect(screen.getByText('coffee_ig')).toBeInTheDocument();
-    expect(screen.getByText('Coffee TG')).toBeInTheDocument();
+    expect(screen.getAllByTestId('network-tile').map((t) => t.dataset.platform)).toEqual(['instagram', 'telegram', 'vk', 'youtube']);
+    expect(screen.getByText('ВКонтакте — скоро')).toBeInTheDocument();
   });
 
-  it('renames the profile on Enter', async () => {
+  it('shows an empty project with add tiles', async () => {
+    mockProfile({ id: 'p1', name: 'Мезопроф', totalFollowers: null, accounts: [] });
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Добавить Instagram' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Добавить Telegram' })).toBeInTheDocument();
+  });
+
+  it('keeps a second account of the same network as an extra tile', async () => {
+    mockProfile({ ...twoAccounts, accounts: [...twoAccounts.accounts, item('acc-tg2', 'Second TG', 'telegram', 100)] });
+    renderPage();
+    expect(await screen.findByText('Second TG')).toBeInTheDocument();
+    expect(screen.getAllByTestId('network-tile')).toHaveLength(5);
+  });
+
+  it('lists the links that could not be added when it was created', async () => {
+    mockProfile();
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/projects/p1', state: { failed: [{ platform: 'telegram', message: 'Канал не найден' }] } }]}>
+        <Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось добавить: Telegram — Канал не найден');
+  });
+
+  it('deletes the project after confirmation and goes to all projects', async () => {
+    mockProfile();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    del.mockResolvedValue({});
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить проект' }));
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/profiles/p1'));
+    expect(await screen.findByText('All projects page')).toBeInTheDocument();
+  });
+
+  it('renames the project on Enter', async () => {
     mockProfile();
     patch.mockResolvedValue({ data: {} });
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Переименовать' }));
-    const input = screen.getByLabelText('Название профиля');
+    const input = screen.getByLabelText('Название проекта');
     fireEvent.change(input, { target: { value: 'Coffee Lab Moscow' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -68,7 +100,7 @@ describe('ProfilePage', () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Переименовать' }));
-    const input = screen.getByLabelText('Название профиля');
+    const input = screen.getByLabelText('Название проекта');
     fireEvent.change(input, { target: { value: 'Something else' } });
     fireEvent.keyDown(input, { key: 'Escape' });
 
@@ -78,15 +110,15 @@ describe('ProfilePage', () => {
 
   it('shows why a rename failed', async () => {
     mockProfile();
-    patch.mockRejectedValue({ response: { data: { message: 'Название профиля не может быть пустым' } } });
+    patch.mockRejectedValue({ response: { data: { message: 'Название проекта не может быть пустым' } } });
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Переименовать' }));
-    const input = screen.getByLabelText('Название профиля');
+    const input = screen.getByLabelText('Название проекта');
     fireEvent.change(input, { target: { value: '  ' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Название профиля не может быть пустым');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Название проекта не может быть пустым');
   });
 
   it('joins several validation messages into one line', async () => {
@@ -95,7 +127,7 @@ describe('ProfilePage', () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Переименовать' }));
-    const input = screen.getByLabelText('Название профиля');
+    const input = screen.getByLabelText('Название проекта');
     fireEvent.change(input, { target: { value: 'x' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -107,25 +139,14 @@ describe('ProfilePage', () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Переименовать' }));
-    expect(screen.getByLabelText('Название профиля')).toHaveAttribute('maxlength', '100');
+    expect(screen.getByLabelText('Название проекта')).toHaveAttribute('maxlength', '100');
   });
 
-  it('says so when the profile does not exist', async () => {
+  it('says so when the project does not exist', async () => {
     get.mockRejectedValue({ response: { status: 404 } });
     renderPage();
 
-    expect(await screen.findByText('Профиль не найден')).toBeInTheDocument();
+    expect(await screen.findByText('Проект не найден')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Вернуться ко всем проектам' })).toHaveAttribute('href', '/projects');
-  });
-
-  it('goes back to Overview after deleting its last account', async () => {
-    mockProfile({ ...twoAccounts, accounts: [twoAccounts.accounts[0]] });
-    del.mockResolvedValue({});
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    renderPage();
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
-
-    expect(await screen.findByText('Overview page')).toBeInTheDocument();
   });
 });

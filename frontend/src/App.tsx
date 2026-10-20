@@ -9,7 +9,7 @@ import { HomePage } from './pages/HomePage';
 import { LegacyProfileRedirect } from './pages/LegacyProfileRedirect';
 import { LoginPage } from './pages/LoginPage';
 import { ProjectsPage } from './pages/ProjectsPage';
-import { ProfilePage } from './pages/ProfilePage';
+import { ProjectPage } from './pages/ProjectPage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { token } = useAuth();
@@ -50,7 +50,7 @@ export default function App() {
             path="/projects/:id"
             element={
               <RequireAuth>
-                <ProfilePage />
+                <ProjectPage />
               </RequireAuth>
             }
           />

@@ -1,0 +1,12 @@
+.tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 180px; padding: 20px; border-radius: 16px; border: 1px solid var(--border); background: var(--bg); text-align: center; color: var(--text); font: inherit; box-sizing: border-box; }
+.empty { border-style: dashed; cursor: pointer; }
+.empty:hover, .empty:focus-visible { border-color: var(--accent); outline: none; }
+.soon { border-style: dashed; opacity: 0.5; }
+.plus { font-size: 48px; line-height: 1; }
+.link { display: flex; flex-direction: column; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+.avatar, .avatarFallback { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: var(--border); }
+.name { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text-h); }
+.followers { color: var(--text); font-size: 14px; }
+.remove { position: absolute; top: 8px; right: 8px; background: none; border: none; color: var(--text); cursor: pointer; font-size: 13px; }
+.remove:hover, .remove:focus-visible { color: var(--danger); }
+.error { color: var(--danger); font-size: 13px; }

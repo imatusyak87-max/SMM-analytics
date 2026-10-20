@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
-import { AddAccountModal } from '../components/AddAccountModal';
+import { AddProjectModal } from '../components/AddProjectModal';
 import { ProfileCard } from '../components/ProfileCard';
 import type { ProfileSummary } from '../profiles';
 import styles from './OverviewPage.module.css';
@@ -86,11 +86,6 @@ export function OverviewPage() {
     setAddError(null);
   }
 
-  function handleCreated() {
-    closeAdding();
-    load();
-  }
-
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -122,12 +117,7 @@ export function OverviewPage() {
         </div>
       )}
       {isAdding && (
-        <AddAccountModal
-          onClose={closeAdding}
-          onCreated={handleCreated}
-          initialError={addError}
-          profiles={items.map(({ id, name }) => ({ id, name }))}
-        />
+        <AddProjectModal onClose={closeAdding} initialError={addError} />
       )}
     </div>
   );

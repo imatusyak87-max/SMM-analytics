@@ -23,31 +23,16 @@ const overviewCalls = () => (apiClient.get as any).mock.calls.filter((c: unknown
 describe('OverviewPage', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('opens the add-account form and reloads accounts after one is created', async () => {
+  it('opens the add-project form from the add button', async () => {
     mockGets();
-    (apiClient.post as any)
-      .mockResolvedValueOnce({
-        data: {
-          platform: 'telegram',
-          externalId: '@somechannel',
-          name: 'Some Channel',
-          followersCount: 10,
-          avatarDataUri: null,
-        },
-      })
-      .mockResolvedValueOnce({ data: { id: 'acc-1' } });
-
     render(<MemoryRouter><OverviewPage /></MemoryRouter>);
     await waitFor(() => expect(overviewCalls()).toBe(1));
 
     fireEvent.click(screen.getByText('Добавить аккаунт'));
-    fireEvent.change(screen.getByLabelText('Ссылка на аккаунт'), {
-      target: { value: 'https://t.me/somechannel' },
-    });
-    fireEvent.click(await screen.findByText('Добавить'));
+    expect(screen.getByRole('dialog', { name: 'Добавить проект' })).toBeInTheDocument();
 
-    await waitFor(() => expect(overviewCalls()).toBe(2));
-    expect(screen.queryByLabelText('Ссылка на аккаунт')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Отмена'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('renders a card per profile with its total followers', async () => {
@@ -75,7 +60,7 @@ describe('OverviewPage', () => {
     mockGets();
     render(<MemoryRouter initialEntries={['/?add=competitor']}><OverviewPage /></MemoryRouter>);
 
-    expect(await screen.findByRole('dialog', { name: 'Добавьте аккаунт' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Добавить проект' })).toBeInTheDocument();
   });
 
   it('shows the error the Facebook login came back with', async () => {
@@ -103,7 +88,7 @@ describe('OverviewPage', () => {
     fireEvent.click(screen.getByText('Отмена'));
     fireEvent.click(screen.getByText('Добавить аккаунт'));
 
-    expect(await screen.findByRole('dialog', { name: 'Добавьте аккаунт' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Добавить проект' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

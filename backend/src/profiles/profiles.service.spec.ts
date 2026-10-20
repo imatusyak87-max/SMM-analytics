@@ -45,7 +45,7 @@ function setup({
     findOneBy: jest.fn(({ id }: { id: string }) =>
       Promise.resolve(profiles.find((p) => p.id === id) ?? null),
     ),
-    save: jest.fn((p: object) => Promise.resolve(p)),
+    save: jest.fn((p: object) => Promise.resolve({ id: 'p-new', ...p })),
     delete: jest.fn(),
   } as any;
   const accounts = { remove: jest.fn(), createFromLink: jest.fn() };
@@ -148,7 +148,7 @@ describe('ProfilesService.rename', () => {
     const { service, profilesRepo } = setup();
 
     await expect(service.rename('p1', '   ')).rejects.toThrow(
-      new BadRequestException('Название профиля не может быть пустым'),
+      new BadRequestException('Название проекта не может быть пустым'),
     );
     expect(profilesRepo.save).not.toHaveBeenCalled();
   });
@@ -232,5 +232,63 @@ describe('ProfilesService.moveAccount', () => {
     await expect(service.moveAccount('a2', target)).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+});
+
+describe('ProfilesService.create', () => {
+  it('creates the project and adds every link that resolves, reporting the rest', async () => {
+    const { service, accounts } = setup();
+    accounts.createFromLink.mockImplementation((link: string) =>
+      link.includes('t.me')
+        ? Promise.reject(new BadRequestException('Канал не найден'))
+        : Promise.resolve({ id: 'acc-ig' }));
+
+    const result = await service.create({ name: '  Pheromone ', links: { instagram: 'https://instagram.com/ph', telegram: 'https://t.me/ph_channel' } });
+
+    expect(result.profile).toMatchObject({ id: 'p-new', name: 'Pheromone' });
+    expect(accounts.createFromLink).toHaveBeenCalledWith('https://instagram.com/ph', 'p-new', 'instagram');
+    expect(accounts.createFromLink).toHaveBeenCalledWith('https://t.me/ph_channel', 'p-new', 'telegram');
+    expect(result.added).toEqual([{ id: 'acc-ig' }]);
+    expect(result.failed).toEqual([{ platform: 'telegram', message: 'Канал не найден' }]);
+  });
+
+  it('creates a project with no links', async () => {
+    const { service, accounts } = setup();
+    const result = await service.create({ name: 'Мезопроф' });
+    expect(result).toMatchObject({ profile: { name: 'Мезопроф' }, added: [], failed: [] });
+    expect(accounts.createFromLink).not.toHaveBeenCalled();
+  });
+
+  it('skips blank link fields', async () => {
+    const { service, accounts } = setup();
+    await service.create({ name: 'X', links: { telegram: '   ' } });
+    expect(accounts.createFromLink).not.toHaveBeenCalled();
+  });
+
+  it('refuses an empty name and creates nothing', async () => {
+    const { service, profilesRepo } = setup();
+    await expect(service.create({ name: '   ' })).rejects.toThrow('Название проекта не может быть пустым');
+    expect(profilesRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('reports an unexpected failure with a generic retry message', async () => {
+    const { service, accounts } = setup();
+    accounts.createFromLink.mockRejectedValue(new Error('socket hang up'));
+    const result = await service.create({ name: 'X', links: { telegram: 'https://t.me/abcde' } });
+    expect(result.failed).toEqual([{ platform: 'telegram', message: 'Не удалось проверить, попробуйте ещё раз' }]);
+  });
+});
+
+describe('ProfilesService.addAccount', () => {
+  it('adds a link to an existing project', async () => {
+    const { service, accounts } = setup();
+    accounts.createFromLink.mockResolvedValue({ id: 'acc-new' });
+    expect(await service.addAccount('p1', 'https://t.me/abcde')).toEqual({ id: 'acc-new' });
+    expect(accounts.createFromLink).toHaveBeenCalledWith('https://t.me/abcde', 'p1');
+  });
+
+  it('answers 404 for an unknown project', async () => {
+    const { service } = setup();
+    await expect(service.addAccount('nope', 'https://t.me/abcde')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -11,6 +11,19 @@ describe('ProfilesController', () => {
     return { controller: new ProfilesController(service), service };
   }
 
+  it('creates a project from a name and links', async () => {
+    const service = { create: jest.fn().mockResolvedValue({ profile: { id: 'p1' }, added: [], failed: [] }) } as any;
+    const dto = { name: 'Pheromone', links: { telegram: 'https://t.me/abcde' } };
+    await new ProfilesController(service).create(dto as any);
+    expect(service.create).toHaveBeenCalledWith(dto);
+  });
+
+  it('adds an account to a project', async () => {
+    const service = { addAccount: jest.fn().mockResolvedValue({ id: 'a1' }) } as any;
+    await new ProfilesController(service).addAccount('p1', { link: 'https://t.me/abcde' } as any);
+    expect(service.addAccount).toHaveBeenCalledWith('p1', 'https://t.me/abcde');
+  });
+
   it('deletes a project', async () => {
     const service = { remove: jest.fn().mockResolvedValue(undefined) } as any;
     await new ProfilesController(service).remove('p1');

@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { InstagramDiscoveryOauthService } from './instagram-discovery-oauth.service';
 import { InstagramDiscoveryConnectionService } from './instagram-discovery-connection.service';
 
-const ADD_COMPETITOR = '/?add=competitor';
+const ADD_PROJECT = '/projects?add=project';
 
 /**
  * connect/status are called by the SPA with its JWT; callback is reached by
@@ -38,11 +38,11 @@ export class InstagramDiscoveryController {
       // Facebook sends error=access_denied and no code when the user cancels.
       if (!code) throw new Error('Вход через Facebook отменён');
       await this.oauth.completeLogin(code, state);
-      res.redirect(ADD_COMPETITOR);
+      res.redirect(ADD_PROJECT);
     } catch (error) {
       const message = (error as Error).message;
       this.logger.warn(`Facebook discovery login failed: ${message}`);
-      res.redirect(`${ADD_COMPETITOR}&discoveryError=${encodeURIComponent(message)}`);
+      res.redirect(`${ADD_PROJECT}&discoveryError=${encodeURIComponent(message)}`);
     }
   }
 }

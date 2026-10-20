@@ -33,16 +33,16 @@ describe('ProfileCard', () => {
     expect(screen.queryByText('ER')).not.toBeInTheDocument();
   });
 
-  it('opens the profile page when it holds several accounts', () => {
-    renderCard({ id: 'p1', name: 'Coffee Lab', totalFollowers: 3, accounts: [item('a', 'telegram', 2), item('b', 'instagram', 1)] });
-
-    expect(screen.getByTestId('profile-card')).toHaveAttribute('href', '/profiles/p1');
-  });
-
-  it('opens the account directly when it is the only one', () => {
+  it('always opens the project page', () => {
     renderCard({ id: 'p1', name: 'Solo', totalFollowers: 2, accounts: [item('acc-9', 'telegram', 2)] });
 
-    expect(screen.getByTestId('profile-card')).toHaveAttribute('href', '/accounts/acc-9');
+    expect(screen.getByTestId('profile-card')).toHaveAttribute('href', '/projects/p1');
+  });
+
+  it('says when a project has no accounts', () => {
+    renderCard({ id: 'p1', name: 'Мезопроф', totalFollowers: null, accounts: [] });
+
+    expect(screen.getByText('Аккаунты не добавлены')).toBeInTheDocument();
   });
 
   it('shows a dash before any followers are counted', () => {

@@ -8,11 +8,6 @@ export interface ProfileSummary {
   id: string;
   name: string;
   totalFollowers: number | null;
-  /** Most followers first; never empty. */
+  /** Most followers first; empty for a project with no accounts yet. */
   accounts: ProfileAccountItem[];
-}
-
-/** A profile page with one account on it would be a needless extra click. */
-export function profileHref(profile: ProfileSummary): string {
-  return profile.accounts.length === 1 ? `/accounts/${profile.accounts[0].account.id}` : `/profiles/${profile.id}`;
 }

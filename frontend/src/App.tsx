@@ -8,7 +8,7 @@ import { GuidePage } from './pages/GuidePage';
 import { HomePage } from './pages/HomePage';
 import { LegacyProfileRedirect } from './pages/LegacyProfileRedirect';
 import { LoginPage } from './pages/LoginPage';
-import { OverviewPage } from './pages/OverviewPage';
+import { ProjectsPage } from './pages/ProjectsPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -42,7 +42,7 @@ export default function App() {
             path="/projects"
             element={
               <RequireAuth>
-                <OverviewPage />
+                <ProjectsPage />
               </RequireAuth>
             }
           />

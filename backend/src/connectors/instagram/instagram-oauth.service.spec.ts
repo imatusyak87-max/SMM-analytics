@@ -114,8 +114,23 @@ describe('InstagramOauthService.completeLogin', () => {
       Promise.resolve(id === 'acc-1' ? PUBLIC_ACCOUNT : externalId === '17841400000000000' ? { id: 'acc-9' } : null));
     loginAs(api, 'coffee_lab');
 
-    await expect(service.completeLogin('c', 's')).rejects.toMatchObject({ accountId: 'acc-1' });
+    await expect(service.completeLogin('c', 's')).rejects.toMatchObject({
+      accountId: 'acc-1',
+      message: 'Этот аккаунт Instagram уже подключён отдельно — удалите дубликат и попробуйте снова',
+    });
     expect(em.update).not.toHaveBeenCalled();
+  });
+
+  it('reports a database failure during the save against the account', async () => {
+    const { service, stateService, api, accountsRepo } = makeDeps();
+    stateService.consume.mockResolvedValue({ type: InstagramAccountKind.OWN, accountId: 'acc-1' });
+    accountsRepo.findOneBy.mockResolvedValue(OWN_ACCOUNT);
+    (accountsRepo as any).manager.transaction.mockRejectedValue(new Error('db down'));
+    loginAs(api, 'coffee_lab');
+
+    await expect(service.completeLogin('c', 's')).rejects.toMatchObject({
+      accountId: 'acc-1', message: 'Не удалось подключить Instagram, попробуйте ещё раз',
+    });
   });
 
   it('reconnects an own account when the same Instagram id logs in', async () => {
@@ -147,6 +162,8 @@ describe('InstagramOauthService.completeLogin', () => {
     accountsRepo.findOneBy.mockResolvedValue(PUBLIC_ACCOUNT);
     api.exchangeCodeForToken.mockRejectedValue({ response: { status: 400, data: { error_message: 'bad code' } } });
 
-    await expect(service.completeLogin('c', 's')).rejects.toMatchObject({ accountId: 'acc-1' });
+    const error = await service.completeLogin('c', 's').catch((e) => e);
+    expect(error).toMatchObject({ accountId: 'acc-1' });
+    expect(error.message).toMatch(/[А-Яа-я]/);
   });
 });

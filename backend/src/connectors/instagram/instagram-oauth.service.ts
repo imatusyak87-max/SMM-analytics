@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account, AccountPlatform, AccountType } from '../../db/entities/account.entity';
@@ -24,6 +24,8 @@ const SCOPES = 'instagram_business_basic,instagram_business_manage_insights';
 
 @Injectable()
 export class InstagramOauthService {
+  private readonly logger = new Logger(InstagramOauthService.name);
+
   constructor(
     private stateService: InstagramOauthStateService,
     private api: InstagramApiClient,
@@ -70,42 +72,48 @@ export class InstagramOauthService {
       throw new InstagramLoginError(translateInstagramError(error).message, account.id);
     }
 
-    if (!profile.id) throw new InstagramLoginError('Instagram не вернул идентификатор аккаунта, попробуйте подключить заново', account.id);
-    // /me returns the id as a string; the token response's numeric user_id can lose precision.
-    const instagramUserId = String(profile.id);
+    try {
+        if (!profile.id) throw new InstagramLoginError('Instagram не вернул идентификатор аккаунта, попробуйте подключить заново', account.id);
+        // /me returns the id as a string; the token response's numeric user_id can lose precision.
+        const instagramUserId = String(profile.id);
 
-    if (account.type === AccountType.PUBLIC_NO_ACCESS) {
-      const expected = account.externalId.replace(/^@/, '').toLowerCase();
-      if (profile.username.toLowerCase() !== expected) {
-        throw new InstagramLoginError(
-          `Вы вошли в другой аккаунт Instagram (@${profile.username}), а проект ждёт @${expected}`,
-          account.id,
-        );
-      }
-      const clash = await this.accountsRepo.findOneBy({ platform: AccountPlatform.INSTAGRAM, externalId: instagramUserId });
-      if (clash && clash.id !== account.id) {
-        throw new InstagramLoginError('Этот аккаунт Instagram уже подключён отдельно — удалите дубликат и попробуйте снова', account.id);
-      }
-    } else if (account.externalId !== instagramUserId) {
-      throw new InstagramLoginError(`Вы вошли в другой аккаунт Instagram (@${profile.username})`, account.id);
+        if (account.type === AccountType.PUBLIC_NO_ACCESS) {
+          const expected = account.externalId.replace(/^@/, '').toLowerCase();
+          if ((profile.username ?? '').toLowerCase() !== expected) {
+            throw new InstagramLoginError(
+              `Вы вошли в другой аккаунт Instagram (@${profile.username}), а проект ждёт @${expected}`,
+              account.id,
+            );
+          }
+          const clash = await this.accountsRepo.findOneBy({ platform: AccountPlatform.INSTAGRAM, externalId: instagramUserId });
+          if (clash && clash.id !== account.id) {
+            throw new InstagramLoginError('Этот аккаунт Instagram уже подключён отдельно — удалите дубликат и попробуйте снова', account.id);
+          }
+        } else if (account.externalId !== instagramUserId) {
+          throw new InstagramLoginError(`Вы вошли в другой аккаунт Instagram (@${profile.username})`, account.id);
+        }
+
+        const encryptedToken = encryptToken(longLivedToken, this.encryptionKey);
+        const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000);
+        // Own accounts are keyed by the numeric id (deauthorize, data-deletion and
+        // dedup all look them up that way), so an upgrade switches to it.
+        const changes = {
+          type: account.type === AccountType.PUBLIC_NO_ACCESS ? AccountType.OWN : account.type,
+          externalId: instagramUserId,
+          name: profile.name ?? profile.username,
+          avatarUrl: profile.profilePictureUrl,
+        };
+        await this.accountsRepo.manager.transaction(async (em) => {
+          await em.update(Account, { id: account.id }, changes);
+          // save() upserts on accountId: it re-creates a credential the data-deletion webhook removed.
+          await em.save(AccountCredential, { accountId: account.id, encryptedToken, tokenExpiresAt, needsReconnect: false });
+        });
+        return { ...account, ...changes };
+    } catch (error) {
+      if (error instanceof InstagramLoginError) throw error;
+      this.logger.warn(`Instagram login for account ${account.id} failed: ${(error as Error).message}`);
+      throw new InstagramLoginError('Не удалось подключить Instagram, попробуйте ещё раз', account.id);
     }
-
-    const encryptedToken = encryptToken(longLivedToken, this.encryptionKey);
-    const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000);
-    // Own accounts are keyed by the numeric id (deauthorize, data-deletion and
-    // dedup all look them up that way), so an upgrade switches to it.
-    const changes = {
-      type: account.type === AccountType.PUBLIC_NO_ACCESS ? AccountType.OWN : account.type,
-      externalId: instagramUserId,
-      name: profile.name ?? profile.username,
-      avatarUrl: profile.profilePictureUrl,
-    };
-    await this.accountsRepo.manager.transaction(async (em) => {
-      await em.update(Account, { id: account.id }, changes);
-      // save() upserts on accountId: it re-creates a credential the data-deletion webhook removed.
-      await em.save(AccountCredential, { accountId: account.id, encryptedToken, tokenExpiresAt, needsReconnect: false });
-    });
-    return { ...account, ...changes };
   }
 
   private redirectUri(): string {

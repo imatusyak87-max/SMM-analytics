@@ -21,6 +21,7 @@
   letter-spacing: -0.2px;
   color: var(--text-h);
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .nav {

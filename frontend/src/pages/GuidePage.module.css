@@ -1,0 +1,5 @@
+.page { max-width: 760px; margin: 0 auto; padding: 24px 16px; line-height: 1.6; color: var(--text); }
+.heading { margin: 0 0 8px; color: var(--text-h); font-family: var(--heading); }
+.note { color: var(--text); margin: 0 0 24px; }
+.page h2 { margin: 32px 0 8px; font-size: 20px; color: var(--text-h); }
+.page ol { padding-left: 20px; }

@@ -26,8 +26,8 @@ export function ProfilePage() {
         <p className={styles.error} role="alert">
           {status === 404 ? 'Профиль не найден' : 'Не удалось загрузить профиль'}
         </p>
-        <Link to="/" className={styles.back}>
-          Вернуться к обзору
+        <Link to="/projects" className={styles.back}>
+          Вернуться ко всем проектам
         </Link>
       </div>
     );
@@ -106,7 +106,7 @@ export function ProfilePage() {
             account={item.account}
             latestSnapshot={item.latestSnapshot}
             // The last account takes the profile with it, so there is nothing left to show here.
-            onDeleted={() => (accounts.length <= 1 ? navigate('/') : setReloadKey((key) => key + 1))}
+            onDeleted={() => (accounts.length <= 1 ? navigate('/projects') : setReloadKey((key) => key + 1))}
           />
         ))}
       </div>

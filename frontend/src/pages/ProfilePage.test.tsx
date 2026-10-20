@@ -31,7 +31,7 @@ function renderPage() {
     <MemoryRouter initialEntries={['/profiles/p1']}>
       <Routes>
         <Route path="/profiles/:id" element={<ProfilePage />} />
-        <Route path="/" element={<p>Overview page</p>} />
+        <Route path="/projects" element={<p>Overview page</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -115,7 +115,7 @@ describe('ProfilePage', () => {
     renderPage();
 
     expect(await screen.findByText('Профиль не найден')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Вернуться к обзору' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Вернуться ко всем проектам' })).toHaveAttribute('href', '/projects');
   });
 
   it('goes back to Overview after deleting its last account', async () => {

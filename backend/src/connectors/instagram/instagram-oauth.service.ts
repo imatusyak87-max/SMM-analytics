@@ -55,12 +55,15 @@ export class InstagramOauthService {
    * upgraded to full access, an own one is reconnected. The logged-in Instagram
    * account must be that account, or nothing changes.
    */
-  async completeLogin(code: string, state: string): Promise<Account> {
+  async completeLogin(code: string | undefined, state: string): Promise<Account> {
     const consumed = await this.stateService.consume(state);
     if (!consumed || consumed.type === InstagramAccountKind.DISCOVERY || !consumed.accountId) throw new Error(EXPIRED);
 
     const account = await this.accountsRepo.findOneBy({ id: consumed.accountId });
     if (!account) throw new Error('Аккаунт больше не существует');
+
+    // Instagram sends error=access_denied and no code when the user cancels.
+    if (!code) throw new InstagramLoginError('Вход в Instagram отменён', account.id);
 
     let longLivedToken: string, expiresInSeconds: number;
     let profile: InstagramProfile;
@@ -77,11 +80,13 @@ export class InstagramOauthService {
         // /me returns the id as a string; the token response's numeric user_id can lose precision.
         const instagramUserId = String(profile.id);
 
+        const handle = profile.username ? ` (@${profile.username})` : '';
+
         if (account.type === AccountType.PUBLIC_NO_ACCESS) {
           const expected = account.externalId.replace(/^@/, '').toLowerCase();
           if ((profile.username ?? '').toLowerCase() !== expected) {
             throw new InstagramLoginError(
-              `Вы вошли в другой аккаунт Instagram (@${profile.username}), а проект ждёт @${expected}`,
+              `Вы вошли в другой аккаунт Instagram${handle}, а проект ждёт @${expected}`,
               account.id,
             );
           }
@@ -90,7 +95,7 @@ export class InstagramOauthService {
             throw new InstagramLoginError('Этот аккаунт Instagram уже подключён отдельно — удалите дубликат и попробуйте снова', account.id);
           }
         } else if (account.externalId !== instagramUserId) {
-          throw new InstagramLoginError(`Вы вошли в другой аккаунт Instagram (@${profile.username})`, account.id);
+          throw new InstagramLoginError(`Вы вошли в другой аккаунт Instagram${handle}`, account.id);
         }
 
         const encryptedToken = encryptToken(longLivedToken, this.encryptionKey);

@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Account } from '../db/entities/account.entity';
+import { AccountPlatform } from '../db/entities/account.entity';
 import { Profile } from '../db/entities/profile.entity';
 import { ProfilesService } from './profiles.service';
 
@@ -128,7 +129,7 @@ describe('ProfilesService.get', () => {
   it('404s for a missing profile', async () => {
     const { service } = setup();
     await expect(service.get('nope')).rejects.toThrow(
-      new NotFoundException('Профиль не найден'),
+      new NotFoundException('Проект не найден'),
     );
   });
 });
@@ -162,7 +163,7 @@ describe('ProfilesService.rename', () => {
 });
 
 describe('ProfilesService.moveAccount', () => {
-  it('moves the account and removes the profile it left empty', async () => {
+  it('moves the account and keeps the project it left, even when empty', async () => {
     const { service, em } = setup({ remaining: 0 });
 
     const result = await service.moveAccount('a2', { profileId: 'p1' });
@@ -172,7 +173,7 @@ describe('ProfilesService.moveAccount', () => {
       { id: 'a2' },
       { profileId: 'p1' },
     );
-    expect(em.delete).toHaveBeenCalledWith(Profile, { id: 'p2' });
+    expect(em.delete).not.toHaveBeenCalled();
     expect(result).toEqual({ profileId: 'p1' });
   });
 
@@ -219,7 +220,7 @@ describe('ProfilesService.moveAccount', () => {
 
     await expect(
       service.moveAccount('a2', { profileId: 'gone' }),
-    ).rejects.toThrow(new NotFoundException('Профиль не найден'));
+    ).rejects.toThrow(new NotFoundException('Проект не найден'));
     expect(em.update).not.toHaveBeenCalled();
   });
 
@@ -284,7 +285,14 @@ describe('ProfilesService.addAccount', () => {
     const { service, accounts } = setup();
     accounts.createFromLink.mockResolvedValue({ id: 'acc-new' });
     expect(await service.addAccount('p1', 'https://t.me/abcde')).toEqual({ id: 'acc-new' });
-    expect(accounts.createFromLink).toHaveBeenCalledWith('https://t.me/abcde', 'p1');
+    expect(accounts.createFromLink).toHaveBeenCalledWith('https://t.me/abcde', 'p1', undefined);
+  });
+
+  it('enforces the network of the tile it was added from', async () => {
+    const { service, accounts } = setup();
+    accounts.createFromLink.mockResolvedValue({ id: 'acc-new' });
+    await service.addAccount('p1', 'https://t.me/abcde', AccountPlatform.INSTAGRAM);
+    expect(accounts.createFromLink).toHaveBeenCalledWith('https://t.me/abcde', 'p1', AccountPlatform.INSTAGRAM);
   });
 
   it('answers 404 for an unknown project', async () => {

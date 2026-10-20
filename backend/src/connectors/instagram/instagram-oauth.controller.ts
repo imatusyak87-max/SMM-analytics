@@ -34,7 +34,7 @@ export class InstagramOauthController {
   ) {}
 
   @Get('callback')
-  async callback(@Query('code') code: string, @Query('state') state: string, @Res() res: Response) {
+  async callback(@Query('code') code: string | undefined, @Query('state') state: string, @Res() res: Response) {
     let accountId: string;
     try {
       ({ id: accountId } = await this.oauthService.completeLogin(code, state));

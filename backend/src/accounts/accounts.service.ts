@@ -20,6 +20,7 @@ import { HistoryLoad } from '../db/entities/history-load.entity';
 import { ConnectorRegistry } from '../connectors/connector-registry.service';
 import { AccountInfo, AccountStats, AvatarImage, SocialConnector } from '../connectors/connector.interface';
 import { createProfile, requireProfile, PROFILE_NOT_FOUND } from '../profiles/profile-store';
+import { isNetworkError } from '../connectors/history-pause.error';
 import { SyncJobService } from '../sync/sync-job.service';
 import { PLATFORM_NAMES } from './platform-names';
 import { CreateAccountDto } from './dto/create-account.dto';
@@ -31,6 +32,9 @@ import {
 
 const ALREADY_ADDED = 'Этот аккаунт уже добавлен';
 const INSTAGRAM_NOT_A_PROFILE = 'Вставьте ссылку на профиль Instagram, а не на пост';
+const CHANNEL_NOT_FOUND = 'Канал не найден';
+const RETRY = 'Не удалось проверить, попробуйте ещё раз';
+const CANNOT_VERIFY = 'Не удалось проверить аккаунт';
 const PG_UNIQUE_VIOLATION = '23505';
 const PG_FOREIGN_KEY_VIOLATION = '23503';
 
@@ -204,7 +208,15 @@ export class AccountsService {
     }
     if (error instanceof InstagramProfileNotFoundError) return new BadRequestException(error.message);
     this.logger.warn(`Could not resolve ${platform} account ${externalId}: ${error.message}`);
-    return new BadRequestException(`Не удалось проверить аккаунт: ${error.message}`);
+    // Provider text is never shown: it is English, and can carry URLs.
+    const e = error as { response?: { status?: number; data?: { description?: string } } };
+    const status = e.response?.status;
+    const description = e.response?.data?.description ?? error.message;
+    if (/chat not found/i.test(description)) return new BadRequestException(CHANNEL_NOT_FOUND);
+    if (isNetworkError(error) || status === 429 || (status !== undefined && status >= 500)) {
+      return new BadRequestException(RETRY);
+    }
+    return new BadRequestException(CANNOT_VERIFY);
   }
 
   findAll() {

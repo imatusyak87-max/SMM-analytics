@@ -399,20 +399,43 @@ describe('AccountsService', () => {
       expect(repo.save).not.toHaveBeenCalled();
     });
 
-    it('surfaces why the platform rejected the account, not just that it failed', async () => {
-      const repo = makeRepo();
-      const connector = {
-        getAccountInfo: jest
-          .fn()
-          .mockRejectedValue(new Error('Bad Request: chat not found')),
-      };
-      const service = new AccountsService(repo, {
+    function serviceRejectingWith(error: unknown) {
+      const connector = { getAccountInfo: jest.fn().mockRejectedValue(error) };
+      return new AccountsService(makeRepo(), {
         get: jest.fn().mockReturnValue(connector),
       } as any, { createManual: jest.fn() } as any);
+    }
 
+    it('says the channel was not found for a Telegram 400 "chat not found"', async () => {
+      const error = Object.assign(new Error('Request failed with status code 400'), {
+        response: { status: 400, data: { ok: false, description: 'Bad Request: chat not found' } },
+      });
       await expect(
-        service.createFromLink('https://t.me/nosuchchannel'),
-      ).rejects.toThrow('Не удалось проверить аккаунт: Bad Request: chat not found');
+        serviceRejectingWith(error).createFromLink('https://t.me/nosuchchannel'),
+      ).rejects.toThrow(new BadRequestException('Канал не найден'));
+    });
+
+    it('says the channel was not found when the error text is "chat not found"', async () => {
+      await expect(
+        serviceRejectingWith(new Error('Bad Request: chat not found')).createFromLink('https://t.me/nosuchchannel'),
+      ).rejects.toThrow(new BadRequestException('Канал не найден'));
+    });
+
+    it('asks to retry on a timeout, a 429 or a 5xx, without leaking provider text', async () => {
+      const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' });
+      const limited = Object.assign(new Error('Too Many Requests'), { response: { status: 429 } });
+      const broken = Object.assign(new Error('Bad Gateway'), { response: { status: 502 } });
+      for (const error of [timeout, limited, broken]) {
+        await expect(
+          serviceRejectingWith(error).createFromLink('https://t.me/nosuchchannel'),
+        ).rejects.toThrow(new BadRequestException('Не удалось проверить, попробуйте ещё раз'));
+      }
+    });
+
+    it('never appends raw provider text to an unknown failure', async () => {
+      await expect(
+        serviceRejectingWith(new Error('secret provider detail')).createFromLink('https://t.me/nosuchchannel'),
+      ).rejects.toThrow(new BadRequestException('Не удалось проверить аккаунт'));
     });
 
     it('rejects a link the platform cannot resolve to a real account', async () => {

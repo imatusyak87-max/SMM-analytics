@@ -13,7 +13,6 @@ import { AccountsService } from '../accounts/accounts.service';
 import { StatsService } from '../stats/stats.service';
 import {
   createProfile,
-  deleteProfileIfEmpty,
   requireProfile,
   PROFILE_NOT_FOUND,
 } from './profile-store';
@@ -88,9 +87,9 @@ export class ProfilesService {
     return { profile, added, failed };
   }
 
-  async addAccount(id: string, link: string): Promise<Account> {
+  async addAccount(id: string, link: string, platform?: AccountPlatform): Promise<Account> {
     await this.findOne(id);
-    return this.accounts.createFromLink(link, id);
+    return this.accounts.createFromLink(link, id, platform);
   }
 
   /** Deletes the project and, through the normal account delete, all its data. */
@@ -132,9 +131,7 @@ export class ProfilesService {
       const destination = hasId
         ? (await requireProfile(em, target.profileId!)).id
         : (await createProfile(em, account.name)).id;
-      const left = account.profileId;
       await em.update(Account, { id: accountId }, { profileId: destination });
-      await deleteProfileIfEmpty(em, left);
       return { profileId: destination };
     });
   }

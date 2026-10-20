@@ -77,6 +77,29 @@ describe('InstagramOauthService.completeLogin', () => {
     await expect(service.completeLogin('c', 's')).rejects.toThrow('Ссылка для входа устарела');
   });
 
+  it('reports a cancelled login against the account without calling Instagram', async () => {
+    const { service, stateService, api, accountsRepo } = makeDeps();
+    stateService.consume.mockResolvedValue({ type: InstagramAccountKind.OWN, accountId: 'acc-1' });
+    accountsRepo.findOneBy.mockResolvedValue(PUBLIC_ACCOUNT);
+
+    await expect(service.completeLogin(undefined, 's')).rejects.toMatchObject({
+      accountId: 'acc-1',
+      message: 'Вход в Instagram отменён',
+    });
+    expect(api.exchangeCodeForToken).not.toHaveBeenCalled();
+  });
+
+  it('omits the handle in a mismatch message when Instagram gave no username', async () => {
+    const { service, stateService, api, accountsRepo } = makeDeps();
+    stateService.consume.mockResolvedValue({ type: InstagramAccountKind.OWN, accountId: 'acc-1' });
+    accountsRepo.findOneBy.mockResolvedValue(OWN_ACCOUNT);
+    loginAs(api, undefined as any, '999');
+
+    await expect(service.completeLogin('c', 's')).rejects.toMatchObject({
+      message: 'Вы вошли в другой аккаунт Instagram',
+    });
+  });
+
   it('upgrades a public account to full access when the same username logs in', async () => {
     const { service, stateService, api, accountsRepo, credentialsRepo, em } = makeDeps();
     stateService.consume.mockResolvedValue({ type: InstagramAccountKind.OWN, accountId: 'acc-1' });

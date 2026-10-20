@@ -9,7 +9,7 @@ const ADD_PROJECT = '/projects?add=project';
 /**
  * connect/status are called by the SPA with its JWT; callback is reached by
  * Facebook's browser redirect, which cannot carry one. Every callback outcome
- * lands back in the add-competitor dialog, which shows any error.
+ * lands back on the add-project page, which shows any error.
  */
 @Controller('instagram/discovery')
 export class InstagramDiscoveryController {

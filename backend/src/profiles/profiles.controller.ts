@@ -15,7 +15,7 @@ import { ProfilesService } from './profiles.service';
 import { RenameProfileDto } from './dto/rename-profile.dto';
 import { MoveAccountDto } from './dto/move-account.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
-import { CreateAccountFromLinkDto } from '../accounts/dto/create-account-from-link.dto';
+import { AddProjectAccountDto } from './dto/add-project-account.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller()
@@ -39,9 +39,9 @@ export class ProfilesController {
       new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND }),
     )
     id: string,
-    @Body() dto: CreateAccountFromLinkDto,
+    @Body() dto: AddProjectAccountDto,
   ) {
-    return this.profilesService.addAccount(id, dto.link);
+    return this.profilesService.addAccount(id, dto.link, dto.platform);
   }
 
   @Get('profiles/:id')

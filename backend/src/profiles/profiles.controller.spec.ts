@@ -20,8 +20,8 @@ describe('ProfilesController', () => {
 
   it('adds an account to a project', async () => {
     const service = { addAccount: jest.fn().mockResolvedValue({ id: 'a1' }) } as any;
-    await new ProfilesController(service).addAccount('p1', { link: 'https://t.me/abcde' } as any);
-    expect(service.addAccount).toHaveBeenCalledWith('p1', 'https://t.me/abcde');
+    await new ProfilesController(service).addAccount('p1', { link: 'https://t.me/abcde', platform: 'telegram' } as any);
+    expect(service.addAccount).toHaveBeenCalledWith('p1', 'https://t.me/abcde', 'telegram');
   });
 
   it('deletes a project', async () => {

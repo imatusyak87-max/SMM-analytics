@@ -95,17 +95,24 @@ On an Instagram account of type `public_no_access` the account page shows a
 note «Публичные данные: охват и репосты недоступны» and a button
 «Подключить полный доступ».
 
-- Click → `GET /accounts/:id/instagram/upgrade` → returns the Instagram login
+- Click → `GET /accounts/:id/instagram/connect` → returns the Instagram login
   URL; the OAuth state row records the target `accountId` (§8).
-- The existing Instagram OAuth callback, when the state carries an
-  `accountId`: fetch the logged-in profile; if its username equals the
-  account's `externalId` (case-insensitive, without `@`) → set the account's
-  `type` to `own`, store the encrypted credential, keep all posts and history;
-  redirect to `/accounts/:id`. Otherwise → redirect with error
-  «Вы вошли в другой аккаунт Instagram (@x), а проект ждёт @y»; nothing changes.
-- The following nightly sync / «Обновить» then collects insights as for any
-  own account.
-- `GET /accounts/instagram/connect?type=own` (create-from-login) is removed.
+- The Instagram OAuth callback, for a state carrying an `accountId`:
+  - account is `public_no_access`: the logged-in username must equal the
+    account's `externalId` (case-insensitive, without `@`). On match the
+    account becomes `own`, its `externalId` becomes the numeric Instagram id
+    (as for every own account), name/avatar refresh, the encrypted credential
+    is stored; posts and history are kept.
+  - account is `own`/`client` (the existing «Переподключить» banner): the
+    logged-in id must equal `externalId`; the credential is replaced.
+  - mismatch → redirect to `/accounts/:id?instagramError=…` with
+    «Вы вошли в другой аккаунт Instagram (@x), а проект ждёт @y» (or
+    «Вы вошли в другой аккаунт Instagram (@x)» on reconnect); nothing changes.
+    Every other failure after the state is read redirects the same way.
+- The generic `GET /accounts/instagram/connect?type=own` (create-from-login,
+  also used by the reconnect banner today) is removed; the reconnect banner
+  uses the per-account endpoint above. A login state without an `accountId`
+  is refused as expired.
 
 ## 7. «Как пользоваться» guide
 
@@ -132,8 +139,9 @@ A placeholder note at the top: «Видеоинструкция появится
 | `DELETE /profiles/:id` | Deletes all its accounts through the existing account-delete path (posts, snapshots, history loads, credentials), then the profile. |
 | `DELETE /accounts/:id` | As today, but no longer deletes a profile left empty. |
 | `GET /profiles` (overview) | Lists from `profiles`, including empty ones. |
-| `GET /accounts/:id/instagram/upgrade` | 404 unknown; 400 if not Instagram or already `own`/`client`. Returns `{ url }`. |
+| `GET /accounts/:id/instagram/connect` | 404 unknown; 400 if not Instagram. Returns `{ redirectUrl }`. Serves both «Подключить полный доступ» and «Переподключить». |
 | `GET /accounts/instagram/connect` | Removed. |
+| Facebook (discovery) login callback | Redirects to `/projects?add=project` (was `/?add=competitor`) so the form reopens. |
 
 Per-link failure messages in `failed[]` reuse the existing Russian errors
 (not found, wrong network, Facebook not connected / needs reconnect), plus
@@ -157,7 +165,7 @@ Frontend (vitest): Home buttons; nav without Compare, «Выйти»; «Все �
 heading and «Добавить проект»; form examples, VK/YouTube disabled, live check,
 navigate with failure notice; project tiles (filled, empty «+», «скоро»,
 legacy extra tile), «Убрать», «Удалить проект»; `/profiles/:id` redirect;
-full-access block shown only for public Instagram accounts; guide renders.
+full-access block shown only for public Instagram accounts; `instagramError` notice; guide renders.
 
 Checks: backend jest + `nest build` + `tsc --noEmit` (never `npm run lint`);
 frontend vitest + `tsc -b` + `vite build`.

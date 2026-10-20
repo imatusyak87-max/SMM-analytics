@@ -7,13 +7,18 @@ import { InstagramAccountKind, InstagramOauthState } from '../../db/entities/ins
 const STATE_TTL_MS = 10 * 60 * 1000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export interface ConsumedState {
+  type: InstagramAccountKind;
+  accountId: string | null;
+}
+
 @Injectable()
 export class InstagramOauthStateService {
   constructor(@InjectRepository(InstagramOauthState) private repo: Repository<InstagramOauthState>) {}
 
-  async create(type: InstagramAccountKind): Promise<string> {
+  async create(type: InstagramAccountKind, accountId: string | null = null): Promise<string> {
     const id = randomUUID();
-    await this.repo.save({ id, type });
+    await this.repo.save({ id, type, accountId });
     return id;
   }
 
@@ -24,7 +29,7 @@ export class InstagramOauthStateService {
    * a raw Postgres error. The delete-returning is one statement, so two
    * parallel callbacks with the same state cannot both succeed.
    */
-  async consume(id: string): Promise<InstagramAccountKind | null> {
+  async consume(id: string): Promise<ConsumedState | null> {
     if (typeof id !== 'string' || !UUID_PATTERN.test(id)) return null;
 
     const result = await this.repo
@@ -32,13 +37,13 @@ export class InstagramOauthStateService {
       .delete()
       .from(InstagramOauthState)
       .where('id = :id', { id })
-      .returning(['type', 'createdAt'])
+      .returning(['type', 'accountId', 'createdAt'])
       .execute();
-    const row = (result.raw as Array<{ type: InstagramAccountKind; createdAt: Date | string }> | undefined)?.[0];
+    const row = (result.raw as Array<{ type: InstagramAccountKind; accountId: string | null; createdAt: Date | string }> | undefined)?.[0];
     if (!row) return null;
 
     const age = Date.now() - new Date(row.createdAt).getTime();
-    return age <= STATE_TTL_MS ? row.type : null;
+    return age <= STATE_TTL_MS ? { type: row.type, accountId: row.accountId ?? null } : null;
   }
 
   /** Removes states whose login was abandoned (never reached the callback). */

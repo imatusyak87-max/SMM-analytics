@@ -38,7 +38,7 @@ export class InstagramOauthService {
   }
 
   async completeLogin(code: string, state: string): Promise<Account> {
-    const type = await this.stateService.consume(state);
+    const type = (await this.stateService.consume(state))?.type ?? null;
     // A discovery state belongs to the Facebook callback; here it would create a bogus account.
     if (!type || type === InstagramAccountKind.DISCOVERY) {
       throw new Error('Ссылка для входа устарела, попробуйте подключить аккаунт заново');

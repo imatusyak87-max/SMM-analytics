@@ -253,6 +253,32 @@ describe('AccountsService', () => {
   });
 
   describe('createFromLink', () => {
+    it('refuses a link for another network than the field it was typed into', async () => {
+      const repo = makeRepo();
+      const connector = { getAccountInfo: jest.fn() };
+      const service = new AccountsService(repo, { get: jest.fn(() => connector) } as any, { createManual: jest.fn() } as any);
+
+      await expect(service.createFromLink('https://instagram.com/brand', 'prof-1', AccountPlatform.TELEGRAM))
+        .rejects.toThrow('Это ссылка не на Telegram');
+      expect(connector.getAccountInfo).not.toHaveBeenCalled();
+    });
+
+    it('refuses a second account of the same network in one project', async () => {
+      const repo = makeRepo();
+      repo.findOneBy.mockImplementation((where: any) => Promise.resolve(where.profileId ? { id: 'acc-tg' } : null));
+      const service = new AccountsService(repo, { get: jest.fn(() => ({ getAccountInfo: jest.fn() })) } as any, { createManual: jest.fn() } as any);
+
+      await expect(service.createFromLink('https://t.me/somechannel', 'prof-1')).rejects.toThrow('В проекте уже есть Telegram');
+    });
+
+    it('names the project an already added account belongs to', async () => {
+      const repo = makeRepo({ id: '1' }, { id: 'acc-1', profileId: 'prof-7' });
+      repo.manager.findOneBy.mockResolvedValue({ id: 'prof-7', name: 'Мезопроф' });
+      const service = new AccountsService(repo, { get: jest.fn(() => ({})) } as any, { createManual: jest.fn() } as any);
+
+      await expect(service.createFromLink('https://t.me/somechannel')).rejects.toThrow('Этот аккаунт уже в проекте «Мезопроф»');
+    });
+
     it('saves the name and avatar fetched from the platform', async () => {
       const repo = makeRepo();
       const connector = {
@@ -354,7 +380,7 @@ describe('AccountsService', () => {
 
       await expect(
         service.createFromLink('https://example.com/someone'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toThrow('Не удалось распознать ссылку. Вставьте ссылку на аккаунт, например https://t.me/channel');
       expect(repo.save).not.toHaveBeenCalled();
     });
 
@@ -369,7 +395,7 @@ describe('AccountsService', () => {
 
       await expect(
         service.createFromLink('https://vk.com/somegroup'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toThrow('ВКонтакте пока не поддерживается');
       expect(repo.save).not.toHaveBeenCalled();
     });
 
@@ -386,7 +412,7 @@ describe('AccountsService', () => {
 
       await expect(
         service.createFromLink('https://t.me/nosuchchannel'),
-      ).rejects.toThrow(/chat not found/);
+      ).rejects.toThrow('Не удалось проверить аккаунт: Bad Request: chat not found');
     });
 
     it('rejects a link the platform cannot resolve to a real account', async () => {

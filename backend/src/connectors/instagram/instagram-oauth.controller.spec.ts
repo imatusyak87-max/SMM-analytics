@@ -1,4 +1,5 @@
 import { InstagramOauthController } from './instagram-oauth.controller';
+import { InstagramLoginError } from './instagram-oauth.service';
 import { AccountPlatform } from '../../db/entities/account.entity';
 
 function makeController(overrides: Partial<Record<string, any>> = {}) {
@@ -58,6 +59,16 @@ describe('InstagramOauthController.callback', () => {
 
     await controller.callback('a-code', 'bad-state', fakeResponse());
 
+    expect(syncJobs.createManual).not.toHaveBeenCalled();
+  });
+
+  it('sends the user back to the account with the message when a login for it fails', async () => {
+    const { controller, syncJobs } = makeController({
+      oauthService: { completeLogin: jest.fn().mockRejectedValue(new InstagramLoginError('Вы вошли в другой аккаунт Instagram (@x)', 'acc-1')) },
+    });
+    const res = fakeResponse();
+    await controller.callback('c', 's', res);
+    expect(res.redirect).toHaveBeenCalledWith(`/accounts/acc-1?instagramError=${encodeURIComponent('Вы вошли в другой аккаунт Instagram (@x)')}`);
     expect(syncJobs.createManual).not.toHaveBeenCalled();
   });
 

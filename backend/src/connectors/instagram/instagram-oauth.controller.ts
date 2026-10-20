@@ -6,7 +6,7 @@ import type { Response } from 'express';
 import { Account, AccountPlatform } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
 import { SyncJobService } from '../../sync/sync-job.service';
-import { InstagramOauthService } from './instagram-oauth.service';
+import { InstagramLoginError, InstagramOauthService } from './instagram-oauth.service';
 import { verifySignedRequest } from './instagram-signed-request';
 
 export const INSTAGRAM_APP_SECRET = 'INSTAGRAM_APP_SECRET';
@@ -39,6 +39,10 @@ export class InstagramOauthController {
     try {
       ({ id: accountId } = await this.oauthService.completeLogin(code, state));
     } catch (error) {
+      if (error instanceof InstagramLoginError) {
+        res.redirect(`/accounts/${error.accountId}?instagramError=${encodeURIComponent(error.message)}`);
+        return;
+      }
       res.status(400).json({ message: (error as Error).message });
       return;
     }

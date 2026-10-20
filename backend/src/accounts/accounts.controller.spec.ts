@@ -52,13 +52,13 @@ describe('AccountsController', () => {
 });
 
 describe('AccountsController.connectInstagram', () => {
-  it('returns the authorize URL for the requested account type', async () => {
-    const oauthService = { buildAuthorizeUrl: jest.fn().mockResolvedValue('https://www.instagram.com/oauth/authorize?...') };
-    const controller = new AccountsController({} as any, oauthService as any);
+  it('starts an Instagram login for one account', async () => {
+    const account = { id: 'acc-1' };
+    const service = { findOne: jest.fn().mockResolvedValue(account) } as any;
+    const oauth = { buildAuthorizeUrlForAccount: jest.fn().mockResolvedValue('https://ig/login') } as any;
+    const controller = new AccountsController(service, oauth);
 
-    const result = await controller.connectInstagram('own');
-
-    expect(oauthService.buildAuthorizeUrl).toHaveBeenCalledWith('own');
-    expect(result).toEqual({ redirectUrl: 'https://www.instagram.com/oauth/authorize?...' });
+    expect(await controller.connectInstagram('acc-1')).toEqual({ redirectUrl: 'https://ig/login' });
+    expect(oauth.buildAuthorizeUrlForAccount).toHaveBeenCalledWith(account);
   });
 });

@@ -1,8 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { InstagramOauthService } from '../connectors/instagram/instagram-oauth.service';
-import { InstagramAccountKind } from '../db/entities/instagram-oauth-state.entity';
 import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { CreateAccountFromLinkDto } from './dto/create-account-from-link.dto';
@@ -15,13 +14,6 @@ export class AccountsController {
     private instagramOauth: InstagramOauthService,
   ) {}
 
-  @Get('instagram/connect')
-  async connectInstagram(@Query('type') type: 'own' | 'client') {
-    const kind = type === 'own' ? InstagramAccountKind.OWN : InstagramAccountKind.CLIENT;
-    const redirectUrl = await this.instagramOauth.buildAuthorizeUrl(kind);
-    return { redirectUrl };
-  }
-
   @Post()
   create(@Body() dto: CreateAccountDto) {
     return this.accountsService.create(dto);
@@ -30,6 +22,12 @@ export class AccountsController {
   @Post('preview')
   preview(@Body() dto: CreateAccountFromLinkDto) {
     return this.accountsService.preview(dto.link);
+  }
+
+  @Get(':id/instagram/connect')
+  async connectInstagram(@Param('id', new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND })) id: string) {
+    const account = await this.accountsService.findOne(id);
+    return { redirectUrl: await this.instagramOauth.buildAuthorizeUrlForAccount(account) };
   }
 
   @Get(':id/avatar')

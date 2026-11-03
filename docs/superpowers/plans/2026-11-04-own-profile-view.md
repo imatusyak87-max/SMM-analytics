@@ -623,7 +623,7 @@ async moveAccount(accountId: string, target: MoveAccountDto): Promise<{ profileI
 }
 ```
 
-`PLATFORM_NAMES`: import from wherever `accounts.service.ts` imports it (export it there if it is local). Remove the now-unused `createProfile` import and `BadRequestException` if unused.
+`PLATFORM_NAMES`: import from `../accounts/platform-names`. Remove the now-unused `createProfile` import and `BadRequestException` if unused.
 
 - [ ] **Step 4: Run, verify pass** — `npx jest src/profiles` and `npx tsc --noEmit`.
 

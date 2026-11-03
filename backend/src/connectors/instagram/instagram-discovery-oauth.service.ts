@@ -36,7 +36,7 @@ export class InstagramDiscoveryOauthService {
   }
 
   async completeLogin(code: string, state: string): Promise<void> {
-    const kind = await this.stateService.consume(state);
+    const kind = (await this.stateService.consume(state))?.type ?? null;
     if (kind !== InstagramAccountKind.DISCOVERY) {
       throw new Error('Ссылка для входа устарела, попробуйте подключить Facebook заново');
     }

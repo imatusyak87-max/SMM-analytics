@@ -68,7 +68,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
 }
 
@@ -87,4 +87,20 @@
 .back {
   color: var(--accent);
   font-size: 14px;
+}
+
+.deleteButton {
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--danger);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.deleteButton:hover,
+.deleteButton:focus-visible {
+  border-color: var(--danger);
+  outline: none;
 }

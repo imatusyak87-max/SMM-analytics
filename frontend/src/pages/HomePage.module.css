@@ -1,0 +1,6 @@
+.page { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px; min-height: 60vh; padding: 0 16px; text-align: center; }
+.heading { font-family: var(--heading); color: var(--text-h); font-size: clamp(28px, 5vw, 44px); line-height: 1.15; max-width: 16ch; margin: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
+.primary, .secondary { display: inline-flex; align-items: center; justify-content: center; min-width: 220px; padding: 18px 28px; border-radius: 12px; font-size: 18px; font-weight: 600; text-decoration: none; }
+.primary { background: var(--accent); color: var(--on-accent); border: 1px solid var(--accent); }
+.secondary { border: 1px solid var(--border); color: var(--text-h); }

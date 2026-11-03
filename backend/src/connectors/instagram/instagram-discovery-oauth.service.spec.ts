@@ -6,7 +6,11 @@ const REDIRECT = 'https://fdagency.duckdns.org/api/instagram/discovery/callback'
 function setup(overrides: { kind?: InstagramAccountKind | null; linked?: object | null; expiresIn?: number | null; configId?: string | null } = {}) {
   const stateService = {
     create: jest.fn().mockResolvedValue('state-uuid'),
-    consume: jest.fn().mockResolvedValue(overrides.kind === undefined ? InstagramAccountKind.DISCOVERY : overrides.kind),
+    consume: jest.fn().mockResolvedValue(
+      overrides.kind === undefined ? { type: InstagramAccountKind.DISCOVERY, accountId: null }
+        : overrides.kind === null ? null
+        : { type: overrides.kind, accountId: null },
+    ),
   };
   const client = {
     exchangeCodeForToken: jest.fn().mockResolvedValue('short'),

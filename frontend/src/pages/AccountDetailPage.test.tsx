@@ -47,6 +47,7 @@ function mockApi({
   get.mockImplementation((url: string, config?: { params: Params }) => {
     if (url.endsWith('/detail')) return Promise.resolve({ data: detailData });
     if (url.endsWith('/posts')) return Promise.resolve({ data: posts(config!.params) });
+    if (url.endsWith('/instagram/connect')) return Promise.resolve({ data: { redirectUrl: 'https://ig/login' } });
     return Promise.resolve({ data: [] });
   });
 }
@@ -58,9 +59,9 @@ const callsTo = (suffix: string): Params[] =>
 
 const lastCallTo = (suffix: string) => callsTo(suffix).at(-1)!;
 
-function renderPage() {
+function renderPage(entry = '/accounts/acc-1') {
   return render(
-    <MemoryRouter initialEntries={['/accounts/acc-1']}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes><Route path="/accounts/:id" element={<AccountDetailPage />} /></Routes>
     </MemoryRouter>,
   );
@@ -322,7 +323,7 @@ describe('AccountDetailPage', () => {
     get.mockImplementation((url: string) => {
       if (url.endsWith('/detail')) return Promise.resolve({ data: { ...detail(), needsReconnect: true } });
       if (url.endsWith('/posts')) return Promise.resolve({ data: { total: 2, items: [post('p1', 'Hello'), post('p2', 'World')] } });
-      if (url.includes('/accounts/instagram/connect')) {
+      if (url.endsWith('/instagram/connect')) {
         return Promise.resolve({ data: { redirectUrl: 'https://www.instagram.com/oauth/authorize?state=xyz' } });
       }
       return Promise.resolve({ data: [] });
@@ -338,7 +339,7 @@ describe('AccountDetailPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Переподключить' }));
 
       await waitFor(() =>
-        expect(get).toHaveBeenCalledWith('/accounts/instagram/connect', { params: { type: 'own' } }),
+        expect(get).toHaveBeenCalledWith('/accounts/acc-1/instagram/connect'),
       );
       await waitFor(() => expect(window.location.href).toBe('https://www.instagram.com/oauth/authorize?state=xyz'));
     } finally {
@@ -366,22 +367,53 @@ describe('profile', () => {
     mockApi();
     renderPage();
 
-    expect(await screen.findByLabelText('Профиль:')).toHaveValue('prof-1');
+    expect(await screen.findByLabelText('Проект:')).toHaveValue('prof-1');
   });
 
-  it('links back to a profile that holds several accounts', async () => {
-    mockApi({ detailData: { ...detail(), profile: { id: 'prof-1', name: 'Coffee Lab', accountCount: 3 } } });
-    renderPage();
-
-    expect(await screen.findByRole('link', { name: '← Coffee Lab' })).toHaveAttribute('href', '/profiles/prof-1');
-  });
-
-  it('has no breadcrumb for an account alone in its profile', async () => {
+  it('links back to its project', async () => {
     mockApi();
     renderPage();
 
-    await screen.findByLabelText('Профиль:');
-    expect(screen.queryByRole('link', { name: '← Coffee Lab' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '← Coffee Lab' })).toHaveAttribute('href', '/projects/prof-1');
+  });
+});
+
+describe('Instagram login', () => {
+  const linked = () => ({ ...detail(), account: { id: 'acc-1', name: 'Brand', platform: 'instagram', type: 'public_no_access' } });
+
+  it('offers full access for an Instagram account added by link', async () => {
+    mockApi({ detailData: linked() });
+    renderPage();
+    expect(await screen.findByText('Публичные данные: охват и репосты недоступны')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Подключить полный доступ' })).toBeInTheDocument();
+  });
+
+  it('starts the Instagram login for this account', async () => {
+    mockApi({ detailData: linked() });
+    const originalLocation = window.location;
+    delete (window as any).location;
+    (window as any).location = { href: '' };
+    try {
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Подключить полный доступ' }));
+      await waitFor(() => expect(window.location.href).toBe('https://ig/login'));
+      expect(get).toHaveBeenCalledWith('/accounts/acc-1/instagram/connect');
+    } finally {
+      (window as any).location = originalLocation;
+    }
+  });
+
+  it('does not offer full access to an own Instagram account', async () => {
+    mockApi({ detailData: { ...detail(), account: { id: 'acc-1', name: 'Brand', platform: 'instagram', type: 'own' } } });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Brand' });
+    expect(screen.queryByRole('button', { name: 'Подключить полный доступ' })).not.toBeInTheDocument();
+  });
+
+  it('shows why an Instagram login did not go through', async () => {
+    mockApi();
+    renderPage(`/accounts/acc-1?instagramError=${encodeURIComponent('Вы вошли в другой аккаунт Instagram (@x)')}`);
+    expect(await screen.findByText('Вы вошли в другой аккаунт Instagram (@x)')).toBeInTheDocument();
   });
 });
 
@@ -392,7 +424,7 @@ describe('delete account', () => {
         <Routes>
           <Route path="/accounts/:id" element={<AccountDetailPage />} />
           <Route path="/" element={<p>Overview page</p>} />
-          <Route path="/profiles/:id" element={<p>Profile page</p>} />
+          <Route path="/projects/:id" element={<p>Project page</p>} />
         </Routes>
       </MemoryRouter>,
     );
@@ -403,7 +435,7 @@ describe('delete account', () => {
     vi.unstubAllGlobals();
   });
 
-  it('deletes the account and goes to the overview when it was alone in its profile', async () => {
+  it('deletes the account and goes to its project when it was alone there', async () => {
     mockApi();
     vi.stubGlobal('confirm', vi.fn(() => true));
     del.mockResolvedValue({});
@@ -412,7 +444,7 @@ describe('delete account', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
 
     expect(confirm).toHaveBeenCalledWith('Удалить «Chan» и всю собранную статистику?');
-    expect(await screen.findByText('Overview page')).toBeInTheDocument();
+    expect(await screen.findByText('Project page')).toBeInTheDocument();
     expect(del).toHaveBeenCalledWith('/accounts/acc-1');
   });
 
@@ -424,7 +456,7 @@ describe('delete account', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
 
-    expect(await screen.findByText('Profile page')).toBeInTheDocument();
+    expect(await screen.findByText('Project page')).toBeInTheDocument();
   });
 
   it('does nothing when the confirmation is declined', async () => {

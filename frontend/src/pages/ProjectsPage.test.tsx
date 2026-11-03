@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { OverviewPage } from './OverviewPage';
+import { ProjectsPage } from './ProjectsPage';
 import { apiClient } from '../api/client';
 
 vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn() } }));
@@ -20,34 +20,39 @@ function mockGets(overview: unknown = [], status: unknown = NO_STATUS) {
 
 const overviewCalls = () => (apiClient.get as any).mock.calls.filter((c: unknown[]) => c[0] === '/profiles').length;
 
-describe('OverviewPage', () => {
+describe('ProjectsPage', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('opens the add-account form and reloads accounts after one is created', async () => {
+  it('opens the add-project form from the add button', async () => {
     mockGets();
-    (apiClient.post as any)
-      .mockResolvedValueOnce({
-        data: {
-          platform: 'telegram',
-          externalId: '@somechannel',
-          name: 'Some Channel',
-          followersCount: 10,
-          avatarDataUri: null,
-        },
-      })
-      .mockResolvedValueOnce({ data: { id: 'acc-1' } });
-
-    render(<MemoryRouter><OverviewPage /></MemoryRouter>);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
     await waitFor(() => expect(overviewCalls()).toBe(1));
 
-    fireEvent.click(screen.getByText('Добавить аккаунт'));
-    fireEvent.change(screen.getByLabelText('Ссылка на аккаунт'), {
-      target: { value: 'https://t.me/somechannel' },
-    });
-    fireEvent.click(await screen.findByText('Добавить'));
+    fireEvent.click(screen.getByText('Добавить проект'));
+    expect(screen.getByRole('dialog', { name: 'Добавить проект' })).toBeInTheDocument();
 
-    await waitFor(() => expect(overviewCalls()).toBe(2));
-    expect(screen.queryByLabelText('Ссылка на аккаунт')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Отмена'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('has the «Все проекты» heading', async () => {
+    mockGets();
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Все проекты' })).toBeInTheDocument();
+  });
+
+  it('says so when projects cannot be loaded', async () => {
+    (apiClient.get as any).mockImplementation((url: string) =>
+      url === '/profiles' ? Promise.reject(new Error('x')) : Promise.resolve({ data: NO_STATUS }));
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
+    expect(await screen.findByText('Не удалось загрузить проекты. Попробуйте позже.')).toBeInTheDocument();
+  });
+
+  it('lists a project that has no accounts yet', async () => {
+    mockGets([{ id: 'p1', name: 'Мезопроф', totalFollowers: null, accounts: [] }]);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
+    expect(await screen.findByText('Мезопроф')).toBeInTheDocument();
+    expect(screen.getByText('Аккаунты не добавлены')).toBeInTheDocument();
   });
 
   it('renders a card per profile with its total followers', async () => {
@@ -63,7 +68,7 @@ describe('OverviewPage', () => {
       },
     ]);
 
-    render(<MemoryRouter><OverviewPage /></MemoryRouter>);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
     expect(await screen.findByText('Coffee Lab')).toBeInTheDocument();
     expect(screen.getAllByTestId('profile-card')).toHaveLength(1);
@@ -73,37 +78,37 @@ describe('OverviewPage', () => {
 
   it('reopens the add dialog when the Facebook login sends the user back', async () => {
     mockGets();
-    render(<MemoryRouter initialEntries={['/?add=competitor']}><OverviewPage /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={['/projects?add=project']}><ProjectsPage /></MemoryRouter>);
 
-    expect(await screen.findByRole('dialog', { name: 'Добавьте аккаунт' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Добавить проект' })).toBeInTheDocument();
   });
 
   it('shows the error the Facebook login came back with', async () => {
     mockGets();
-    const entry = `/?add=competitor&discoveryError=${encodeURIComponent('Вход через Facebook отменён')}`;
-    render(<MemoryRouter initialEntries={[entry]}><OverviewPage /></MemoryRouter>);
+    const entry = `/projects?add=project&discoveryError=${encodeURIComponent('Вход через Facebook отменён')}`;
+    render(<MemoryRouter initialEntries={[entry]}><ProjectsPage /></MemoryRouter>);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Вход через Facebook отменён');
   });
 
   it('does not open the dialog on a plain visit', async () => {
     mockGets();
-    render(<MemoryRouter><OverviewPage /></MemoryRouter>);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
-    await screen.findByText(/Пока нет ни одного аккаунта|Загрузка/);
+    await screen.findByText(/Пока нет ни одного проекта|Загрузка/);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('forgets the Facebook login error once the dialog is closed', async () => {
     mockGets();
-    const entry = `/?add=competitor&discoveryError=${encodeURIComponent('Вход через Facebook отменён')}`;
-    render(<MemoryRouter initialEntries={[entry]}><OverviewPage /></MemoryRouter>);
+    const entry = `/projects?add=project&discoveryError=${encodeURIComponent('Вход через Facebook отменён')}`;
+    render(<MemoryRouter initialEntries={[entry]}><ProjectsPage /></MemoryRouter>);
     expect(await screen.findByRole('alert')).toHaveTextContent('Вход через Facebook отменён');
 
     fireEvent.click(screen.getByText('Отмена'));
-    fireEvent.click(screen.getByText('Добавить аккаунт'));
+    fireEvent.click(screen.getByText('Добавить проект'));
 
-    expect(await screen.findByRole('dialog', { name: 'Добавьте аккаунт' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Добавить проект' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
@@ -113,7 +118,7 @@ describe('OverviewPage', () => {
 
     it('is shown when connected and the access has expired', async () => {
       mockGets([], EXPIRED);
-      render(<MemoryRouter><OverviewPage /></MemoryRouter>);
+      render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
       expect(await screen.findByRole('alert')).toHaveTextContent(BANNER);
       expect(screen.getByRole('button', { name: 'Переподключить Facebook' })).toBeInTheDocument();
@@ -125,10 +130,10 @@ describe('OverviewPage', () => {
       ['the status request fails', new Error('boom')],
     ])('is hidden when %s', async (_name, status) => {
       mockGets([], status);
-      render(<MemoryRouter><OverviewPage /></MemoryRouter>);
+      render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
       await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/instagram/discovery/status'));
-      await screen.findByText(/Пока нет ни одного аккаунта/);
+      await screen.findByText(/Пока нет ни одного проекта/);
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
@@ -143,7 +148,7 @@ describe('OverviewPage', () => {
       delete (window as any).location;
       (window as any).location = { href: '' };
       try {
-        render(<MemoryRouter><OverviewPage /></MemoryRouter>);
+        render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
         fireEvent.click(await screen.findByRole('button', { name: 'Переподключить Facebook' }));
 
         await waitFor(() => expect(window.location.href).toBe('https://www.facebook.com/dialog'));
@@ -157,7 +162,7 @@ describe('OverviewPage', () => {
         if (url === '/instagram/discovery/connect') return Promise.reject({ response: { data: { message: 'Facebook не настроен' } } });
         return Promise.resolve({ data: url === '/instagram/discovery/status' ? EXPIRED : [] });
       });
-      render(<MemoryRouter><OverviewPage /></MemoryRouter>);
+      render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
       fireEvent.click(await screen.findByRole('button', { name: 'Переподключить Facebook' }));
 

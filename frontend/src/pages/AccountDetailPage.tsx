@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ProfileSwitcher } from '../components/ProfileSwitcher';
 import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
@@ -41,6 +41,14 @@ interface PostsPage {
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Set by the Instagram login callback when the login did not go through.
+  const [instagramError] = useState(() => searchParams.get('instagramError'));
+  useEffect(() => {
+    if (searchParams.has('instagramError')) setSearchParams({}, { replace: true });
+    // Only on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [period, setPeriod] = useState<SelectedPeriod>(() => selectPreset('last30', new Date()));
   const [typeFilter, setTypeFilter] = useState('all');
   const [sort, setSort] = useState<PostSort>('views');
@@ -95,14 +103,15 @@ export function AccountDetailPage() {
     setTablePage(1);
   };
 
-  async function handleReconnect() {
+  /** Full access (a linked account) and reconnect (an own one) are the same per-account login. */
+  async function startInstagramLogin() {
     setReconnecting(true);
     setReconnectError(null);
     try {
-      const { data } = await apiClient.get('/accounts/instagram/connect', { params: { type: 'own' } });
+      const { data } = await apiClient.get(`/accounts/${id}/instagram/connect`);
       window.location.href = data.redirectUrl;
     } catch (err: any) {
-      setReconnectError(err.response?.data?.message ?? 'Не удалось начать переподключение');
+      setReconnectError(err.response?.data?.message ?? 'Не удалось начать подключение');
       setReconnecting(false);
     }
   }
@@ -112,8 +121,7 @@ export function AccountDetailPage() {
     try {
       setDeleteError(null);
       await apiClient.delete(`/accounts/${target.id}`);
-      // A profile that still has other accounts is the natural place to land.
-      navigate(profile.accountCount > 1 ? `/profiles/${profile.id}` : '/');
+      navigate(`/projects/${profile.id}`);
     } catch (err: any) {
       setDeleteError(err.response?.data?.message ?? 'Не удалось удалить аккаунт');
     }
@@ -137,11 +145,9 @@ export function AccountDetailPage() {
 
   return (
     <div className={styles.page}>
-      {profile.accountCount > 1 && (
-        <Link to={`/profiles/${profile.id}`} className={styles.breadcrumb}>
-          ← {profile.name}
-        </Link>
-      )}
+      <Link to={`/projects/${profile.id}`} className={styles.breadcrumb}>
+        ← {profile.name}
+      </Link>
       <div className={styles.header}>
         <h2 className={styles.heading}>{account.name}</h2>
         <ProfileSwitcher accountId={account.id} profile={profile} onMoved={() => setReloadKey((key) => key + 1)} />
@@ -176,10 +182,20 @@ export function AccountDetailPage() {
       {detail.data.needsReconnect && (
         <div className={styles.reconnectBanner} role="alert">
           <span>Переподключите Instagram — доступ к аккаунту был потерян.</span>
-          <button type="button" onClick={handleReconnect} disabled={reconnecting}>
+          <button type="button" onClick={startInstagramLogin} disabled={reconnecting}>
             {reconnecting ? 'Переходим…' : 'Переподключить'}
           </button>
           {reconnectError && <span className={styles.error}>{reconnectError}</span>}
+        </div>
+      )}
+      {instagramError && <p className={styles.error} role="alert">{instagramError}</p>}
+      {account.platform === 'instagram' && account.type === 'public_no_access' && (
+        <div className={styles.fullAccess}>
+          <span>Публичные данные: охват и репосты недоступны</span>
+          <button type="button" onClick={startInstagramLogin} disabled={reconnecting}>
+            {reconnecting ? 'Переходим…' : 'Подключить полный доступ'}
+          </button>
+          {reconnectError && !detail.data.needsReconnect && <span className={styles.error}>{reconnectError}</span>}
         </div>
       )}
       <section className={styles.overview} aria-label="Сводка за период">

@@ -1,13 +1,10 @@
 import { NotFoundException } from '@nestjs/common';
-import { Account } from '../db/entities/account.entity';
 import { Profile } from '../db/entities/profile.entity';
-import { createProfile, deleteProfileIfEmpty, requireProfile, PROFILE_NOT_FOUND } from './profile-store';
+import { createProfile, requireProfile, PROFILE_NOT_FOUND } from './profile-store';
 
 function fakeEm(overrides: Record<string, jest.Mock> = {}) {
   return {
     save: jest.fn((_target: unknown, row: object) => Promise.resolve({ id: 'prof-new', ...row })),
-    count: jest.fn().mockResolvedValue(0),
-    delete: jest.fn(),
     findOneBy: jest.fn().mockResolvedValue(null),
     ...overrides,
   } as any;
@@ -21,23 +18,6 @@ describe('profile-store', () => {
 
     expect(em.save).toHaveBeenCalledWith(Profile, { name: 'Coffee Lab' });
     expect(profile).toEqual({ id: 'prof-new', name: 'Coffee Lab' });
-  });
-
-  it('deletes a profile no account points to any more', async () => {
-    const em = fakeEm({ count: jest.fn().mockResolvedValue(0) });
-
-    await deleteProfileIfEmpty(em, 'prof-1');
-
-    expect(em.count).toHaveBeenCalledWith(Account, { where: { profileId: 'prof-1' } });
-    expect(em.delete).toHaveBeenCalledWith(Profile, { id: 'prof-1' });
-  });
-
-  it('keeps a profile that still has accounts', async () => {
-    const em = fakeEm({ count: jest.fn().mockResolvedValue(2) });
-
-    await deleteProfileIfEmpty(em, 'prof-1');
-
-    expect(em.delete).not.toHaveBeenCalled();
   });
 
   it('returns an existing profile', async () => {

@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { Account, AccountPlatform, AccountType } from '../db/entities/account.entity';
 import { AccountCredential } from '../db/entities/account-credential.entity';
 import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
+import { Profile } from '../db/entities/profile.entity';
 import { Post } from '../db/entities/post.entity';
 import { SyncJob } from '../db/entities/sync-job.entity';
 import { CompetitorRun } from '../db/entities/competitor-run.entity';
@@ -18,8 +19,10 @@ import { CompetitorRejection } from '../db/entities/competitor-rejection.entity'
 import { HistoryLoad } from '../db/entities/history-load.entity';
 import { ConnectorRegistry } from '../connectors/connector-registry.service';
 import { AccountInfo, AccountStats, AvatarImage, SocialConnector } from '../connectors/connector.interface';
-import { createProfile, deleteProfileIfEmpty, requireProfile, PROFILE_NOT_FOUND } from '../profiles/profile-store';
+import { createProfile, requireProfile, PROFILE_NOT_FOUND } from '../profiles/profile-store';
+import { isNetworkError } from '../connectors/history-pause.error';
 import { SyncJobService } from '../sync/sync-job.service';
+import { PLATFORM_NAMES } from './platform-names';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { ParsedAccountLink, isInstagramLink, parseAccountLink } from './parse-account-link';
 import {
@@ -29,6 +32,9 @@ import {
 
 const ALREADY_ADDED = 'Этот аккаунт уже добавлен';
 const INSTAGRAM_NOT_A_PROFILE = 'Вставьте ссылку на профиль Instagram, а не на пост';
+const CHANNEL_NOT_FOUND = 'Канал не найден';
+const RETRY = 'Не удалось проверить, попробуйте ещё раз';
+const CANNOT_VERIFY = 'Не удалось проверить аккаунт';
 const PG_UNIQUE_VIOLATION = '23505';
 const PG_FOREIGN_KEY_VIOLATION = '23503';
 
@@ -93,13 +99,25 @@ export class AccountsService {
     });
   }
 
-  async createFromLink(link: string, profileId?: string) {
-    const { parsed, connector } = this.resolveLink(link);
+  async createFromLink(link: string, profileId?: string, expected?: AccountPlatform) {
+    const parsed = this.parseLink(link);
+    // Checked before the connector lookup so a VK link in the Telegram field says "wrong field", not "unsupported".
+    if (expected && parsed.platform !== expected) {
+      throw new BadRequestException(`Это ссылка не на ${PLATFORM_NAMES[expected]}`);
+    }
+    const connector = this.connectorFor(parsed);
 
-    if (await this.findExisting(parsed)) throw new ConflictException(ALREADY_ADDED);
+    const existing = await this.findExisting(parsed);
+    if (existing) throw new ConflictException(await this.alreadyAddedMessage(existing));
 
-    // Checked before the platform call so a stale choice fails fast and cheaply.
-    if (profileId) await requireProfile(this.repo.manager, profileId);
+    if (profileId) {
+      // Checked before the platform call so a stale choice fails fast and cheaply.
+      await requireProfile(this.repo.manager, profileId);
+      // One account per network per project; legacy projects may still hold two.
+      if (await this.repo.findOneBy({ profileId, platform: parsed.platform })) {
+        throw new ConflictException(`В проекте уже есть ${PLATFORM_NAMES[parsed.platform]}`);
+      }
+    }
 
     let info: AccountInfo;
     try {
@@ -140,6 +158,11 @@ export class AccountsService {
     return account;
   }
 
+  private async alreadyAddedMessage(account: Account): Promise<string> {
+    const project = await this.repo.manager.findOneBy(Profile, { id: account.profileId });
+    return project ? `Этот аккаунт уже в проекте «${project.name}»` : ALREADY_ADDED;
+  }
+
   private findExisting(parsed: ParsedAccountLink): Promise<Account | null> {
     return this.repo.findOneBy({ platform: parsed.platform, externalId: parsed.externalId });
   }
@@ -157,18 +180,24 @@ export class AccountsService {
   }
 
   private resolveLink(link: string): { parsed: ParsedAccountLink; connector: SocialConnector } {
+    const parsed = this.parseLink(link);
+    return { parsed, connector: this.connectorFor(parsed) };
+  }
+
+  private parseLink(link: string): ParsedAccountLink {
     const parsed = parseAccountLink(link);
     if (!parsed) {
       if (isInstagramLink(link)) throw new BadRequestException(INSTAGRAM_NOT_A_PROFILE);
-      throw new BadRequestException(
-        'Unsupported link. Paste a Telegram, Instagram, VK, YouTube or LinkedIn account URL.',
-      );
+      throw new BadRequestException('Не удалось распознать ссылку. Вставьте ссылку на аккаунт, например https://t.me/channel');
     }
+    return parsed;
+  }
 
+  private connectorFor(parsed: ParsedAccountLink): SocialConnector {
     try {
-      return { parsed, connector: this.registry.get(parsed.platform) };
+      return this.registry.get(parsed.platform);
     } catch {
-      throw new BadRequestException(`${parsed.platform} is not supported yet.`);
+      throw new BadRequestException(`${PLATFORM_NAMES[parsed.platform]} пока не поддерживается`);
     }
   }
 
@@ -179,7 +208,15 @@ export class AccountsService {
     }
     if (error instanceof InstagramProfileNotFoundError) return new BadRequestException(error.message);
     this.logger.warn(`Could not resolve ${platform} account ${externalId}: ${error.message}`);
-    return new BadRequestException(`Couldn't add that account — ${platform} said: ${error.message}`);
+    // Provider text is never shown: it is English, and can carry URLs.
+    const e = error as { response?: { status?: number; data?: { description?: string } } };
+    const status = e.response?.status;
+    const description = e.response?.data?.description ?? error.message;
+    if (/chat not found/i.test(description)) return new BadRequestException(CHANNEL_NOT_FOUND);
+    if (isNetworkError(error) || status === 429 || (status !== undefined && status >= 500)) {
+      return new BadRequestException(RETRY);
+    }
+    return new BadRequestException(CANNOT_VERIFY);
   }
 
   findAll() {
@@ -193,7 +230,7 @@ export class AccountsService {
   }
 
   async remove(id: string) {
-    const account = await this.findOne(id);
+    await this.findOne(id);
     await this.repo.manager.transaction(async (em) => {
       await em.delete(CompetitorRejection, { accountId: id });
       await em.delete(CompetitorSuggestion, { accountId: id });
@@ -204,7 +241,6 @@ export class AccountsService {
       await em.delete(AccountCredential, { accountId: id });
       await em.delete(HistoryLoad, { accountId: id });
       await em.delete(Account, { id });
-      await deleteProfileIfEmpty(em, account.profileId);
     });
   }
 

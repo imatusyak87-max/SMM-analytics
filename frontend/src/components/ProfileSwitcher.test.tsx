@@ -27,17 +27,17 @@ describe('ProfileSwitcher', () => {
   it('shows the current profile and offers the others plus a separate one', async () => {
     render(<ProfileSwitcher accountId="acc-1" profile={current} onMoved={vi.fn()} />);
 
-    const select = screen.getByLabelText('Профиль:');
+    const select = screen.getByLabelText('Проект:');
     expect(select).toHaveValue('p1');
     expect(await screen.findByRole('option', { name: 'Tea House (telegram)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Отдельный профиль' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Отдельный проект' })).toBeInTheDocument();
   });
 
   it('has no separate-profile option for an account that is already alone', async () => {
     render(<ProfileSwitcher accountId="acc-1" profile={{ ...current, accountCount: 1 }} onMoved={vi.fn()} />);
 
     await screen.findByRole('option', { name: 'Tea House (telegram)' });
-    expect(screen.queryByRole('option', { name: 'Отдельный профиль' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Отдельный проект' })).not.toBeInTheDocument();
   });
 
   it('moves the account to the chosen profile', async () => {
@@ -46,7 +46,7 @@ describe('ProfileSwitcher', () => {
     render(<ProfileSwitcher accountId="acc-1" profile={current} onMoved={onMoved} />);
     await screen.findByRole('option', { name: 'Tea House (telegram)' });
 
-    fireEvent.change(screen.getByLabelText('Профиль:'), { target: { value: 'p2' } });
+    fireEvent.change(screen.getByLabelText('Проект:'), { target: { value: 'p2' } });
 
     await waitFor(() => expect(onMoved).toHaveBeenCalled());
     expect(patch).toHaveBeenCalledWith('/accounts/acc-1/profile', { profileId: 'p2' });
@@ -56,7 +56,7 @@ describe('ProfileSwitcher', () => {
     patch.mockResolvedValue({ data: { profileId: 'p-new' } });
     render(<ProfileSwitcher accountId="acc-1" profile={current} onMoved={vi.fn()} />);
 
-    fireEvent.change(screen.getByLabelText('Профиль:'), { target: { value: '__new__' } });
+    fireEvent.change(screen.getByLabelText('Проект:'), { target: { value: '__new__' } });
 
     await waitFor(() => expect(patch).toHaveBeenCalledWith('/accounts/acc-1/profile', { newProfile: true }));
   });
@@ -67,9 +67,9 @@ describe('ProfileSwitcher', () => {
     render(<ProfileSwitcher accountId="acc-1" profile={current} onMoved={onMoved} />);
     await screen.findByRole('option', { name: 'Tea House (telegram)' });
 
-    fireEvent.change(screen.getByLabelText('Профиль:'), { target: { value: 'p2' } });
+    fireEvent.change(screen.getByLabelText('Проект:'), { target: { value: 'p2' } });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Профиль не найден');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Проект не найден');
     await waitFor(() => expect(get.mock.calls.filter(([url]: [string]) => url === '/profiles')).toHaveLength(2));
     expect(onMoved).not.toHaveBeenCalled();
   });

@@ -1,31 +1,54 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Account } from '../db/entities/account.entity';
+import { Account, AccountPlatform } from '../db/entities/account.entity';
 import { Profile } from '../db/entities/profile.entity';
+import { AccountsService } from '../accounts/accounts.service';
 import { StatsService } from '../stats/stats.service';
 import {
   createProfile,
-  deleteProfileIfEmpty,
   requireProfile,
   PROFILE_NOT_FOUND,
 } from './profile-store';
 import { ProfileSummary, toProfileSummary } from './profile-summary';
 import type { MoveAccountDto } from './dto/move-account.dto';
+import type { CreateProjectDto } from './dto/create-project.dto';
 
-const EMPTY_NAME = 'Название профиля не может быть пустым';
+const EMPTY_NAME = 'Название проекта не может быть пустым';
 const ACCOUNT_NOT_FOUND = 'Аккаунт не найден';
+const RETRY = 'Не удалось проверить, попробуйте ещё раз';
+// The networks the form can add today, in display order.
+const LINK_PLATFORMS = [AccountPlatform.INSTAGRAM, AccountPlatform.TELEGRAM] as const;
+
+export interface CreatedProject {
+  profile: Profile;
+  added: Account[];
+  failed: Array<{ platform: AccountPlatform; message: string }>;
+}
+
+function failureMessage(error: unknown): string {
+  if (!(error instanceof HttpException)) return RETRY;
+  const body = error.getResponse();
+  if (typeof body === 'string') return body;
+  const message = (body as { message?: string | string[] }).message;
+  return Array.isArray(message) ? message.join(', ') : (message ?? RETRY);
+}
 
 @Injectable()
 export class ProfilesService {
+  private readonly logger = new Logger(ProfilesService.name);
+
   constructor(
     @InjectRepository(Profile) private profilesRepo: Repository<Profile>,
     @InjectRepository(Account) private accountsRepo: Repository<Account>,
     private stats: StatsService,
+    private accounts: AccountsService,
   ) {}
 
   async list(): Promise<ProfileSummary[]> {
@@ -33,15 +56,48 @@ export class ProfilesService {
       this.profilesRepo.find({ order: { createdAt: 'ASC' } }),
       this.stats.getOverview(),
     ]);
-    // A profile whose accounts are all deactivated has nothing to show.
-    return profiles
-      .map((profile) =>
-        toProfileSummary(
-          profile,
-          items.filter((item) => item.account.profileId === profile.id),
-        ),
-      )
-      .filter((summary) => summary.accounts.length > 0);
+    // Empty projects are listed too: a project lives until it is deleted.
+    return profiles.map((profile) =>
+      toProfileSummary(
+        profile,
+        items.filter((item) => item.account.profileId === profile.id),
+      ),
+    );
+  }
+
+  /** Creates the project, then adds each link it can; a link that fails never undoes the project. */
+  async create(dto: CreateProjectDto): Promise<CreatedProject> {
+    const name = dto.name.trim();
+    if (!name) throw new BadRequestException(EMPTY_NAME);
+    const profile = await this.profilesRepo.save({ name });
+
+    const added: Account[] = [];
+    const failed: CreatedProject['failed'] = [];
+    for (const platform of LINK_PLATFORMS) {
+      const link = dto.links?.[platform]?.trim();
+      if (!link) continue;
+      try {
+        added.push(await this.accounts.createFromLink(link, profile.id, platform));
+      } catch (error) {
+        if (!(error instanceof HttpException))
+          this.logger.warn(`Could not add ${platform} ${link}: ${(error as Error).message}`);
+        failed.push({ platform, message: failureMessage(error) });
+      }
+    }
+    return { profile, added, failed };
+  }
+
+  async addAccount(id: string, link: string, platform?: AccountPlatform): Promise<Account> {
+    await this.findOne(id);
+    return this.accounts.createFromLink(link, id, platform);
+  }
+
+  /** Deletes the project and, through the normal account delete, all its data. */
+  async remove(id: string): Promise<void> {
+    await this.findOne(id);
+    const accounts = await this.accountsRepo.find({ where: { profileId: id } });
+    for (const account of accounts) await this.accounts.remove(account.id);
+    await this.profilesRepo.delete({ id });
   }
 
   async get(id: string): Promise<ProfileSummary> {
@@ -75,9 +131,7 @@ export class ProfilesService {
       const destination = hasId
         ? (await requireProfile(em, target.profileId!)).id
         : (await createProfile(em, account.name)).id;
-      const left = account.profileId;
       await em.update(Account, { id: accountId }, { profileId: destination });
-      await deleteProfileIfEmpty(em, left);
       return { profileId: destination };
     });
   }

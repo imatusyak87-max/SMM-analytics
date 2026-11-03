@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account, AccountPlatform, AccountType } from '../../db/entities/account.entity';
@@ -8,7 +8,15 @@ import { InstagramApiClient, InstagramProfile } from './instagram-api.client';
 import { InstagramOauthStateService } from './instagram-oauth-state.service';
 import { encryptToken } from './instagram-token-crypto';
 import { translateInstagramError } from './instagram-error';
-import { createProfile } from '../../profiles/profile-store';
+
+const EXPIRED = 'Ссылка для входа устарела, попробуйте подключить аккаунт заново';
+
+/** A login for a known account failed; the callback sends the user back to that account with the message. */
+export class InstagramLoginError extends Error {
+  constructor(message: string, readonly accountId: string) {
+    super(message);
+  }
+}
 
 const AUTHORIZE_URL = 'https://www.instagram.com/oauth/authorize';
 // Confirmed against the real consent screen in Task 0, step 1.
@@ -16,6 +24,8 @@ const SCOPES = 'instagram_business_basic,instagram_business_manage_insights';
 
 @Injectable()
 export class InstagramOauthService {
+  private readonly logger = new Logger(InstagramOauthService.name);
+
   constructor(
     private stateService: InstagramOauthStateService,
     private api: InstagramApiClient,
@@ -25,8 +35,11 @@ export class InstagramOauthService {
     private encryptionKey: string,
   ) {}
 
-  async buildAuthorizeUrl(type: InstagramAccountKind): Promise<string> {
-    const state = await this.stateService.create(type);
+  async buildAuthorizeUrlForAccount(account: Account): Promise<string> {
+    if (account.platform !== AccountPlatform.INSTAGRAM) {
+      throw new BadRequestException('Полный доступ есть только для Instagram');
+    }
+    const state = await this.stateService.create(InstagramAccountKind.OWN, account.id);
     const params = new URLSearchParams({
       client_id: this.appId,
       redirect_uri: this.redirectUri(),
@@ -37,64 +50,75 @@ export class InstagramOauthService {
     return `${AUTHORIZE_URL}?${params.toString()}`;
   }
 
-  async completeLogin(code: string, state: string): Promise<Account> {
-    const type = await this.stateService.consume(state);
-    // A discovery state belongs to the Facebook callback; here it would create a bogus account.
-    if (!type || type === InstagramAccountKind.DISCOVERY) {
-      throw new Error('Ссылка для входа устарела, попробуйте подключить аккаунт заново');
-    }
+  /**
+   * Every login is for one existing account: a public one (added by link) is
+   * upgraded to full access, an own one is reconnected. The logged-in Instagram
+   * account must be that account, or nothing changes.
+   */
+  async completeLogin(code: string | undefined, state: string): Promise<Account> {
+    const consumed = await this.stateService.consume(state);
+    if (!consumed || consumed.type === InstagramAccountKind.DISCOVERY || !consumed.accountId) throw new Error(EXPIRED);
 
-    let shortLivedToken: string, longLivedToken: string, expiresInSeconds: number;
+    const account = await this.accountsRepo.findOneBy({ id: consumed.accountId });
+    if (!account) throw new Error('Аккаунт больше не существует');
+
+    // Instagram sends error=access_denied and no code when the user cancels.
+    if (!code) throw new InstagramLoginError('Вход в Instagram отменён', account.id);
+
+    let longLivedToken: string, expiresInSeconds: number;
     let profile: InstagramProfile;
     try {
-      ({ accessToken: shortLivedToken } = await this.api.exchangeCodeForToken(code));
+      const { accessToken: shortLivedToken } = await this.api.exchangeCodeForToken(code);
       ({ accessToken: longLivedToken, expiresInSeconds } = await this.api.exchangeForLongLivedToken(shortLivedToken));
       profile = await this.api.getProfile(longLivedToken);
     } catch (error) {
-      // The client throws raw, untranslated errors (Task 5) — this is the
-      // layer that turns one into a message safe to show the user.
-      throw translateInstagramError(error);
+      throw new InstagramLoginError(translateInstagramError(error).message, account.id);
     }
 
-    if (!profile.id) throw new Error('Instagram не вернул идентификатор аккаунта, попробуйте подключить заново');
-    // The token response's user_id is a JSON number that can exceed 2^53 and
-    // lose precision; /me returns the same id as a string, so key on that.
-    const instagramUserId = String(profile.id);
+    try {
+        if (!profile.id) throw new InstagramLoginError('Instagram не вернул идентификатор аккаунта, попробуйте подключить заново', account.id);
+        // /me returns the id as a string; the token response's numeric user_id can lose precision.
+        const instagramUserId = String(profile.id);
 
-    const encryptedToken = encryptToken(longLivedToken, this.encryptionKey);
-    const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000);
+        const handle = profile.username ? ` (@${profile.username})` : '';
 
-    // externalId is Instagram's numeric user id, not @username — see the plan's
-    // Global Constraints for why. This is what makes reconnect an update, not
-    // a duplicate insert, on a second login for the same account.
-    const existing = await this.accountsRepo.findOneBy({ platform: AccountPlatform.INSTAGRAM, externalId: instagramUserId });
+        if (account.type === AccountType.PUBLIC_NO_ACCESS) {
+          const expected = account.externalId.replace(/^@/, '').toLowerCase();
+          if ((profile.username ?? '').toLowerCase() !== expected) {
+            throw new InstagramLoginError(
+              `Вы вошли в другой аккаунт Instagram${handle}, а проект ждёт @${expected}`,
+              account.id,
+            );
+          }
+          const clash = await this.accountsRepo.findOneBy({ platform: AccountPlatform.INSTAGRAM, externalId: instagramUserId });
+          if (clash && clash.id !== account.id) {
+            throw new InstagramLoginError('Этот аккаунт Instagram уже подключён отдельно — удалите дубликат и попробуйте снова', account.id);
+          }
+        } else if (account.externalId !== instagramUserId) {
+          throw new InstagramLoginError(`Вы вошли в другой аккаунт Instagram${handle}`, account.id);
+        }
 
-    if (existing) {
-      // save() on the accountId primary key is an upsert: it re-creates the
-      // row the data-deletion webhook removed, where update() would touch 0 rows.
-      await this.credentialsRepo.save({ accountId: existing.id, encryptedToken, tokenExpiresAt, needsReconnect: false });
-      // The sync pipeline never rewrites name/avatar, and Instagram's avatar
-      // CDN URLs expire — a reconnect is a natural moment to refresh both.
-      const refreshed = { name: profile.name ?? profile.username, avatarUrl: profile.profilePictureUrl };
-      await this.accountsRepo.update({ id: existing.id }, refreshed);
-      return { ...existing, ...refreshed };
+        const encryptedToken = encryptToken(longLivedToken, this.encryptionKey);
+        const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000);
+        // Own accounts are keyed by the numeric id (deauthorize, data-deletion and
+        // dedup all look them up that way), so an upgrade switches to it.
+        const changes = {
+          type: account.type === AccountType.PUBLIC_NO_ACCESS ? AccountType.OWN : account.type,
+          externalId: instagramUserId,
+          name: profile.name ?? profile.username,
+          avatarUrl: profile.profilePictureUrl,
+        };
+        await this.accountsRepo.manager.transaction(async (em) => {
+          await em.update(Account, { id: account.id }, changes);
+          // save() upserts on accountId: it re-creates a credential the data-deletion webhook removed.
+          await em.save(AccountCredential, { accountId: account.id, encryptedToken, tokenExpiresAt, needsReconnect: false });
+        });
+        return { ...account, ...changes };
+    } catch (error) {
+      if (error instanceof InstagramLoginError) throw error;
+      this.logger.warn(`Instagram login for account ${account.id} failed: ${(error as Error).message}`);
+      throw new InstagramLoginError('Не удалось подключить Instagram, попробуйте ещё раз', account.id);
     }
-
-    const name = profile.name ?? profile.username;
-    return this.accountsRepo.manager.transaction(async (em) => {
-      const group = await createProfile(em, name);
-      const account = await em.save(Account, {
-        platform: AccountPlatform.INSTAGRAM,
-        externalId: instagramUserId,
-        name,
-        avatarUrl: profile.profilePictureUrl,
-        type: type === InstagramAccountKind.OWN ? AccountType.OWN : AccountType.CLIENT,
-        isActive: true,
-        profileId: group.id,
-      });
-      await em.save(AccountCredential, { accountId: account.id, encryptedToken, tokenExpiresAt, needsReconnect: false });
-      return account;
-    });
   }
 
   private redirectUri(): string {

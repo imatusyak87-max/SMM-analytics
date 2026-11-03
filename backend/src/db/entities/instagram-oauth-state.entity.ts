@@ -20,5 +20,7 @@ export enum InstagramAccountKind {
 export class InstagramOauthState {
   @PrimaryColumn('uuid') id: string;
   @Column({ type: 'enum', enum: InstagramAccountKind }) type: InstagramAccountKind;
+  /** Set when the login is for one existing account (full-access upgrade or reconnect). */
+  @Column({ type: 'uuid', nullable: true }) accountId: string | null;
   @CreateDateColumn() createdAt: Date;
 }

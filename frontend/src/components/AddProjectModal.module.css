@@ -215,3 +215,9 @@
   gap: 12px;
   margin-top: 12px;
 }
+
+.step { margin: 20px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text); }
+.field { margin-top: 12px; }
+.example { margin: 4px 0 0; font-size: 13px; color: var(--text); }
+.soon { margin-left: 8px; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text); }
+.input:disabled { opacity: 0.5; cursor: not-allowed; }

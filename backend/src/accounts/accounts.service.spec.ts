@@ -102,14 +102,14 @@ describe('AccountsService', () => {
       });
     });
 
-    it('deletes the profile the account leaves empty', async () => {
-      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1', profileId: 'prof-1' });
+    it('keeps the project the account leaves, even when it is now empty', async () => {
+      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1', profileId: 'p1' });
       em.count.mockResolvedValue(0);
       const service = new AccountsService(repo, { get: jest.fn() } as any, { createManual: jest.fn() } as any);
 
       await service.remove('acc-1');
 
-      expect(em.delete).toHaveBeenLastCalledWith(Profile, { id: 'prof-1' });
+      expect(em.delete).not.toHaveBeenCalledWith(Profile, expect.anything());
     });
 
     it('does not delete anything for an account that does not exist', async () => {
@@ -253,6 +253,32 @@ describe('AccountsService', () => {
   });
 
   describe('createFromLink', () => {
+    it('refuses a link for another network than the field it was typed into', async () => {
+      const repo = makeRepo();
+      const connector = { getAccountInfo: jest.fn() };
+      const service = new AccountsService(repo, { get: jest.fn(() => connector) } as any, { createManual: jest.fn() } as any);
+
+      await expect(service.createFromLink('https://instagram.com/brand', 'prof-1', AccountPlatform.TELEGRAM))
+        .rejects.toThrow('Это ссылка не на Telegram');
+      expect(connector.getAccountInfo).not.toHaveBeenCalled();
+    });
+
+    it('refuses a second account of the same network in one project', async () => {
+      const repo = makeRepo();
+      repo.findOneBy.mockImplementation((where: any) => Promise.resolve(where.profileId ? { id: 'acc-tg' } : null));
+      const service = new AccountsService(repo, { get: jest.fn(() => ({ getAccountInfo: jest.fn() })) } as any, { createManual: jest.fn() } as any);
+
+      await expect(service.createFromLink('https://t.me/somechannel', 'prof-1')).rejects.toThrow('В проекте уже есть Telegram');
+    });
+
+    it('names the project an already added account belongs to', async () => {
+      const repo = makeRepo({ id: '1' }, { id: 'acc-1', profileId: 'prof-7' });
+      repo.manager.findOneBy.mockResolvedValue({ id: 'prof-7', name: 'Мезопроф' });
+      const service = new AccountsService(repo, { get: jest.fn(() => ({})) } as any, { createManual: jest.fn() } as any);
+
+      await expect(service.createFromLink('https://t.me/somechannel')).rejects.toThrow('Этот аккаунт уже в проекте «Мезопроф»');
+    });
+
     it('saves the name and avatar fetched from the platform', async () => {
       const repo = makeRepo();
       const connector = {
@@ -354,7 +380,7 @@ describe('AccountsService', () => {
 
       await expect(
         service.createFromLink('https://example.com/someone'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toThrow('Не удалось распознать ссылку. Вставьте ссылку на аккаунт, например https://t.me/channel');
       expect(repo.save).not.toHaveBeenCalled();
     });
 
@@ -369,24 +395,47 @@ describe('AccountsService', () => {
 
       await expect(
         service.createFromLink('https://vk.com/somegroup'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toThrow('ВКонтакте пока не поддерживается');
       expect(repo.save).not.toHaveBeenCalled();
     });
 
-    it('surfaces why the platform rejected the account, not just that it failed', async () => {
-      const repo = makeRepo();
-      const connector = {
-        getAccountInfo: jest
-          .fn()
-          .mockRejectedValue(new Error('Bad Request: chat not found')),
-      };
-      const service = new AccountsService(repo, {
+    function serviceRejectingWith(error: unknown) {
+      const connector = { getAccountInfo: jest.fn().mockRejectedValue(error) };
+      return new AccountsService(makeRepo(), {
         get: jest.fn().mockReturnValue(connector),
       } as any, { createManual: jest.fn() } as any);
+    }
 
+    it('says the channel was not found for a Telegram 400 "chat not found"', async () => {
+      const error = Object.assign(new Error('Request failed with status code 400'), {
+        response: { status: 400, data: { ok: false, description: 'Bad Request: chat not found' } },
+      });
       await expect(
-        service.createFromLink('https://t.me/nosuchchannel'),
-      ).rejects.toThrow(/chat not found/);
+        serviceRejectingWith(error).createFromLink('https://t.me/nosuchchannel'),
+      ).rejects.toThrow(new BadRequestException('Канал не найден'));
+    });
+
+    it('says the channel was not found when the error text is "chat not found"', async () => {
+      await expect(
+        serviceRejectingWith(new Error('Bad Request: chat not found')).createFromLink('https://t.me/nosuchchannel'),
+      ).rejects.toThrow(new BadRequestException('Канал не найден'));
+    });
+
+    it('asks to retry on a timeout, a 429 or a 5xx, without leaking provider text', async () => {
+      const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' });
+      const limited = Object.assign(new Error('Too Many Requests'), { response: { status: 429 } });
+      const broken = Object.assign(new Error('Bad Gateway'), { response: { status: 502 } });
+      for (const error of [timeout, limited, broken]) {
+        await expect(
+          serviceRejectingWith(error).createFromLink('https://t.me/nosuchchannel'),
+        ).rejects.toThrow(new BadRequestException('Не удалось проверить, попробуйте ещё раз'));
+      }
+    });
+
+    it('never appends raw provider text to an unknown failure', async () => {
+      await expect(
+        serviceRejectingWith(new Error('secret provider detail')).createFromLink('https://t.me/nosuchchannel'),
+      ).rejects.toThrow(new BadRequestException('Не удалось проверить аккаунт'));
     });
 
     it('rejects a link the platform cannot resolve to a real account', async () => {

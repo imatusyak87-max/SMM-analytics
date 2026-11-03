@@ -20,18 +20,26 @@ describe('App', () => {
     render(<App />);
 
     expect(screen.getByLabelText('Логин')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Все проекты' })).not.toBeInTheDocument();
     expect(apiClient.get).not.toHaveBeenCalled();
   });
 
-  it('renders the overview page with nav at / for a logged-in user', async () => {
+  it('renders the home page with nav at / for a logged-in user', () => {
     localStorage.setItem('accessToken', 'tok123');
-    (apiClient.get as any).mockResolvedValue({ data: [] });
     window.history.pushState({}, '', '/');
     render(<App />);
 
-    expect(screen.getByRole('link', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Compare' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Единый центр отчетности FD Agency' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Все проекты' })).toHaveLength(2);
+    expect(screen.queryByRole('link', { name: 'Compare' })).not.toBeInTheDocument();
+  });
+
+  it('renders the projects list at /projects', async () => {
+    localStorage.setItem('accessToken', 'tok123');
+    (apiClient.get as any).mockResolvedValue({ data: [] });
+    window.history.pushState({}, '', '/projects');
+    render(<App />);
+
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/profiles'));
   });
 });

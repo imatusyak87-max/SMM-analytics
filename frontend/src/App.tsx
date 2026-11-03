@@ -4,10 +4,12 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import { AuthShell } from './components/AuthShell';
 import { Layout } from './components/Layout';
 import { AccountDetailPage } from './pages/AccountDetailPage';
-import { ComparePage } from './pages/ComparePage';
+import { GuidePage } from './pages/GuidePage';
+import { HomePage } from './pages/HomePage';
+import { LegacyProfileRedirect } from './pages/LegacyProfileRedirect';
 import { LoginPage } from './pages/LoginPage';
-import { OverviewPage } from './pages/OverviewPage';
-import { ProfilePage } from './pages/ProfilePage';
+import { ProjectsPage } from './pages/ProjectsPage';
+import { ProjectPage } from './pages/ProjectPage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { token } = useAuth();
@@ -32,7 +34,39 @@ export default function App() {
             path="/"
             element={
               <RequireAuth>
-                <OverviewPage />
+                <HomePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/projects"
+            element={
+              <RequireAuth>
+                <ProjectsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/projects/:id"
+            element={
+              <RequireAuth>
+                <ProjectPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profiles/:id"
+            element={
+              <RequireAuth>
+                <LegacyProfileRedirect />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/guide"
+            element={
+              <RequireAuth>
+                <GuidePage />
               </RequireAuth>
             }
           />
@@ -41,22 +75,6 @@ export default function App() {
             element={
               <RequireAuth>
                 <AccountDetailPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/profiles/:id"
-            element={
-              <RequireAuth>
-                <ProfilePage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/compare"
-            element={
-              <RequireAuth>
-                <ComparePage />
               </RequireAuth>
             }
           />

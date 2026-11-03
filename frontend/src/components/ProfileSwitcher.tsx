@@ -34,7 +34,7 @@ export function ProfileSwitcher({ accountId, profile, onMoved }: ProfileSwitcher
       onMoved();
     } catch (err: any) {
       if (err.response?.status === 404) {
-        setError('Профиль не найден');
+        setError('Проект не найден');
         setListKey((key) => key + 1);
       } else {
         setError(err.response?.data?.message ?? 'Не удалось перенести аккаунт');
@@ -47,7 +47,7 @@ export function ProfileSwitcher({ accountId, profile, onMoved }: ProfileSwitcher
   return (
     <div className={styles.switcher}>
       <label className={styles.label} htmlFor="profile-switcher">
-        Профиль:
+        Проект:
       </label>
       <select
         id="profile-switcher"
@@ -63,7 +63,7 @@ export function ProfileSwitcher({ accountId, profile, onMoved }: ProfileSwitcher
             {`${p.name} (${p.accounts.map((a) => a.account.platform).join(', ')})`}
           </option>
         ))}
-        {profile.accountCount > 1 && <option value={NEW_PROFILE}>Отдельный профиль</option>}
+        {profile.accountCount > 1 && <option value={NEW_PROFILE}>Отдельный проект</option>}
       </select>
       {error && (
         <span className={styles.error} role="alert">

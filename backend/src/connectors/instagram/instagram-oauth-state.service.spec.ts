@@ -25,26 +25,34 @@ function makeRepo(returned: Array<Record<string, unknown>> = []) {
 }
 
 describe('InstagramOauthStateService', () => {
-  it('creates a state row carrying the requested type and returns its id', async () => {
+  it('creates a state row carrying the requested type and target account', async () => {
     const { repo } = makeRepo();
     const service = new InstagramOauthStateService(repo);
 
-    const id = await service.create(InstagramAccountKind.OWN);
+    const id = await service.create(InstagramAccountKind.OWN, 'acc-1');
 
-    expect(typeof id).toBe('string');
-    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({ id, type: InstagramAccountKind.OWN }));
+    expect(repo.save).toHaveBeenCalledWith({ id, type: InstagramAccountKind.OWN, accountId: 'acc-1' });
   });
 
-  it('consumes a fresh state atomically (delete-returning) and returns its type', async () => {
-    const { repo, qb } = makeRepo([{ type: InstagramAccountKind.CLIENT, createdAt: new Date() }]);
+  it('stores no account for a login that is not tied to one', async () => {
+    const { repo } = makeRepo();
     const service = new InstagramOauthStateService(repo);
 
-    const type = await service.consume(STATE_ID);
+    const id = await service.create(InstagramAccountKind.DISCOVERY);
 
-    expect(type).toBe(InstagramAccountKind.CLIENT);
+    expect(repo.save).toHaveBeenCalledWith({ id, type: InstagramAccountKind.DISCOVERY, accountId: null });
+  });
+
+  it('consumes a fresh state atomically (delete-returning) and returns its type and account', async () => {
+    const { repo, qb } = makeRepo([{ type: 'own', accountId: 'acc-1', createdAt: new Date() }]);
+    const service = new InstagramOauthStateService(repo);
+
+    const state = await service.consume(STATE_ID);
+
+    expect(state).toEqual({ type: InstagramAccountKind.OWN, accountId: 'acc-1' });
     expect(qb.delete).toHaveBeenCalled();
     expect(qb.where).toHaveBeenCalledWith('id = :id', { id: STATE_ID });
-    expect(qb.returning).toHaveBeenCalled();
+    expect(qb.returning).toHaveBeenCalledWith(['type', 'accountId', 'createdAt']);
     // No separate read-then-delete: two parallel callbacks can't both see the row.
     expect(repo.findOneBy).not.toHaveBeenCalled();
   });

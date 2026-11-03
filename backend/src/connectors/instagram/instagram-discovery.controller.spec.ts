@@ -44,7 +44,7 @@ describe('InstagramDiscoveryController', () => {
     await new InstagramDiscoveryController(oauth as any, connection as any).callback('the-code', 'state-uuid', res);
 
     expect(oauth.completeLogin).toHaveBeenCalledWith('the-code', 'state-uuid');
-    expect(res.redirect).toHaveBeenCalledWith('/?add=competitor');
+    expect(res.redirect).toHaveBeenCalledWith('/projects?add=project');
   });
 
   it("carries a failed login's message back to the dialog", async () => {
@@ -53,7 +53,7 @@ describe('InstagramDiscoveryController', () => {
 
     await new InstagramDiscoveryController(oauth as any, connection as any).callback('the-code', 'state-uuid', res);
 
-    expect(res.redirect).toHaveBeenCalledWith(`/?add=competitor&discoveryError=${encodeURIComponent('Ссылка для входа устарела')}`);
+    expect(res.redirect).toHaveBeenCalledWith(`/projects?add=project&discoveryError=${encodeURIComponent('Ссылка для входа устарела')}`);
   });
 
   it('treats a callback without a code (the user cancelled) as a cancelled login', async () => {
@@ -63,6 +63,6 @@ describe('InstagramDiscoveryController', () => {
     await new InstagramDiscoveryController(oauth as any, connection as any).callback(undefined, 'state-uuid', res);
 
     expect(oauth.completeLogin).not.toHaveBeenCalled();
-    expect(res.redirect).toHaveBeenCalledWith(`/?add=competitor&discoveryError=${encodeURIComponent('Вход через Facebook отменён')}`);
+    expect(res.redirect).toHaveBeenCalledWith(`/projects?add=project&discoveryError=${encodeURIComponent('Вход через Facebook отменён')}`);
   });
 });

@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import styles from './Layout.module.css';
 
@@ -23,18 +23,12 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
-        <span className={styles.brand}>SMM Analytics</span>
+        <Link to="/" className={styles.brand}>FD Agency</Link>
         <nav className={styles.nav}>
-          <NavLink to="/" end className={navLinkClassName}>
-            Overview
-          </NavLink>
-          <NavLink to="/compare" className={navLinkClassName}>
-            Compare
-          </NavLink>
+          <NavLink to="/projects" className={navLinkClassName}>Все проекты</NavLink>
+          <NavLink to="/guide" className={navLinkClassName}>Как пользоваться</NavLink>
         </nav>
-        <button type="button" className={styles.logout} onClick={handleLogout}>
-          Log out
-        </button>
+        <button type="button" className={styles.logout} onClick={handleLogout}>Выйти</button>
       </header>
       <main className={styles.content}>{children}</main>
     </div>

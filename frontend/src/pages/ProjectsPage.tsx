@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
-import { AddAccountModal } from '../components/AddAccountModal';
+import { AddProjectModal } from '../components/AddProjectModal';
 import { ProfileCard } from '../components/ProfileCard';
 import type { ProfileSummary } from '../profiles';
-import styles from './OverviewPage.module.css';
+import styles from './ProjectsPage.module.css';
 
-export function OverviewPage() {
+export function ProjectsPage() {
   const [items, setItems] = useState<ProfileSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // The Facebook login (for Instagram competitors) redirects back to /?add=competitor,
+  // The Facebook login (for Instagram competitors) redirects back to /projects?add=project,
   // optionally with the error it failed with; reopen the dialog where the user left it.
   const [searchParams, setSearchParams] = useSearchParams();
-  const [isAdding, setIsAdding] = useState(searchParams.get('add') === 'competitor');
+  const [isAdding, setIsAdding] = useState(searchParams.get('add') === 'project');
   const [addError, setAddError] = useState<string | null>(searchParams.get('discoveryError'));
 
   const mounted = useRef(true);
@@ -86,17 +86,12 @@ export function OverviewPage() {
     setAddError(null);
   }
 
-  function handleCreated() {
-    closeAdding();
-    load();
-  }
-
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.heading}>Overview</h1>
+        <h1 className={styles.heading}>Все проекты</h1>
         <button type="button" className={styles.addButton} onClick={() => setIsAdding(true)}>
-          Добавить аккаунт
+          Добавить проект
         </button>
       </div>
       {facebookExpired && (
@@ -111,9 +106,9 @@ export function OverviewPage() {
       {loading ? (
         <p className={styles.loading}>Загрузка…</p>
       ) : error ? (
-        <p className={styles.error}>Не удалось загрузить аккаунты. Попробуйте позже.</p>
+        <p className={styles.error}>Не удалось загрузить проекты. Попробуйте позже.</p>
       ) : items.length === 0 ? (
-        <p className={styles.empty}>Пока нет ни одного аккаунта.</p>
+        <p className={styles.empty}>Пока нет ни одного проекта.</p>
       ) : (
         <div className={styles.grid}>
           {items.map((profile) => (
@@ -122,12 +117,7 @@ export function OverviewPage() {
         </div>
       )}
       {isAdding && (
-        <AddAccountModal
-          onClose={closeAdding}
-          onCreated={handleCreated}
-          initialError={addError}
-          profiles={items.map(({ id, name }) => ({ id, name }))}
-        />
+        <AddProjectModal onClose={closeAdding} initialError={addError} />
       )}
     </div>
   );

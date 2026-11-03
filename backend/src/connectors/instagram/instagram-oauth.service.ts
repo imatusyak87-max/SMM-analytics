@@ -11,9 +11,10 @@ import { translateInstagramError } from './instagram-error';
 
 const EXPIRED = 'Ссылка для входа устарела, попробуйте подключить аккаунт заново';
 
-/** A login for a known account failed; the callback sends the user back to that account with the message. */
+/** A login failed; the callback sends the user back to that account (or home) with the message. */
 export class InstagramLoginError extends Error {
-  constructor(message: string, readonly accountId: string) {
+  /** accountId is null when the login cannot be tied to an account (expired link, account gone). */
+  constructor(message: string, readonly accountId: string | null) {
     super(message);
   }
 }
@@ -57,10 +58,10 @@ export class InstagramOauthService {
    */
   async completeLogin(code: string | undefined, state: string): Promise<Account> {
     const consumed = await this.stateService.consume(state);
-    if (!consumed || consumed.type === InstagramAccountKind.DISCOVERY || !consumed.accountId) throw new Error(EXPIRED);
+    if (!consumed || consumed.type === InstagramAccountKind.DISCOVERY || !consumed.accountId) throw new InstagramLoginError(EXPIRED, null);
 
-    const account = await this.accountsRepo.findOneBy({ id: consumed.accountId });
-    if (!account) throw new Error('Аккаунт больше не существует');
+    const account = await this.accountsRepo.findOneBy({ id: consumed.accountId, isActive: true });
+    if (!account) throw new InstagramLoginError('Аккаунт больше не существует', null);
 
     // Instagram sends error=access_denied and no code when the user cancels.
     if (!code) throw new InstagramLoginError('Вход в Instagram отменён', account.id);

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, Param, ParseUUIDPipe, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { InstagramOauthService } from '../connectors/instagram/instagram-oauth.service';
@@ -55,10 +55,5 @@ export class AccountsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.accountsService.remove(id);
-  }
-
-  @Patch(':id/deactivate')
-  deactivate(@Param('id') id: string) {
-    return this.accountsService.deactivate(id);
   }
 }

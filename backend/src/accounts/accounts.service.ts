@@ -8,15 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account, AccountPlatform, AccountType } from '../db/entities/account.entity';
-import { AccountCredential } from '../db/entities/account-credential.entity';
-import { AccountSnapshot } from '../db/entities/account-snapshot.entity';
 import { Profile } from '../db/entities/profile.entity';
-import { Post } from '../db/entities/post.entity';
-import { SyncJob } from '../db/entities/sync-job.entity';
-import { CompetitorRun } from '../db/entities/competitor-run.entity';
-import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
-import { CompetitorRejection } from '../db/entities/competitor-rejection.entity';
-import { HistoryLoad } from '../db/entities/history-load.entity';
 import { ConnectorRegistry } from '../connectors/connector-registry.service';
 import { AccountInfo, AccountStats, AvatarImage, SocialConnector } from '../connectors/connector.interface';
 import { createProfile, requireProfile, PROFILE_NOT_FOUND } from '../profiles/profile-store';
@@ -224,27 +216,13 @@ export class AccountsService {
   }
 
   async findOne(id: string) {
-    const account = await this.repo.findOneBy({ id });
+    const account = await this.repo.findOneBy({ id, isActive: true });
     if (!account) throw new NotFoundException(`Account ${id} not found`);
     return account;
   }
 
+  /** Hides the account: it stops syncing, and re-adding its link brings it back with all its data. */
   async remove(id: string) {
-    await this.findOne(id);
-    await this.repo.manager.transaction(async (em) => {
-      await em.delete(CompetitorRejection, { accountId: id });
-      await em.delete(CompetitorSuggestion, { accountId: id });
-      await em.delete(CompetitorRun, { accountId: id });
-      await em.delete(Post, { accountId: id });
-      await em.delete(AccountSnapshot, { accountId: id });
-      await em.delete(SyncJob, { accountId: id });
-      await em.delete(AccountCredential, { accountId: id });
-      await em.delete(HistoryLoad, { accountId: id });
-      await em.delete(Account, { id });
-    });
-  }
-
-  async deactivate(id: string) {
     await this.findOne(id);
     await this.repo.update(id, { isActive: false });
   }

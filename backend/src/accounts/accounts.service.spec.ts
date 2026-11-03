@@ -2,8 +2,6 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { AccountsService } from './accounts.service';
 import { AccountPlatform, AccountType } from '../db/entities/account.entity';
 import { InstagramDiscoveryUnavailableError, InstagramProfileNotFoundError } from '../connectors/instagram/instagram-discovery.errors';
-import { CompetitorRun } from '../db/entities/competitor-run.entity';
-import { CompetitorSuggestion } from '../db/entities/competitor-suggestion.entity';
 import { Profile } from '../db/entities/profile.entity';
 
 /**
@@ -66,74 +64,22 @@ describe('AccountsService', () => {
   });
 
   describe('remove', () => {
-    function makeRepoWithTransaction(account: unknown) {
-      const em = { delete: jest.fn(), count: jest.fn().mockResolvedValue(1) };
-      const repo = {
-        findOneBy: jest.fn().mockResolvedValue(account),
-        manager: {
-          transaction: jest.fn((cb: (em: unknown) => Promise<void>) => cb(em)),
-        },
-      } as any;
-      return { repo, em };
-    }
-
-    it('clears the data belonging to the account before removing it', async () => {
-      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1', profileId: 'prof-1' });
+    it('hides the account and keeps all its data', async () => {
+      const repo = { findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1', isActive: true }), update: jest.fn() } as any;
       const service = new AccountsService(repo, { get: jest.fn() } as any, { createManual: jest.fn() } as any);
 
       await service.remove('acc-1');
 
-      const deletedTables = em.delete.mock.calls.map(
-        (call: unknown[]) => (call[0] as { name: string }).name,
-      );
-      expect(deletedTables).toEqual([
-        'CompetitorRejection',
-        'CompetitorSuggestion',
-        'CompetitorRun',
-        'Post',
-        'AccountSnapshot',
-        'SyncJob',
-        'AccountCredential',
-        'HistoryLoad',
-        'Account',
-      ]);
-      expect(em.delete).toHaveBeenCalledWith(expect.anything(), {
-        accountId: 'acc-1',
-      });
+      expect(repo.update).toHaveBeenCalledWith('acc-1', { isActive: false });
     });
 
-    it('keeps the project the account leaves, even when it is now empty', async () => {
-      const { repo, em } = makeRepoWithTransaction({ id: 'acc-1', profileId: 'p1' });
-      em.count.mockResolvedValue(0);
+    it('answers 404 for an account that is already deleted', async () => {
+      const repo = { findOneBy: jest.fn().mockResolvedValue(null), update: jest.fn() } as any;
       const service = new AccountsService(repo, { get: jest.fn() } as any, { createManual: jest.fn() } as any);
 
-      await service.remove('acc-1');
-
-      expect(em.delete).not.toHaveBeenCalledWith(Profile, expect.anything());
-    });
-
-    it('does not delete anything for an account that does not exist', async () => {
-      const { repo, em } = makeRepoWithTransaction(null);
-      const service = new AccountsService(repo, { get: jest.fn() } as any, { createManual: jest.fn() } as any);
-
-      await expect(service.remove('missing')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
-      expect(em.delete).not.toHaveBeenCalled();
-    });
-
-    it('deletes competitor runs and suggestions along with the account', async () => {
-      const em = { delete: jest.fn(), count: jest.fn().mockResolvedValue(1) };
-      const repo = {
-        findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1', profileId: 'prof-1' }),
-        manager: { transaction: jest.fn(async (cb: any) => cb(em)) },
-      } as any;
-      const service = new AccountsService(repo, {} as any, {} as any);
-
-      await service.remove('acc-1');
-
-      expect(em.delete).toHaveBeenCalledWith(CompetitorSuggestion, { accountId: 'acc-1' });
-      expect(em.delete).toHaveBeenCalledWith(CompetitorRun, { accountId: 'acc-1' });
+      await expect(service.remove('acc-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(repo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+      expect(repo.update).not.toHaveBeenCalled();
     });
   });
 

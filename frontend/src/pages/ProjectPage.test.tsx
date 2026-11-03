@@ -102,6 +102,15 @@ describe('ProjectPage', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
+  it('says the statistics are kept when the project is deleted', async () => {
+    mockProfile();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить проект' }));
+    expect(confirm).toHaveBeenCalledWith('Удалить проект «Coffee Lab»? Статистика аккаунтов сохранится и вернётся, если добавить их снова.');
+    expect(del).not.toHaveBeenCalled();
+  });
+
   it('deletes the project after confirmation and goes to all projects', async () => {
     mockProfile();
     vi.spyOn(window, 'confirm').mockReturnValue(true);

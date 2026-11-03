@@ -1,6 +1,4 @@
-import { useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { apiClient } from '../api/client';
 import { formatCount } from '../format';
 import type { ProfileAccountItem } from '../profiles';
 import type { NETWORKS } from './LinkField';
@@ -12,11 +10,10 @@ interface NetworkTileProps {
   network: (typeof NETWORKS)[number];
   item?: ProfileAccountItem;
   onAdd: () => void;
-  onRemoved: () => void;
 }
 
-export function NetworkTile({ network, item, onAdd, onRemoved }: NetworkTileProps) {
-  if (item) return <FilledTile item={item} onRemoved={onRemoved} />;
+export function NetworkTile({ network, item, onAdd }: NetworkTileProps) {
+  if (item) return <FilledTile item={item} />;
   if (!network.available) {
     return (
       <div className={`${styles.tile} ${styles.soon}`} data-testid="network-tile" data-platform={network.platform}>
@@ -34,23 +31,9 @@ export function NetworkTile({ network, item, onAdd, onRemoved }: NetworkTileProp
   );
 }
 
-function FilledTile({ item, onRemoved }: { item: ProfileAccountItem; onRemoved: () => void }) {
+function FilledTile({ item }: { item: ProfileAccountItem }) {
   const { account, latestSnapshot } = item;
   const avatarSrc = useAvatar(account.id, account.avatarUrl !== null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function remove(e: MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm(`Убрать «${account.name}» из проекта? Вся собранная статистика этого аккаунта будет удалена.`)) return;
-    try {
-      setError(null);
-      await apiClient.delete(`/accounts/${account.id}`);
-      onRemoved();
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? 'Не удалось убрать аккаунт');
-    }
-  }
 
   return (
     <div className={styles.tile} data-testid="network-tile" data-platform={account.platform}>
@@ -59,8 +42,6 @@ function FilledTile({ item, onRemoved }: { item: ProfileAccountItem; onRemoved: 
         <span className={styles.name}><PlatformIcon platform={account.platform} /> {account.name}</span>
         <span className={styles.followers}>{formatCount(latestSnapshot?.followersCount ?? null)} подписчиков</span>
       </Link>
-      <button type="button" className={styles.remove} onClick={remove}>Убрать</button>
-      {error && <span className={styles.error} role="alert">{error}</span>}
     </div>
   );
 }

@@ -31,7 +31,7 @@ describe('LinkField', () => {
     post.mockResolvedValue({ data: { platform: 'telegram', externalId: '@chan', name: 'Канал', followersCount: 1200, avatarDataUri: null, alreadyAdded: false } });
     render(<Harness />);
     await type('https://t.me/chan');
-    expect(post).toHaveBeenCalledWith('/accounts/preview', { link: 'https://t.me/chan' });
+    expect(post).toHaveBeenCalledWith('/accounts/preview', { link: 'https://t.me/chan', platform: 'telegram' });
     expect(screen.getByText('Канал')).toBeInTheDocument();
   });
 
@@ -54,5 +54,13 @@ describe('LinkField', () => {
     render(<Harness platform="instagram" />);
     await type('https://instagram.com/brand');
     expect(screen.getByRole('button', { name: 'Подключить Facebook' })).toBeInTheDocument();
+  });
+
+  it('says a previously deleted account comes back with its statistics', async () => {
+    post.mockResolvedValue({ data: { platform: 'telegram', name: 'Chan', followersCount: 1, avatarDataUri: null, alreadyAdded: false, previouslyAdded: true } });
+    render(<Harness />);
+    await type('https://t.me/chan');
+    expect(screen.getByText('Аккаунт добавлялся раньше — собранная статистика вернётся')).toBeInTheDocument();
+    expect(screen.queryByText('Этот аккаунт уже добавлен')).not.toBeInTheDocument();
   });
 });

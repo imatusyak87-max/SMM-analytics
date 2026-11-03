@@ -19,6 +19,7 @@ interface AccountPreview {
   followersCount: number;
   avatarDataUri: string | null;
   alreadyAdded: boolean;
+  previouslyAdded: boolean;
 }
 
 type FacebookPrompt = 'connect' | 'reconnect';
@@ -58,7 +59,7 @@ export function LinkField({ id, platform, value, onChange, autoFocus }: LinkFiel
     setResolving(true);
     const timer = setTimeout(() => {
       apiClient
-        .post('/accounts/preview', { link: trimmed })
+        .post('/accounts/preview', { link: trimmed, platform })
         .then((res) => {
           if (cancelled) return;
           if (res.data.platform !== platform) setError(`Это ссылка не на ${network.name}`);
@@ -128,6 +129,7 @@ export function LinkField({ id, platform, value, onChange, autoFocus }: LinkFiel
               <span className={styles.previewCount}>{formatCount(preview.followersCount)}</span> подписчиков
             </div>
             {preview.alreadyAdded && <p className={styles.duplicate}>Этот аккаунт уже добавлен</p>}
+            {preview.previouslyAdded && <p className={styles.hint}>Аккаунт добавлялся раньше — собранная статистика вернётся</p>}
           </div>
         </div>
       )}

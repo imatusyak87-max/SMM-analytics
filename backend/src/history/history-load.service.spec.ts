@@ -76,6 +76,23 @@ describe('HistoryLoadService.start', () => {
   });
 });
 
+describe('HistoryLoadService.get', () => {
+  it('refuses a deleted account', async () => {
+    const { service, accountsRepo, loadsRepo } = setup();
+    accountsRepo.findOneBy.mockResolvedValue(null);
+
+    await expect(service.get('acc-1')).rejects.toThrow(NotFoundException);
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(loadsRepo.findOneBy).not.toHaveBeenCalled();
+  });
+
+  it('returns null for an active account that never loaded history', async () => {
+    const { service } = setup();
+
+    expect(await service.get('acc-1')).toBeNull();
+  });
+});
+
 describe('HistoryLoadService.resumeStranded', () => {
   it('re-queues an unfinished load that has no job in the queue, honouring a pause', async () => {
     const pausedUntil = new Date(Date.now() + 60_000);

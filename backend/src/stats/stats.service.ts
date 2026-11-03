@@ -215,7 +215,7 @@ export class StatsService {
   async compare(accountIds: string[], period: Period) {
     const result: { account: Account | null; trend: AccountSnapshot[] }[] = [];
     for (const accountId of accountIds) {
-      const account = await this.accountsRepo.findOneBy({ id: accountId });
+      const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
       const trend = await this.snapshotsRepo.find({
         where: { accountId, date: Between(period.from, period.to) },
         order: { date: 'ASC' },

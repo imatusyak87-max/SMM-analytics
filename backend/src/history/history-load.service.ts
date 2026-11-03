@@ -95,6 +95,8 @@ export class HistoryLoadService implements OnApplicationBootstrap {
   }
 
   async get(accountId: string): Promise<HistoryLoadView | null> {
+    const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
+    if (!account) throw new NotFoundException('Аккаунт не найден');
     const load = await this.loadsRepo.findOneBy({ accountId });
     return load ? toView(load) : null;
   }

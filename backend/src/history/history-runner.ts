@@ -64,7 +64,18 @@ export class HistoryRunner {
     const load = await this.loadsRepo.findOneBy({ accountId });
     if (!load || load.status === HistoryLoadStatus.DONE || load.status === HistoryLoadStatus.FAILED) return null;
     const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
-    if (!account) return null;
+    if (!account) {
+      // Deleted account: close the open load so a revived account isn't stuck «running»; the cursor is kept for «Продолжить».
+      load.status = HistoryLoadStatus.FAILED;
+      load.errorMessage = 'Аккаунт удалён';
+      load.finishedAt = new Date();
+      try {
+        await this.persist(load);
+      } catch (error) {
+        if (!(error instanceof LoadGone)) throw error;
+      }
+      return null;
+    }
     const connector = this.registry.get(account.platform);
 
     load.status = HistoryLoadStatus.RUNNING;

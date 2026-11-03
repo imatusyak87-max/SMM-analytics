@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Account } from '../db/entities/account.entity';
 import { AccountPlatform } from '../db/entities/account.entity';
 import { Profile } from '../db/entities/profile.entity';
@@ -21,17 +25,25 @@ function setup({
     overviewItem('a2', 'p2', 5),
     overviewItem('a3', 'p2', 7),
   ],
-  account = { id: 'a2', name: 'Acc', profileId: 'p2' } as {
-    id: string;
-    name: string;
-    profileId: string;
-  } | null,
+  account = {
+    id: 'a2',
+    name: 'Acc',
+    profileId: 'p2',
+    platform: 'telegram',
+  } as { id: string; name: string; profileId: string; platform: string } | null,
+  sameNetwork = null as { id: string } | null,
   target = { id: 'p1', name: 'One' } as { id: string; name: string } | null,
   remaining = 0,
 } = {}) {
   const em = {
-    findOneBy: jest.fn((entity: unknown) =>
-      Promise.resolve(entity === Account ? account : target),
+    findOneBy: jest.fn((entity: unknown, where: any) =>
+      Promise.resolve(
+        entity !== Account
+          ? target
+          : where.profileId
+            ? sameNetwork
+            : account,
+      ),
     ),
     save: jest.fn((_t: unknown, row: object) =>
       Promise.resolve({ id: 'p-new', ...row }),
@@ -191,20 +203,6 @@ describe('ProfilesService.moveAccount', () => {
     expect(em.delete).not.toHaveBeenCalled();
   });
 
-  it('splits the account into a new profile named after it', async () => {
-    const { service, em } = setup({ remaining: 1 });
-
-    const result = await service.moveAccount('a2', { newProfile: true });
-
-    expect(em.save).toHaveBeenCalledWith(Profile, { name: 'Acc' });
-    expect(em.update).toHaveBeenCalledWith(
-      Account,
-      { id: 'a2' },
-      { profileId: 'p-new' },
-    );
-    expect(result).toEqual({ profileId: 'p-new' });
-  });
-
   it('does nothing when the account is already in that profile', async () => {
     const { service, em } = setup();
 
@@ -230,15 +228,30 @@ describe('ProfilesService.moveAccount', () => {
     expect(em.update).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [{}],
-    [{ profileId: 'p1', newProfile: true }],
-    [{ newProfile: false }],
-  ])('needs exactly one destination (%j)', async (target) => {
-    const { service } = setup();
-    await expect(service.moveAccount('a2', target)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+  it('refuses to move a deleted account', async () => {
+    const { service, em } = setup({ account: null });
+
+    await expect(
+      service.moveAccount('a2', { profileId: 'p1' }),
+    ).rejects.toThrow(new NotFoundException('Аккаунт не найден'));
+    expect(em.findOneBy).toHaveBeenCalledWith(Account, {
+      id: 'a2',
+      isActive: true,
+    });
+  });
+
+  it('refuses a project that already has that network', async () => {
+    const { service, em } = setup({ sameNetwork: { id: 'a9' } });
+
+    await expect(
+      service.moveAccount('a2', { profileId: 'p1' }),
+    ).rejects.toThrow(new ConflictException('В проекте уже есть Telegram'));
+    expect(em.findOneBy).toHaveBeenCalledWith(Account, {
+      profileId: 'p1',
+      platform: 'telegram',
+      isActive: true,
+    });
+    expect(em.update).not.toHaveBeenCalled();
   });
 });
 

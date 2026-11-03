@@ -50,9 +50,9 @@ describe('ProfilesController', () => {
 
   it('moves an account', async () => {
     const { controller, service } = build();
-    const result = await controller.moveAccount('a1', { newProfile: true });
+    const result = await controller.moveAccount('a1', { profileId: 'p2' });
     expect(service.moveAccount).toHaveBeenCalledWith('a1', {
-      newProfile: true,
+      profileId: 'p2',
     });
     expect(result).toEqual({ profileId: 'p1' });
   });

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   HttpException,
   Injectable,
   Logger,
@@ -9,10 +10,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account, AccountPlatform } from '../db/entities/account.entity';
 import { Profile } from '../db/entities/profile.entity';
+import { PLATFORM_NAMES } from '../accounts/platform-names';
 import { AccountsService } from '../accounts/accounts.service';
 import { StatsService } from '../stats/stats.service';
 import {
-  createProfile,
   requireProfile,
   PROFILE_NOT_FOUND,
 } from './profile-store';
@@ -118,20 +119,28 @@ export class ProfilesService {
     accountId: string,
     target: MoveAccountDto,
   ): Promise<{ profileId: string }> {
-    const hasId = typeof target.profileId === 'string';
-    const wantsNew = target.newProfile === true;
-    if (hasId === wantsNew)
-      throw new BadRequestException('Укажите либо profileId, либо newProfile');
-
     return this.accountsRepo.manager.transaction(async (em) => {
-      const account = await em.findOneBy(Account, { id: accountId });
+      const account = await em.findOneBy(Account, {
+        id: accountId,
+        isActive: true,
+      });
       if (!account) throw new NotFoundException(ACCOUNT_NOT_FOUND);
-      if (hasId && target.profileId === account.profileId)
+      if (target.profileId === account.profileId)
         return { profileId: account.profileId };
 
-      const destination = hasId
-        ? (await requireProfile(em, target.profileId!)).id
-        : (await createProfile(em, account.name)).id;
+      const destination = (await requireProfile(em, target.profileId)).id;
+      // One account per network per project, same rule as adding one.
+      if (
+        await em.findOneBy(Account, {
+          profileId: destination,
+          platform: account.platform,
+          isActive: true,
+        })
+      ) {
+        throw new ConflictException(
+          `В проекте уже есть ${PLATFORM_NAMES[account.platform]}`,
+        );
+      }
       await em.update(Account, { id: accountId }, { profileId: destination });
       return { profileId: destination };
     });

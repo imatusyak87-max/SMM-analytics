@@ -70,10 +70,8 @@
 }
 
 .error {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  white-space: nowrap;
+  margin: 0;
+  padding: 8px 10px;
   font-size: 13px;
   color: var(--danger);
 }

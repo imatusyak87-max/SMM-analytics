@@ -43,6 +43,21 @@ describe('MoveAccountButton', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('В проекте уже есть Instagram');
   });
 
+  it('shows the refusal inside the open menu and drops it when the menu is reopened', async () => {
+    patch.mockRejectedValue({ response: { data: { message: 'В проекте уже есть Instagram' } } });
+    render(<MoveAccountButton accountId="acc-1" currentProjectId="prof-1" onMoved={vi.fn()} />);
+    const trigger = screen.getByRole('button', { name: 'Перенести…' });
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Мезопроф (instagram)' }));
+    const alert = await screen.findByRole('alert');
+    expect(screen.getByRole('menu')).toContainElement(alert);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(trigger);
+    await screen.findByRole('menu');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('says so when there is nowhere to move', async () => {
     get.mockResolvedValue({ data: [projects[0]] });
     render(<MoveAccountButton accountId="acc-1" currentProjectId="prof-1" onMoved={vi.fn()} />);

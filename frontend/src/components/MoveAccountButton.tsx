@@ -51,7 +51,7 @@ export function MoveAccountButton({ accountId, currentProjectId, onMoved }: Move
 
   return (
     <div className={styles.wrapper} ref={wrapperRef}>
-      <button type="button" className={styles.trigger} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={styles.trigger} aria-expanded={open} onClick={() => { setError(null); setOpen((o) => !o); }}>
         Перенести…
       </button>
       {open && (
@@ -64,9 +64,9 @@ export function MoveAccountButton({ accountId, currentProjectId, onMoved }: Move
               {`${p.name} (${p.accounts.map((a) => a.account.platform).join(', ')})`}
             </button>
           ))}
+          {error && <p className={styles.error} role="alert">{error}</p>}
         </div>
       )}
-      {error && <span className={styles.error} role="alert">{error}</span>}
     </div>
   );
 }

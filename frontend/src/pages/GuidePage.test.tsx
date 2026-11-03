@@ -26,5 +26,7 @@ describe('GuidePage', () => {
     expect(screen.getByText(/«Свой профиль \/ Конкуренты»/)).toBeInTheDocument();
     expect(screen.getByText(/«Перенести…»/)).toBeInTheDocument();
     expect(screen.getByText(/по комментариям/)).toBeInTheDocument();
+    expect(screen.getByText(/раздел «Конкуренты» скоро появится/)).toBeInTheDocument();
+    expect(screen.queryByText(/пока скоро/)).not.toBeInTheDocument();
   });
 });

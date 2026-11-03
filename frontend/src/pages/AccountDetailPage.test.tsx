@@ -133,6 +133,13 @@ describe('AccountDetailPage', () => {
     await waitFor(() => expect(lastCallTo('/posts')).toMatchObject({ sort: 'reactions', page: 1, size: 10 }));
   });
 
+  it('sorts the top posts by comments', async () => {
+    mockApi();
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Комментарии' }));
+    await waitFor(() => expect(lastCallTo('/posts').sort).toBe('comments'));
+  });
+
   it('filters by post type on the server, and sends no type for «Все»', async () => {
     mockApi();
     renderPage();

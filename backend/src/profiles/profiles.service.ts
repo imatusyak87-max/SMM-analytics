@@ -53,7 +53,7 @@ export class ProfilesService {
 
   async list(): Promise<ProfileSummary[]> {
     const [profiles, items] = await Promise.all([
-      this.profilesRepo.find({ order: { createdAt: 'ASC' } }),
+      this.profilesRepo.find({ where: { isActive: true }, order: { createdAt: 'ASC' } }),
       this.stats.getOverview(),
     ]);
     // Empty projects are listed too: a project lives until it is deleted.
@@ -92,12 +92,13 @@ export class ProfilesService {
     return this.accounts.createFromLink(link, id, platform);
   }
 
-  /** Deletes the project and, through the normal account delete, all its data. */
+  /** Hides the project and its accounts; their statistics stay and come back when an account is re-added. */
   async remove(id: string): Promise<void> {
     await this.findOne(id);
-    const accounts = await this.accountsRepo.find({ where: { profileId: id } });
-    for (const account of accounts) await this.accounts.remove(account.id);
-    await this.profilesRepo.delete({ id });
+    await this.profilesRepo.manager.transaction(async (em) => {
+      await em.update(Account, { profileId: id }, { isActive: false });
+      await em.update(Profile, { id }, { isActive: false });
+    });
   }
 
   async get(id: string): Promise<ProfileSummary> {
@@ -137,7 +138,7 @@ export class ProfilesService {
   }
 
   private async findOne(id: string): Promise<Profile> {
-    const profile = await this.profilesRepo.findOneBy({ id });
+    const profile = await this.profilesRepo.findOneBy({ id, isActive: true });
     if (!profile) throw new NotFoundException(PROFILE_NOT_FOUND);
     return profile;
   }

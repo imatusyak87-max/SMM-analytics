@@ -28,7 +28,6 @@ function setup({
   } | null,
   target = { id: 'p1', name: 'One' } as { id: string; name: string } | null,
   remaining = 0,
-  projectAccounts = [{ id: 'a2' }, { id: 'a3' }],
 } = {}) {
   const em = {
     findOneBy: jest.fn((entity: unknown) =>
@@ -47,12 +46,11 @@ function setup({
       Promise.resolve(profiles.find((p) => p.id === id) ?? null),
     ),
     save: jest.fn((p: object) => Promise.resolve({ id: 'p-new', ...p })),
-    delete: jest.fn(),
+    manager: { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) },
   } as any;
   const accounts = { remove: jest.fn(), createFromLink: jest.fn() };
   const accountsRepo = {
     manager: { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) },
-    find: jest.fn().mockResolvedValue(projectAccounts),
   } as any;
   const stats = {
     getOverview: jest.fn((profileId?: string) =>
@@ -77,6 +75,7 @@ describe('ProfilesService.list', () => {
     const result = await service.list();
 
     expect(profilesRepo.find).toHaveBeenCalledWith({
+      where: { isActive: true },
       order: { createdAt: 'ASC' },
     });
     expect(
@@ -101,12 +100,12 @@ describe('ProfilesService.list', () => {
 });
 
 describe('ProfilesService.remove', () => {
-  it('deletes a project with every account in it', async () => {
-    const { service, accounts, profilesRepo } = setup();
+  it('hides a deleted project and its accounts, keeping their data', async () => {
+    const { service, accounts, em } = setup();
     await service.remove('p2');
-    expect(accounts.remove).toHaveBeenCalledWith('a2');
-    expect(accounts.remove).toHaveBeenCalledWith('a3');
-    expect(profilesRepo.delete).toHaveBeenCalledWith({ id: 'p2' });
+    expect(em.update).toHaveBeenCalledWith(Account, { profileId: 'p2' }, { isActive: false });
+    expect(em.update).toHaveBeenCalledWith(Profile, { id: 'p2' }, { isActive: false });
+    expect(accounts.remove).not.toHaveBeenCalled();
   });
 
   it('answers 404 for deleting an unknown project', async () => {
@@ -131,6 +130,13 @@ describe('ProfilesService.get', () => {
     await expect(service.get('nope')).rejects.toThrow(
       new NotFoundException('Проект не найден'),
     );
+  });
+
+  it('answers 404 for a hidden project', async () => {
+    const { service, profilesRepo } = setup();
+    profilesRepo.findOneBy.mockResolvedValue(null);
+    await expect(service.get('p1')).rejects.toThrow('Проект не найден');
+    expect(profilesRepo.findOneBy).toHaveBeenCalledWith({ id: 'p1', isActive: true });
   });
 });
 

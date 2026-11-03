@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
-import { AccountPlatform, AccountType } from '../db/entities/account.entity';
+import { Account, AccountPlatform, AccountType } from '../db/entities/account.entity';
 import { InstagramDiscoveryUnavailableError, InstagramProfileNotFoundError } from '../connectors/instagram/instagram-discovery.errors';
 import { Profile } from '../db/entities/profile.entity';
 
@@ -16,6 +16,7 @@ function withTransactions(repo: any) {
     ),
     count: jest.fn().mockResolvedValue(1),
     delete: jest.fn(),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
     findOneBy: jest.fn().mockResolvedValue({ id: 'prof-1', name: 'Existing' }),
   };
   repo.em = em;
@@ -106,6 +107,7 @@ describe('AccountsService', () => {
         followersCount: 4321,
         avatarDataUri: `data:image/jpeg;base64,${Buffer.from('img').toString('base64')}`,
         alreadyAdded: false,
+        previouslyAdded: false,
       });
       expect(repo.save).not.toHaveBeenCalled();
     });
@@ -130,7 +132,7 @@ describe('AccountsService', () => {
     });
 
     it('reports that an already added channel is a duplicate', async () => {
-      const repo = makeRepo({ id: '1' }, { id: 'existing', externalId: '@somechannel' });
+      const repo = makeRepo({ id: '1' }, { id: 'existing', externalId: '@somechannel', isActive: true });
       const connector = {
         getAccountInfo: jest.fn().mockResolvedValue({ name: 'Some Channel', avatarUrl: null, description: null }),
         getAccountStats: jest.fn().mockResolvedValue({ followersCount: 4321 }),
@@ -211,14 +213,14 @@ describe('AccountsService', () => {
 
     it('refuses a second account of the same network in one project', async () => {
       const repo = makeRepo();
-      repo.findOneBy.mockImplementation((where: any) => Promise.resolve(where.profileId ? { id: 'acc-tg' } : null));
+      repo.findOneBy.mockImplementation((where: any) => Promise.resolve(where.profileId ? { id: 'acc-tg', isActive: true } : null));
       const service = new AccountsService(repo, { get: jest.fn(() => ({ getAccountInfo: jest.fn() })) } as any, { createManual: jest.fn() } as any);
 
       await expect(service.createFromLink('https://t.me/somechannel', 'prof-1')).rejects.toThrow('В проекте уже есть Telegram');
     });
 
     it('names the project an already added account belongs to', async () => {
-      const repo = makeRepo({ id: '1' }, { id: 'acc-1', profileId: 'prof-7' });
+      const repo = makeRepo({ id: '1' }, { id: 'acc-1', profileId: 'prof-7', isActive: true });
       repo.manager.findOneBy.mockResolvedValue({ id: 'prof-7', name: 'Мезопроф' });
       const service = new AccountsService(repo, { get: jest.fn(() => ({})) } as any, { createManual: jest.fn() } as any);
 
@@ -473,7 +475,7 @@ describe('AccountsService', () => {
     });
 
     it('treats the user\'s own connected account as already added', async () => {
-      const own = { id: 'acc-own', externalId: '9001' };
+      const own = { id: 'acc-own', externalId: '9001', isActive: true };
       const existing = (where: any) => (where.externalId === '9001' ? own : null);
 
       const { service } = setup({ existing });
@@ -498,7 +500,7 @@ describe('AccountsService', () => {
     }
 
     it('rejects a link for an account that is already added', async () => {
-      const repo = makeRepo({ id: '1' }, { id: 'existing', externalId: '@somechannel' });
+      const repo = makeRepo({ id: '1' }, { id: 'existing', externalId: '@somechannel', isActive: true });
       const { service } = serviceWith(repo);
 
       await expect(service.createFromLink('https://t.me/somechannel')).rejects.toBeInstanceOf(
@@ -507,7 +509,7 @@ describe('AccountsService', () => {
     });
 
     it('looks the duplicate up by platform and handle together', async () => {
-      const repo = makeRepo({ id: '1' }, { id: 'existing' });
+      const repo = makeRepo({ id: '1' }, { id: 'existing', isActive: true });
       const { service } = serviceWith(repo);
 
       await service.createFromLink('https://t.me/somechannel').catch(() => undefined);
@@ -519,7 +521,7 @@ describe('AccountsService', () => {
     });
 
     it('saves nothing and queues no sync when the account already exists', async () => {
-      const repo = makeRepo({ id: '1' }, { id: 'existing' });
+      const repo = makeRepo({ id: '1' }, { id: 'existing', isActive: true });
       const { service, syncJobs } = serviceWith(repo);
 
       await service.createFromLink('https://t.me/somechannel').catch(() => undefined);
@@ -529,7 +531,7 @@ describe('AccountsService', () => {
     });
 
     it('treats the same channel in different case as already added', async () => {
-      const repo = makeRepo({ id: '1' }, { id: 'existing' });
+      const repo = makeRepo({ id: '1' }, { id: 'existing', isActive: true });
       const { service } = serviceWith(repo);
 
       await expect(service.createFromLink('https://t.me/SomeChannel')).rejects.toBeInstanceOf(
@@ -558,6 +560,86 @@ describe('AccountsService', () => {
       const { service } = serviceWith(repo);
 
       await expect(service.createFromLink('https://t.me/somechannel')).rejects.toThrow('disk full');
+    });
+  });
+
+  describe('reviving a deleted account', () => {
+    function setup(existing: (where: any) => unknown, affected = 1) {
+      const repo = makeRepo();
+      repo.findOneBy.mockImplementation((where: any) => Promise.resolve(existing(where)));
+      repo.em.update = jest.fn().mockResolvedValue({ affected });
+      const connector = {
+        getAccountInfo: jest.fn().mockResolvedValue({ name: 'Brand', avatarUrl: null, description: null, platformUserId: '9001' }),
+        getAccountStats: jest.fn().mockResolvedValue({ followersCount: 10 }),
+        getAvatar: jest.fn(),
+      };
+      const syncJobs = { createManual: jest.fn() };
+      const service = new AccountsService(repo, { get: jest.fn(() => connector) } as any, syncJobs as any);
+      return { service, repo, connector, syncJobs };
+    }
+    const deleted = { id: 'acc-old', name: 'Chan', externalId: '@somechannel', isActive: false, profileId: 'prof-old' };
+
+    it('brings a deleted account back into the chosen project and syncs it', async () => {
+      const { service, repo, syncJobs, connector } = setup((w) => (w.externalId === '@somechannel' ? deleted : null));
+
+      const account = await service.createFromLink('https://t.me/somechannel', 'prof-1');
+
+      expect(repo.em.update).toHaveBeenCalledWith(
+        Account, { id: 'acc-old', isActive: false }, { isActive: true, profileId: 'prof-1' },
+      );
+      expect(account).toMatchObject({ id: 'acc-old', isActive: true, profileId: 'prof-1' });
+      expect(repo.save).not.toHaveBeenCalled();
+      expect(connector.getAccountInfo).not.toHaveBeenCalled();
+      expect(syncJobs.createManual).toHaveBeenCalledWith('acc-old');
+    });
+
+    it('brings it back into a new project named after it when no project is given', async () => {
+      const { service, repo } = setup((w) => (w.externalId === '@somechannel' ? deleted : null));
+
+      await service.createFromLink('https://t.me/somechannel');
+
+      expect(repo.em.save).toHaveBeenCalledWith(Profile, { name: 'Chan' });
+      expect(repo.em.update).toHaveBeenCalledWith(Account, expect.anything(), { isActive: true, profileId: 'prof-new' });
+    });
+
+    it('keeps it deleted when the project already has that network', async () => {
+      const { service, repo } = setup((w) =>
+        w.profileId ? { id: 'acc-tg', isActive: true } : w.externalId === '@somechannel' ? deleted : null);
+
+      await expect(service.createFromLink('https://t.me/somechannel', 'prof-1')).rejects.toThrow('В проекте уже есть Telegram');
+      expect(repo.em.update).not.toHaveBeenCalled();
+    });
+
+    it('answers «already added» when a concurrent add revived it first', async () => {
+      const { service, syncJobs } = setup((w) => (w.externalId === '@somechannel' ? deleted : null), 0);
+
+      await expect(service.createFromLink('https://t.me/somechannel', 'prof-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(syncJobs.createManual).not.toHaveBeenCalled();
+    });
+
+    it('revives a deleted own Instagram account found by its numeric id', async () => {
+      const own = { id: 'acc-own', name: 'Brand', externalId: '9001', isActive: false, profileId: 'prof-old' };
+      const { service, repo } = setup((w) => (w.externalId === '9001' ? own : null));
+
+      await service.createFromLink('https://instagram.com/brand', 'prof-1');
+
+      expect(repo.em.update).toHaveBeenCalledWith(Account, { id: 'acc-own', isActive: false }, { isActive: true, profileId: 'prof-1' });
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it('previews a deleted account as previously added, not as a duplicate', async () => {
+      const { service } = setup((w) => (w.externalId === '@somechannel' ? deleted : null));
+
+      const preview = await service.preview('https://t.me/somechannel');
+
+      expect(preview).toMatchObject({ alreadyAdded: false, previouslyAdded: true });
+    });
+
+    it('refuses a preview for another network than the field asked for', async () => {
+      const { service, connector } = setup(() => null);
+
+      await expect(service.preview('https://vk.com/brand', AccountPlatform.TELEGRAM)).rejects.toThrow('Это ссылка не на Telegram');
+      expect(connector.getAccountInfo).not.toHaveBeenCalled();
     });
   });
 });

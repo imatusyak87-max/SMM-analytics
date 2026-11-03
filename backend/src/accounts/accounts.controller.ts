@@ -5,6 +5,7 @@ import { InstagramOauthService } from '../connectors/instagram/instagram-oauth.s
 import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { CreateAccountFromLinkDto } from './dto/create-account-from-link.dto';
+import { PreviewAccountDto } from './dto/preview-account.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('accounts')
@@ -20,8 +21,8 @@ export class AccountsController {
   }
 
   @Post('preview')
-  preview(@Body() dto: CreateAccountFromLinkDto) {
-    return this.accountsService.preview(dto.link);
+  preview(@Body() dto: PreviewAccountDto) {
+    return this.accountsService.preview(dto.link, dto.platform);
   }
 
   @Get(':id/instagram/connect')

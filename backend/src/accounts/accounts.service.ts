@@ -40,8 +40,9 @@ export class AccountsService {
     private syncJobs: SyncJobService,
   ) {}
 
-  async preview(link: string) {
-    const { parsed, connector } = this.resolveLink(link);
+  async preview(link: string, expected?: AccountPlatform) {
+    const parsed = this.parseFor(link, expected);
+    const connector = this.connectorFor(parsed);
     const draft = this.draftOf(parsed);
 
     let info: AccountInfo;
@@ -66,15 +67,17 @@ export class AccountsService {
       }
     }
 
+    const match = (await this.findExisting(parsed)) ?? (await this.findConnected(parsed.platform, info));
     return {
       platform: parsed.platform,
       externalId: parsed.externalId,
       name: info.name,
       followersCount: stats.followersCount,
       avatarDataUri,
-      // Lets the add dialog say so before the user clicks; the 409 on create is
-      // still what enforces it.
-      alreadyAdded: (await this.findExisting(parsed)) !== null || (await this.matchesConnectedAccount(parsed.platform, info)),
+      // Lets the dialog say so before the user clicks; create is still what enforces it.
+      alreadyAdded: match?.isActive === true,
+      // A deleted account comes back with its statistics when added again.
+      previouslyAdded: match !== null && !match.isActive,
     };
   }
 
@@ -92,24 +95,22 @@ export class AccountsService {
   }
 
   async createFromLink(link: string, profileId?: string, expected?: AccountPlatform) {
-    const parsed = this.parseLink(link);
-    // Checked before the connector lookup so a VK link in the Telegram field says "wrong field", not "unsupported".
-    if (expected && parsed.platform !== expected) {
-      throw new BadRequestException(`Это ссылка не на ${PLATFORM_NAMES[expected]}`);
-    }
+    const parsed = this.parseFor(link, expected);
     const connector = this.connectorFor(parsed);
 
     const existing = await this.findExisting(parsed);
-    if (existing) throw new ConflictException(await this.alreadyAddedMessage(existing));
+    if (existing?.isActive) throw new ConflictException(await this.alreadyAddedMessage(existing));
 
     if (profileId) {
       // Checked before the platform call so a stale choice fails fast and cheaply.
       await requireProfile(this.repo.manager, profileId);
       // One account per network per project; legacy projects may still hold two.
-      if (await this.repo.findOneBy({ profileId, platform: parsed.platform })) {
+      if (await this.repo.findOneBy({ profileId, platform: parsed.platform, isActive: true })) {
         throw new ConflictException(`В проекте уже есть ${PLATFORM_NAMES[parsed.platform]}`);
       }
     }
+
+    if (existing) return this.revive(existing, profileId);
 
     let info: AccountInfo;
     try {
@@ -118,7 +119,9 @@ export class AccountsService {
       throw this.unresolvable(parsed.platform, parsed.externalId, error as Error);
     }
 
-    if (await this.matchesConnectedAccount(parsed.platform, info)) throw new ConflictException(ALREADY_ADDED);
+    const connected = await this.findConnected(parsed.platform, info);
+    if (connected?.isActive) throw new ConflictException(ALREADY_ADDED);
+    if (connected) return this.revive(connected, profileId);
 
     let account: Account;
     try {
@@ -150,6 +153,19 @@ export class AccountsService {
     return account;
   }
 
+  /** Brings a deleted account back, with all its statistics, into the given project or a new one. */
+  private async revive(account: Account, profileId?: string): Promise<Account> {
+    const revived = await this.repo.manager.transaction(async (em) => {
+      const targetProfileId = profileId ?? (await createProfile(em, account.name)).id;
+      // Conditional, so two adds racing on one deleted account revive it once.
+      const result = await em.update(Account, { id: account.id, isActive: false }, { isActive: true, profileId: targetProfileId });
+      if (!result.affected) throw new ConflictException(ALREADY_ADDED);
+      return { ...account, isActive: true, profileId: targetProfileId };
+    });
+    await this.syncJobs.createManual(revived.id);
+    return revived;
+  }
+
   private async alreadyAddedMessage(account: Account): Promise<string> {
     const project = await this.repo.manager.findOneBy(Profile, { id: account.profileId });
     return project ? `Этот аккаунт уже в проекте «${project.name}»` : ALREADY_ADDED;
@@ -166,14 +182,18 @@ export class AccountsService {
   }
 
   /** An Instagram competitor lookup can reveal the user's own connected account under its numeric id. */
-  private async matchesConnectedAccount(platform: AccountPlatform, info: AccountInfo): Promise<boolean> {
-    if (!info.platformUserId) return false;
-    return (await this.repo.findOneBy({ platform, externalId: info.platformUserId })) !== null;
+  private async findConnected(platform: AccountPlatform, info: AccountInfo): Promise<Account | null> {
+    if (!info.platformUserId) return null;
+    return this.repo.findOneBy({ platform, externalId: info.platformUserId });
   }
 
-  private resolveLink(link: string): { parsed: ParsedAccountLink; connector: SocialConnector } {
+  private parseFor(link: string, expected?: AccountPlatform): ParsedAccountLink {
     const parsed = this.parseLink(link);
-    return { parsed, connector: this.connectorFor(parsed) };
+    // Checked before the connector lookup so a VK link in the Telegram field says "wrong field", not "unsupported".
+    if (expected && parsed.platform !== expected) {
+      throw new BadRequestException(`Это ссылка не на ${PLATFORM_NAMES[expected]}`);
+    }
+    return parsed;
   }
 
   private parseLink(link: string): ParsedAccountLink {

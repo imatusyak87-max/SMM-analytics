@@ -502,4 +502,19 @@ describe('delete account', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось удалить аккаунт');
   });
+
+  it('reloads the page after the account is moved', async () => {
+    mockApi();
+    (apiClient.patch as any).mockResolvedValue({ data: { profileId: 'prof-2' } });
+    get.mockImplementation((url: string) =>
+      url === '/profiles'
+        ? Promise.resolve({ data: [{ id: 'prof-2', name: 'Мезопроф', totalFollowers: null, accounts: [] }] })
+        : url.endsWith('/detail') ? Promise.resolve({ data: detail() })
+        : url.endsWith('/posts') ? Promise.resolve({ data: { total: 0, items: [] } })
+        : Promise.resolve({ data: [] }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Перенести…' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Мезопроф ()' }));
+    await waitFor(() => expect(callsTo('/detail').length).toBeGreaterThan(1));
+  });
 });

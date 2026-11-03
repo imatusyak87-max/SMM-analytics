@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
 import { HistoryLoadPanel } from '../components/HistoryLoadPanel';
+import { MoveAccountButton } from '../components/MoveAccountButton';
 import { Pagination } from '../components/Pagination';
 import { PeriodPicker } from '../components/PeriodPicker';
 import { PostList, type PostItem, type PostSort } from '../components/PostList';
@@ -167,7 +168,11 @@ export function AccountDetailPage() {
               setTablePage(1);
             }}
           />
-          {/* MoveAccountButton goes here in Task 10 */}
+          <MoveAccountButton
+            accountId={account.id}
+            currentProjectId={profile.id}
+            onMoved={() => setReloadKey((key) => key + 1)}
+          />
           <button
             type="button"
             className={styles.deleteButton}

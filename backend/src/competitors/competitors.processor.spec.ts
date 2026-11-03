@@ -59,12 +59,16 @@ const job = (attemptsMade = 1) =>
 
 describe('CompetitorsProcessor', () => {
   it('does not run competitor discovery for a deleted account', async () => {
-    const { processor, accountsRepo, finder } = makeProcessor();
+    const { processor, accountsRepo, runsRepo, finder } = makeProcessor();
     accountsRepo.findOneBy.mockResolvedValue(null);
 
-    await processor.process(job()).catch(() => undefined);
+    await processor.process(job());
 
     expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(runsRepo.update).toHaveBeenLastCalledWith(
+      'run-1',
+      expect.objectContaining({ status: CompetitorRunStatus.FAILED, errorMessage: 'Аккаунт удалён' }),
+    );
     expect(finder.suggest).not.toHaveBeenCalled();
   });
 

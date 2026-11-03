@@ -1,8 +1,9 @@
-import { ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { In, MoreThan, Repository } from 'typeorm';
 import { Queue } from 'bullmq';
+import { Account } from '../db/entities/account.entity';
 import {
   CompetitorRun,
   CompetitorRunStatus,
@@ -35,6 +36,7 @@ export class CompetitorRunService {
     @InjectRepository(CompetitorRun) private runsRepo: Repository<CompetitorRun>,
     @InjectQueue('competitors') private queue: Queue,
     @Inject(COMPETITOR_CONFIG) private config: CompetitorConfig,
+    @InjectRepository(Account) private accountsRepo: Repository<Account>,
   ) {}
 
   isEnabled(): boolean {
@@ -44,6 +46,10 @@ export class CompetitorRunService {
   async createManual(accountId: string): Promise<CompetitorRun> {
     if (!this.config.enabled) {
       throw new ServiceUnavailableException('Подбор конкурентов не настроен');
+    }
+    // A deleted account gets no new runs.
+    if (!(await this.accountsRepo.findOneBy({ id: accountId, isActive: true }))) {
+      throw new NotFoundException('Аккаунт не найден');
     }
     if (await this.activeRun(accountId)) {
       throw new ConflictException('Подбор конкурентов уже выполняется');

@@ -66,6 +66,7 @@ describe('StatsService.getPostsPage', () => {
   it.each([
     ['views', 'post.views'],
     ['reactions', 'post.likes'],
+    ['comments', 'post.comments'],
     ['er', 'post.erViews'],
     ['date', 'post.publishedAt'],
   ] as const)('sorts by %s on %s, descending, with unknown values last', async (sort, column) => {

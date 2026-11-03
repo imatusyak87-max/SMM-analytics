@@ -46,6 +46,7 @@ export interface PostsPage {
 const SORT_COLUMNS: Record<PostSortKey, string> = {
   views: 'post.views',
   reactions: 'post.likes',
+  comments: 'post.comments',
   er: 'post.erViews',
   date: 'post.publishedAt',
 };

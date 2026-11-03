@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ProfileSwitcher } from '../components/ProfileSwitcher';
 import { apiClient } from '../api/client';
 import { useApiGet } from '../api/useApiGet';
-import { CompetitorsSection } from '../components/CompetitorsSection';
 import { HistoryLoadPanel } from '../components/HistoryLoadPanel';
 import { Pagination } from '../components/Pagination';
 import { PeriodPicker } from '../components/PeriodPicker';
@@ -16,6 +14,7 @@ import { PostTypeFilter } from '../components/PostTypeFilter';
 import { RefreshButton } from '../components/RefreshButton';
 import { StatTiles, type AccountSummary } from '../components/StatTiles';
 import { TrendChart } from '../components/TrendChart';
+import { ViewModeSwitch } from '../components/ViewModeSwitch';
 import { formatCount } from '../format';
 import { formatIsoDate, selectPreset, type SelectedPeriod } from '../periods';
 import styles from './AccountDetailPage.module.css';
@@ -23,7 +22,7 @@ import styles from './AccountDetailPage.module.css';
 const TOP_COUNT = 10;
 
 interface DetailData {
-  profile: { id: string; name: string; accountCount: number };
+  profile: { id: string; name: string };
   account: { id: string; name: string; platform: string; type: string };
   latestSnapshot: { followersCount: number; avgEr: number | null } | null;
   trend: Array<{ date: string; followersCount: number }>;
@@ -117,7 +116,7 @@ export function AccountDetailPage() {
   }
 
   async function handleDelete(target: { id: string; name: string }, profile: DetailData['profile']) {
-    if (!confirm(`Удалить «${target.name}» и всю собранную статистику?`)) return;
+    if (!confirm(`Убрать «${target.name}» из проекта? Собранная статистика сохранится — если добавить аккаунт снова, она вернётся.`)) return;
     try {
       setDeleteError(null);
       await apiClient.delete(`/accounts/${target.id}`);
@@ -149,30 +148,35 @@ export function AccountDetailPage() {
         ← {profile.name}
       </Link>
       <div className={styles.header}>
-        <h2 className={styles.heading}>{account.name}</h2>
-        <ProfileSwitcher accountId={account.id} profile={profile} onMoved={() => setReloadKey((key) => key + 1)} />
-        <RefreshButton
-          accountId={account.id}
-          onSynced={() => {
-            setReloadKey((key) => key + 1);
-            setTablePage(1);
-          }}
-        />
-        <HistoryLoadPanel
-          accountId={account.id}
-          onFinished={() => {
-            setReloadKey((key) => key + 1);
-            setTablePage(1);
-          }}
-        />
-        <button
-          type="button"
-          className={styles.deleteButton}
-          aria-label="Удалить аккаунт"
-          onClick={() => handleDelete(account, profile)}
-        >
-          Удалить
-        </button>
+        <div className={styles.title}>
+          <h2 className={styles.heading}>{account.name}</h2>
+          <ViewModeSwitch />
+        </div>
+        <div className={styles.actions}>
+          <RefreshButton
+            accountId={account.id}
+            onSynced={() => {
+              setReloadKey((key) => key + 1);
+              setTablePage(1);
+            }}
+          />
+          <HistoryLoadPanel
+            accountId={account.id}
+            onFinished={() => {
+              setReloadKey((key) => key + 1);
+              setTablePage(1);
+            }}
+          />
+          {/* MoveAccountButton goes here in Task 10 */}
+          <button
+            type="button"
+            className={styles.deleteButton}
+            aria-label="Удалить аккаунт"
+            onClick={() => handleDelete(account, profile)}
+          >
+            Удалить
+          </button>
+        </div>
       </div>
       {deleteError && (
         <p className={styles.error} role="alert">
@@ -218,7 +222,6 @@ export function AccountDetailPage() {
           },
         ]}
       />
-      <CompetitorsSection accountId={account.id} />
       <section className={styles.posts} aria-labelledby="top-posts-heading">
         <div className={styles.postsHeader}>
           <h3 id="top-posts-heading" className={styles.subheading}>

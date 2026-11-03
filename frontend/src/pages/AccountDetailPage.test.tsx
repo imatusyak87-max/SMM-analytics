@@ -370,11 +370,14 @@ describe('AccountDetailPage', () => {
 });
 
 describe('profile', () => {
-  it('shows which profile the account is in', async () => {
+  it('shows the own-profile header without a project picker or competitors', async () => {
     mockApi();
     renderPage();
 
-    expect(await screen.findByLabelText('Проект:')).toHaveValue('prof-1');
+    expect(await screen.findByRole('heading', { name: 'Chan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Свой профиль' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Проект:')).not.toBeInTheDocument();
+    expect(screen.queryByText(/конкурент/i, { selector: 'h3' })).not.toBeInTheDocument();
   });
 
   it('links back to its project', async () => {
@@ -450,7 +453,7 @@ describe('delete account', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
 
-    expect(confirm).toHaveBeenCalledWith('Удалить «Chan» и всю собранную статистику?');
+    expect(confirm).toHaveBeenCalledWith('Убрать «Chan» из проекта? Собранная статистика сохранится — если добавить аккаунт снова, она вернётся.');
     expect(await screen.findByText('Project page')).toBeInTheDocument();
     expect(del).toHaveBeenCalledWith('/accounts/acc-1');
   });

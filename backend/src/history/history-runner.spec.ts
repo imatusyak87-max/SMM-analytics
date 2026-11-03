@@ -253,6 +253,7 @@ describe('HistoryRunner.runSlice — pauses and failures', () => {
     accountsRepo.findOneBy.mockResolvedValue(null);
 
     expect(await runner.runSlice('acc-1')).toBeNull();
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
     expect(loadsRepo.update).not.toHaveBeenCalled();
   });
 

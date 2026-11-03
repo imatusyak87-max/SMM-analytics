@@ -49,7 +49,7 @@ export class CompetitorsProcessor extends WorkerHost {
     try {
       await this.runsRepo.update(runId, { status: CompetitorRunStatus.RUNNING, startedAt: new Date() });
 
-      const account = await this.accountsRepo.findOneBy({ id: accountId });
+      const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
       if (!account) throw new Error(`Account ${accountId} not found`);
 
       const profile = await this.profiles.build(account);

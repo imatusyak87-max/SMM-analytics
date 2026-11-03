@@ -7,7 +7,8 @@ describe('SyncJobService', () => {
     const saved = { id: 'job-1', accountId: 'acc-1', trigger: SyncTrigger.MANUAL, status: SyncStatus.PENDING };
     const syncJobsRepo = { save: jest.fn().mockResolvedValue(saved), create: jest.fn((x) => x) } as any;
     const queue = { add: jest.fn() } as any;
-    const service = new SyncJobService(syncJobsRepo, queue);
+    const accountsRepo = { findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1', isActive: true }) } as any;
+    const service = new SyncJobService(syncJobsRepo, queue, accountsRepo);
 
     const result = await service.createManual('acc-1');
 
@@ -20,6 +21,17 @@ describe('SyncJobService', () => {
       expect.objectContaining({ priority: 1, attempts: 3, backoff: { type: 'exponential', delay: 30000 } }),
     );
     expect(result).toBe(saved);
+  });
+
+  it('refuses a manual sync of a deleted account', async () => {
+    const syncJobsRepo = { save: jest.fn(), create: jest.fn((x) => x) } as any;
+    const queue = { add: jest.fn() } as any;
+    const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(null) } as any;
+    const service = new SyncJobService(syncJobsRepo, queue, accountsRepo);
+
+    await expect(service.createManual('acc-1')).rejects.toThrow('Аккаунт не найден');
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(queue.add).not.toHaveBeenCalled();
   });
 
   it('createScheduledForAllActiveAccounts enqueues one job per active account with lower priority', async () => {

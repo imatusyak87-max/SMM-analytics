@@ -14,10 +14,18 @@ function setup({ existing = null as any, account = { id: 'acc-1', platform: Acco
   const registry = { get: jest.fn().mockReturnValue(canLoad ? { loadHistoryPage: jest.fn() } : {}) };
   const queue = { add: jest.fn(), getJobs: jest.fn().mockResolvedValue([]) };
   const service = new HistoryLoadService(loadsRepo as any, accountsRepo as any, registry as any, queue as any);
-  return { service, loadsRepo, queue };
+  return { service, loadsRepo, accountsRepo, queue };
 }
 
 describe('HistoryLoadService.start', () => {
+  it('refuses a history load for a deleted account', async () => {
+    const { service, accountsRepo } = setup();
+    accountsRepo.findOneBy.mockResolvedValue(null);
+
+    await expect(service.start('acc-1')).rejects.toThrow('Аккаунт не найден');
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+  });
+
   it('creates a fresh load and queues its first slice', async () => {
     const { service, loadsRepo, queue } = setup();
 

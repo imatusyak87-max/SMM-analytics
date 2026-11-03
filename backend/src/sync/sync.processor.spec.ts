@@ -29,8 +29,22 @@ describe('SyncProcessor', () => {
     const syncJobsRepo = { update: overrides.syncJobsUpdate ?? jest.fn() } as any;
     const competitorRuns = overrides.competitorRuns ?? { createForNewAccount: jest.fn().mockResolvedValue(null) };
     const processor = new SyncProcessor(registry, accountsRepo, snapshotsRepo, postsRepo, syncJobsRepo, competitorRuns);
-    return { processor, syncJobsRepo, snapshotsRepo, postsRepo, competitorRuns };
+    return { processor, registry, accountsRepo, syncJobsRepo, snapshotsRepo, postsRepo, competitorRuns };
   }
+
+  it('skips a job queued before its account was deleted, without retrying', async () => {
+    const { processor, registry, accountsRepo, syncJobsRepo } = buildProcessor();
+    accountsRepo.findOneBy.mockResolvedValue(null);
+
+    await processor.process({ data: { syncJobId: 'job-1', accountId: 'acc-1' } } as any);
+
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(syncJobsRepo.update).toHaveBeenLastCalledWith(
+      'job-1',
+      expect.objectContaining({ status: SyncStatus.FAILED, errorMessage: 'Аккаунт удалён' }),
+    );
+    expect(registry.get).not.toHaveBeenCalled();
+  });
 
   it('on success, writes a snapshot and marks the job success', async () => {
     const { processor, syncJobsRepo, snapshotsRepo } = buildProcessor();

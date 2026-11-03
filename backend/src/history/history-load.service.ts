@@ -57,7 +57,7 @@ export class HistoryLoadService implements OnApplicationBootstrap {
   ) {}
 
   async start(accountId: string): Promise<HistoryLoadView> {
-    const account = await this.accountsRepo.findOneBy({ id: accountId });
+    const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
     if (!account) throw new NotFoundException('Аккаунт не найден');
     if (typeof this.registry.get(account.platform).loadHistoryPage !== 'function') {
       throw new BadRequestException('Для этой платформы загрузка истории недоступна');

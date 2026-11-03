@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { StatsService } from './stats.service';
 
 /**
@@ -16,12 +17,23 @@ function fakeQueryBuilder(result: [unknown[], number] = [[], 0]) {
 
 function serviceWith(qb: any) {
   const postsRepo = { createQueryBuilder: jest.fn().mockReturnValue(qb) } as any;
-  return new StatsService({} as any, {} as any, postsRepo, {} as any, {} as any);
+  const accountsRepo = { findOneBy: jest.fn().mockResolvedValue({ id: 'acc-1', isActive: true }) } as any;
+  return new StatsService(accountsRepo, {} as any, postsRepo, {} as any, {} as any);
 }
 
 const base = { from: '2026-09-01', to: '2026-09-30', sort: 'views' as const, page: 1, size: 10 };
 
 describe('StatsService.getPostsPage', () => {
+  it('answers 404 for the posts of a deleted account', async () => {
+    const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(null) } as any;
+    const postsRepo = { createQueryBuilder: jest.fn() } as any;
+    const service = new StatsService(accountsRepo, {} as any, postsRepo, {} as any, {} as any);
+
+    await expect(service.getPostsPage('acc-1', base)).rejects.toBeInstanceOf(NotFoundException);
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(postsRepo.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
   it('returns the page of posts and the total count of the whole filtered set', async () => {
     const items = [{ id: 'p1' }, { id: 'p2' }];
     const service = serviceWith(fakeQueryBuilder([items, 37]));

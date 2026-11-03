@@ -63,7 +63,7 @@ export class HistoryRunner {
   async runSlice(accountId: string): Promise<number | null> {
     const load = await this.loadsRepo.findOneBy({ accountId });
     if (!load || load.status === HistoryLoadStatus.DONE || load.status === HistoryLoadStatus.FAILED) return null;
-    const account = await this.accountsRepo.findOneBy({ id: accountId });
+    const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
     if (!account) return null;
     const connector = this.registry.get(account.platform);
 

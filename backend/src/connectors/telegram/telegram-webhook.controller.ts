@@ -35,7 +35,7 @@ export class TelegramWebhookController {
   ) {
     if (!update.channel_post) return;
 
-    const account = await this.accountsRepo.findOneBy({ id: accountId });
+    const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
     if (!account) return;
 
     // The shared secret proves the sender is Telegram, not that this update belongs

@@ -51,13 +51,23 @@ function makeProcessor(overrides: any = {}) {
     verifier as any,
     rejectionsRepo as any,
   );
-  return { processor, runsRepo, suggestionsRepo, em, finder, verifier };
+  return { processor, accountsRepo, runsRepo, suggestionsRepo, em, finder, verifier };
 }
 
 const job = (attemptsMade = 1) =>
   ({ data: { runId: 'run-1', accountId: 'acc-1' }, opts: { attempts: 2 }, attemptsMade }) as any;
 
 describe('CompetitorsProcessor', () => {
+  it('does not run competitor discovery for a deleted account', async () => {
+    const { processor, accountsRepo, finder } = makeProcessor();
+    accountsRepo.findOneBy.mockResolvedValue(null);
+
+    await processor.process(job()).catch(() => undefined);
+
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(finder.suggest).not.toHaveBeenCalled();
+  });
+
   it('stores verified suggestions, the niche and the usage of a successful run, atomically', async () => {
     const { processor, runsRepo, suggestionsRepo, em } = makeProcessor();
 

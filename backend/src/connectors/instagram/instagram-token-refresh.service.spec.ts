@@ -37,6 +37,16 @@ describe('InstagramTokenRefreshService.refreshExpiring', () => {
     expect(update[1].needsReconnect).toBe(false);
   });
 
+  it('keeps refreshing tokens of deleted own accounts', async () => {
+    const { service, accountsRepo, credentialsRepo } = makeDeps();
+    accountsRepo.find.mockResolvedValue([]);
+    credentialsRepo.find.mockResolvedValue([]);
+
+    await service.refreshExpiring();
+
+    expect(accountsRepo.find).toHaveBeenCalledWith({ where: { platform: AccountPlatform.INSTAGRAM } });
+  });
+
   it('leaves alone a credential that is not close to expiring', async () => {
     const { service, accountsRepo, credentialsRepo, api } = makeDeps();
     accountsRepo.find.mockResolvedValue([{ id: 'acc-1', platform: AccountPlatform.INSTAGRAM }]);

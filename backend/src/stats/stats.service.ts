@@ -105,7 +105,7 @@ export class StatsService {
   ) {}
 
   async getAccountDetail(accountId: string, period: Period) {
-    const account = await this.accountsRepo.findOneBy({ id: accountId });
+    const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
     if (!account) throw new NotFoundException(`Account ${accountId} not found`);
 
     const credential = await this.credentialsRepo.findOneBy({ accountId });
@@ -173,6 +173,9 @@ export class StatsService {
   }
 
   async getPostsPage(accountId: string, query: PostsPageQuery): Promise<PostsPage> {
+    if (!(await this.accountsRepo.findOneBy({ id: accountId, isActive: true }))) {
+      throw new NotFoundException(`Account ${accountId} not found`);
+    }
     const qb = this.postsRepo
       .createQueryBuilder('post')
       .where('post.accountId = :accountId', { accountId })

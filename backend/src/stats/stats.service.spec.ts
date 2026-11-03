@@ -207,6 +207,13 @@ describe('StatsService.getAccountDetail for a missing account', () => {
     await expect(service.getAccountDetail('gone', period)).rejects.toThrow(NotFoundException);
   });
 
+  it('answers 404 for the detail of a deleted account', async () => {
+    const { service, accountsRepo } = setup({ account: null });
+
+    await expect(service.getAccountDetail('acc-1', period)).rejects.toBeInstanceOf(NotFoundException);
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+  });
+
   it('does not query snapshots or posts for an account that does not exist', async () => {
     const { service, snapshotsRepo, postsRepo } = setup({ account: null });
 

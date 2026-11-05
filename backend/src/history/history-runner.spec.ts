@@ -247,13 +247,17 @@ describe('HistoryRunner.runSlice — pauses and failures', () => {
     }
   });
 
-  it('does nothing when the account was deleted meanwhile', async () => {
+  it('fails the load when the account was deleted meanwhile, keeping the cursor for «Продолжить»', async () => {
     const connector = { loadHistoryPage: jest.fn() };
-    const { runner, accountsRepo, loadsRepo } = setup({ connector });
+    const { runner, accountsRepo, loadsRepo } = setup({ connector, load: makeLoad({ status: HistoryLoadStatus.RUNNING, cursor: 'p:10', postsLoaded: 5 }) });
     accountsRepo.findOneBy.mockResolvedValue(null);
 
     expect(await runner.runSlice('acc-1')).toBeNull();
-    expect(loadsRepo.update).not.toHaveBeenCalled();
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(connector.loadHistoryPage).not.toHaveBeenCalled();
+    expect(loadsRepo.update).toHaveBeenCalledTimes(1);
+    expect(lastWrite(loadsRepo)).toMatchObject({ status: HistoryLoadStatus.FAILED, errorMessage: 'Аккаунт удалён', cursor: 'p:10', postsLoaded: 5 });
+    expect(lastWrite(loadsRepo).finishedAt).toBeInstanceOf(Date);
   });
 
   it('writes progress with update(), never save(), so a deleted row is not recreated', async () => {

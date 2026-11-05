@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   HttpException,
   Injectable,
   Logger,
@@ -9,10 +10,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account, AccountPlatform } from '../db/entities/account.entity';
 import { Profile } from '../db/entities/profile.entity';
+import { PLATFORM_NAMES } from '../accounts/platform-names';
 import { AccountsService } from '../accounts/accounts.service';
 import { StatsService } from '../stats/stats.service';
 import {
-  createProfile,
   requireProfile,
   PROFILE_NOT_FOUND,
 } from './profile-store';
@@ -53,7 +54,7 @@ export class ProfilesService {
 
   async list(): Promise<ProfileSummary[]> {
     const [profiles, items] = await Promise.all([
-      this.profilesRepo.find({ order: { createdAt: 'ASC' } }),
+      this.profilesRepo.find({ where: { isActive: true }, order: { createdAt: 'ASC' } }),
       this.stats.getOverview(),
     ]);
     // Empty projects are listed too: a project lives until it is deleted.
@@ -92,12 +93,13 @@ export class ProfilesService {
     return this.accounts.createFromLink(link, id, platform);
   }
 
-  /** Deletes the project and, through the normal account delete, all its data. */
+  /** Hides the project and its accounts; their statistics stay and come back when an account is re-added. */
   async remove(id: string): Promise<void> {
     await this.findOne(id);
-    const accounts = await this.accountsRepo.find({ where: { profileId: id } });
-    for (const account of accounts) await this.accounts.remove(account.id);
-    await this.profilesRepo.delete({ id });
+    await this.profilesRepo.manager.transaction(async (em) => {
+      await em.update(Account, { profileId: id }, { isActive: false });
+      await em.update(Profile, { id }, { isActive: false });
+    });
   }
 
   async get(id: string): Promise<ProfileSummary> {
@@ -117,27 +119,35 @@ export class ProfilesService {
     accountId: string,
     target: MoveAccountDto,
   ): Promise<{ profileId: string }> {
-    const hasId = typeof target.profileId === 'string';
-    const wantsNew = target.newProfile === true;
-    if (hasId === wantsNew)
-      throw new BadRequestException('Укажите либо profileId, либо newProfile');
-
     return this.accountsRepo.manager.transaction(async (em) => {
-      const account = await em.findOneBy(Account, { id: accountId });
+      const account = await em.findOneBy(Account, {
+        id: accountId,
+        isActive: true,
+      });
       if (!account) throw new NotFoundException(ACCOUNT_NOT_FOUND);
-      if (hasId && target.profileId === account.profileId)
+      if (target.profileId === account.profileId)
         return { profileId: account.profileId };
 
-      const destination = hasId
-        ? (await requireProfile(em, target.profileId!)).id
-        : (await createProfile(em, account.name)).id;
+      const destination = (await requireProfile(em, target.profileId)).id;
+      // One account per network per project, same rule as adding one.
+      if (
+        await em.findOneBy(Account, {
+          profileId: destination,
+          platform: account.platform,
+          isActive: true,
+        })
+      ) {
+        throw new ConflictException(
+          `В проекте уже есть ${PLATFORM_NAMES[account.platform]}`,
+        );
+      }
       await em.update(Account, { id: accountId }, { profileId: destination });
       return { profileId: destination };
     });
   }
 
   private async findOne(id: string): Promise<Profile> {
-    const profile = await this.profilesRepo.findOneBy({ id });
+    const profile = await this.profilesRepo.findOneBy({ id, isActive: true });
     if (!profile) throw new NotFoundException(PROFILE_NOT_FOUND);
     return profile;
   }

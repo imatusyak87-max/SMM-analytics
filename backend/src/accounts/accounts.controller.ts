@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, Param, ParseUUIDPipe, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { InstagramOauthService } from '../connectors/instagram/instagram-oauth.service';
 import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { CreateAccountFromLinkDto } from './dto/create-account-from-link.dto';
+import { PreviewAccountDto } from './dto/preview-account.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('accounts')
@@ -20,8 +21,8 @@ export class AccountsController {
   }
 
   @Post('preview')
-  preview(@Body() dto: CreateAccountFromLinkDto) {
-    return this.accountsService.preview(dto.link);
+  preview(@Body() dto: PreviewAccountDto) {
+    return this.accountsService.preview(dto.link, dto.platform);
   }
 
   @Get(':id/instagram/connect')
@@ -55,10 +56,5 @@ export class AccountsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.accountsService.remove(id);
-  }
-
-  @Patch(':id/deactivate')
-  deactivate(@Param('id') id: string) {
-    return this.accountsService.deactivate(id);
   }
 }

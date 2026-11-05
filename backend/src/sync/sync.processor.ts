@@ -44,8 +44,16 @@ export class SyncProcessor extends WorkerHost {
     try {
       await this.syncJobsRepo.update(syncJobId, { status: SyncStatus.RUNNING, startedAt: new Date() });
 
-      const account = await this.accountsRepo.findOneBy({ id: accountId });
-      if (!account) throw new Error(`Account ${accountId} not found`);
+      const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
+      if (!account) {
+        // Deleted after the job was queued: settle it now rather than burn three retries.
+        await this.syncJobsRepo.update(syncJobId, {
+          status: SyncStatus.FAILED,
+          errorMessage: 'Аккаунт удалён',
+          finishedAt: new Date(),
+        });
+        return;
+      }
       platform = account.platform;
 
       const connector = this.registry.get(account.platform);

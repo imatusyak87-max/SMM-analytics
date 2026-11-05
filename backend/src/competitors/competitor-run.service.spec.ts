@@ -1,8 +1,8 @@
-import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { CompetitorRunService } from './competitor-run.service';
 import { CompetitorRunStatus, CompetitorRunTrigger } from '../db/entities/competitor-run.entity';
 
-function makeService(overrides: { runs?: any; queue?: any; enabled?: boolean } = {}) {
+function makeService(overrides: { runs?: any; queue?: any; enabled?: boolean; account?: any } = {}) {
   const runsRepo = overrides.runs ?? {
     findOne: jest.fn().mockResolvedValue(null),
     count: jest.fn().mockResolvedValue(0),
@@ -10,12 +10,16 @@ function makeService(overrides: { runs?: any; queue?: any; enabled?: boolean } =
     save: jest.fn().mockImplementation((x) => Promise.resolve({ id: 'run-1', ...x })),
   };
   const queue = overrides.queue ?? { add: jest.fn() };
-  const service = new CompetitorRunService(runsRepo, queue, {
-    provider: 'gemini',
-    model: 'gemini-2.5-flash',
-    enabled: overrides.enabled ?? true,
-  });
-  return { service, runsRepo, queue };
+  const accountsRepo = {
+    findOneBy: jest.fn().mockResolvedValue('account' in overrides ? overrides.account : { id: 'acc-1', isActive: true }),
+  };
+  const service = new CompetitorRunService(
+    runsRepo,
+    queue,
+    { provider: 'gemini', model: 'gemini-2.5-flash', enabled: overrides.enabled ?? true },
+    accountsRepo as any,
+  );
+  return { service, runsRepo, queue, accountsRepo };
 }
 
 describe('CompetitorRunService', () => {
@@ -39,6 +43,15 @@ describe('CompetitorRunService', () => {
       expect.objectContaining({ attempts: 2, backoff: { type: 'exponential', delay: 60000 } }),
     );
     expect(run.id).toBe('run-1');
+  });
+
+  it('refuses a manual run for a deleted account', async () => {
+    const { service, accountsRepo, runsRepo, queue } = makeService({ account: null });
+
+    await expect(service.createManual('acc-1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(runsRepo.save).not.toHaveBeenCalled();
+    expect(queue.add).not.toHaveBeenCalled();
   });
 
   it('refuses a second run while one is pending or running', async () => {

@@ -32,7 +32,7 @@ export class CompetitorsService {
     const handles = suggestions.map((s) => `@${s.externalId}`);
     const tracked = handles.length
       ? await this.accountsRepo.find({
-          where: { platform: AccountPlatform.TELEGRAM, externalId: In(handles) },
+          where: { platform: AccountPlatform.TELEGRAM, externalId: In(handles), isActive: true },
         })
       : [];
     const byHandle = new Map(

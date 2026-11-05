@@ -24,6 +24,17 @@ describe('TelegramWebhookController', () => {
     expect(guards).toContain(TelegramWebhookGuard);
   });
 
+  it('ignores posts for a deleted account', async () => {
+    const { controller, postsRepo, accountsRepo } = build(null);
+
+    await controller.handleUpdate('acc-1', {
+      channel_post: { message_id: 1, date: 1755000000, text: 'x', chat: { id: 100, username: 'testchannel' } },
+    });
+
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(postsRepo.upsert).not.toHaveBeenCalled();
+  });
+
   it('upserts a post derived from a channel_post update', async () => {
     const { controller, postsRepo } = build();
 

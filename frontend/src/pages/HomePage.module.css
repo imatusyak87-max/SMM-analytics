@@ -4,3 +4,4 @@
 .primary, .secondary { display: inline-flex; align-items: center; justify-content: center; min-width: 220px; padding: 18px 28px; border-radius: 12px; font-size: 18px; font-weight: 600; text-decoration: none; }
 .primary { background: var(--accent); color: var(--on-accent); border: 1px solid var(--accent); }
 .secondary { border: 1px solid var(--border); color: var(--text-h); }
+.error { margin: 0; color: var(--danger); font-size: 15px; }

@@ -72,16 +72,23 @@ describe('InstagramOauthController.callback', () => {
     expect(syncJobs.createManual).not.toHaveBeenCalled();
   });
 
-  it('responds 400 with a plain message when the login cannot be completed', async () => {
+  it('sends a login error with no account to the home page', async () => {
     const { controller } = makeController({
-      oauthService: { completeLogin: jest.fn().mockRejectedValue(new Error('Ссылка для входа устарела, попробуйте подключить аккаунт заново')) },
+      oauthService: { completeLogin: jest.fn().mockRejectedValue(new InstagramLoginError('Ссылка для входа устарела, попробуйте подключить аккаунт заново', null)) },
     });
     const res = fakeResponse();
+    await controller.callback('code', 'state', res);
+    expect(res.redirect).toHaveBeenCalledWith(`/?instagramError=${encodeURIComponent('Ссылка для входа устарела, попробуйте подключить аккаунт заново')}`);
+  });
 
-    await controller.callback('a-code', 'bad-state', res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Ссылка для входа устарела, попробуйте подключить аккаунт заново' });
+  it('never shows an unexpected error as raw JSON', async () => {
+    const { controller } = makeController({
+      oauthService: { completeLogin: jest.fn().mockRejectedValue(new Error('connection refused')) },
+    });
+    const res = fakeResponse();
+    await controller.callback('code', 'state', res);
+    expect(res.redirect).toHaveBeenCalledWith(`/?instagramError=${encodeURIComponent('Не удалось подключить Instagram, попробуйте ещё раз')}`);
+    expect(res.status).not.toHaveBeenCalled();
   });
 });
 

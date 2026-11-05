@@ -39,11 +39,12 @@ export class InstagramOauthController {
     try {
       ({ id: accountId } = await this.oauthService.completeLogin(code, state));
     } catch (error) {
-      if (error instanceof InstagramLoginError) {
-        res.redirect(`/accounts/${error.accountId}?instagramError=${encodeURIComponent(error.message)}`);
-        return;
-      }
-      res.status(400).json({ message: (error as Error).message });
+      // The browser landed here from Instagram, so it always goes back to a page, never to raw JSON.
+      const known = error instanceof InstagramLoginError;
+      if (!known) this.logger.warn(`Instagram login failed: ${(error as Error).message}`);
+      const message = known ? error.message : 'Не удалось подключить Instagram, попробуйте ещё раз';
+      const page = known && error.accountId ? `/accounts/${error.accountId}` : '/';
+      res.redirect(`${page}?instagramError=${encodeURIComponent(message)}`);
       return;
     }
 

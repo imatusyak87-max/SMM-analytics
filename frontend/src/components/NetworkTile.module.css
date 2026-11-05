@@ -7,6 +7,3 @@
 .avatar, .avatarFallback { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: var(--border); }
 .name { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text-h); }
 .followers { color: var(--text); font-size: 14px; }
-.remove { position: absolute; top: 8px; right: 8px; background: none; border: none; color: var(--text); cursor: pointer; font-size: 13px; }
-.remove:hover, .remove:focus-visible { color: var(--danger); }
-.error { color: var(--danger); font-size: 13px; }

@@ -46,6 +46,7 @@ export interface PostsPage {
 const SORT_COLUMNS: Record<PostSortKey, string> = {
   views: 'post.views',
   reactions: 'post.likes',
+  comments: 'post.comments',
   er: 'post.erViews',
   date: 'post.publishedAt',
 };
@@ -105,7 +106,7 @@ export class StatsService {
   ) {}
 
   async getAccountDetail(accountId: string, period: Period) {
-    const account = await this.accountsRepo.findOneBy({ id: accountId });
+    const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
     if (!account) throw new NotFoundException(`Account ${accountId} not found`);
 
     const credential = await this.credentialsRepo.findOneBy({ accountId });
@@ -173,6 +174,9 @@ export class StatsService {
   }
 
   async getPostsPage(accountId: string, query: PostsPageQuery): Promise<PostsPage> {
+    if (!(await this.accountsRepo.findOneBy({ id: accountId, isActive: true }))) {
+      throw new NotFoundException(`Account ${accountId} not found`);
+    }
     const qb = this.postsRepo
       .createQueryBuilder('post')
       .where('post.accountId = :accountId', { accountId })
@@ -211,7 +215,7 @@ export class StatsService {
   async compare(accountIds: string[], period: Period) {
     const result: { account: Account | null; trend: AccountSnapshot[] }[] = [];
     for (const accountId of accountIds) {
-      const account = await this.accountsRepo.findOneBy({ id: accountId });
+      const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
       const trend = await this.snapshotsRepo.find({
         where: { accountId, date: Between(period.from, period.to) },
         order: { date: 'ASC' },

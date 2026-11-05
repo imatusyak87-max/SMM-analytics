@@ -2,7 +2,7 @@ import styles from './PostList.module.css';
 import { formatCount, formatPercent } from '../format';
 import { isRoundVideo } from '../postType';
 
-export type PostSort = 'views' | 'reactions' | 'er' | 'date';
+export type PostSort = 'views' | 'reactions' | 'comments' | 'er' | 'date';
 
 /** One post from the `posts` array of GET /accounts/:id/detail. */
 export interface PostItem {

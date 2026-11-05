@@ -2,7 +2,7 @@ import { IsDateString, IsIn, IsOptional, IsEnum, IsInt, IsString, Min } from 'cl
 import { Type } from 'class-transformer';
 import { PostType } from '../../db/entities/post.entity';
 
-export const POST_SORTS = ['views', 'reactions', 'er', 'date'] as const;
+export const POST_SORTS = ['views', 'reactions', 'comments', 'er', 'date'] as const;
 export type PostSortKey = (typeof POST_SORTS)[number];
 
 export const PAGE_SIZES = [10, 25, 50, 100] as const;

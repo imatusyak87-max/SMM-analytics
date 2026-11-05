@@ -17,6 +17,18 @@
   flex-wrap: wrap;
 }
 
+.title,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.actions {
+  gap: 8px;
+}
+
 .heading {
   margin: 0;
   font-family: var(--heading);
@@ -217,13 +229,13 @@
 }
 
 .deleteButton {
-  padding: 6px 12px;
+  padding: 4px 8px;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text);
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
   transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }

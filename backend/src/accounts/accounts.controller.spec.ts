@@ -24,7 +24,7 @@ describe('AccountsController', () => {
 
     const result = await controller.preview({ link: 'https://t.me/somechannel' });
 
-    expect(service.preview).toHaveBeenCalledWith('https://t.me/somechannel');
+    expect(service.preview).toHaveBeenCalledWith('https://t.me/somechannel', undefined);
     expect(result).toBe(preview);
   });
 

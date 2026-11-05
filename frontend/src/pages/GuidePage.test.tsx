@@ -18,4 +18,15 @@ describe('GuidePage', () => {
     ]);
     expect(screen.getByText('Видеоинструкция появится позже.')).toBeInTheDocument();
   });
+
+  it('describes soft delete and the account page controls', () => {
+    render(<MemoryRouter><GuidePage /></MemoryRouter>);
+    expect(screen.getByText(/«Удалить проект» скрывает проект; статистика его аккаунтов сохраняется/)).toBeInTheDocument();
+    expect(screen.queryByText(/«Убрать» удаляет аккаунт/)).not.toBeInTheDocument();
+    expect(screen.getByText(/«Свой профиль \/ Конкуренты»/)).toBeInTheDocument();
+    expect(screen.getByText(/«Перенести…»/)).toBeInTheDocument();
+    expect(screen.getByText(/по комментариям/)).toBeInTheDocument();
+    expect(screen.getByText(/раздел «Конкуренты» скоро появится/)).toBeInTheDocument();
+    expect(screen.queryByText(/пока скоро/)).not.toBeInTheDocument();
+  });
 });

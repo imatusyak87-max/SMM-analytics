@@ -24,7 +24,13 @@ describe('profile-store', () => {
     const em = fakeEm({ findOneBy: jest.fn().mockResolvedValue({ id: 'prof-1', name: 'X' }) });
 
     await expect(requireProfile(em, 'prof-1')).resolves.toEqual({ id: 'prof-1', name: 'X' });
-    expect(em.findOneBy).toHaveBeenCalledWith(Profile, { id: 'prof-1' });
+    expect(em.findOneBy).toHaveBeenCalledWith(Profile, { id: 'prof-1', isActive: true });
+  });
+
+  it('treats a hidden project as not found', async () => {
+    const em = fakeEm();
+    await expect(requireProfile(em, 'prof-1')).rejects.toThrow('Проект не найден');
+    expect(em.findOneBy).toHaveBeenCalledWith(Profile, { id: 'prof-1', isActive: true });
   });
 
   it('throws a Russian 404 for a missing profile', async () => {

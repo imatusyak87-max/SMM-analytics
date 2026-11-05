@@ -207,6 +207,13 @@ describe('StatsService.getAccountDetail for a missing account', () => {
     await expect(service.getAccountDetail('gone', period)).rejects.toThrow(NotFoundException);
   });
 
+  it('answers 404 for the detail of a deleted account', async () => {
+    const { service, accountsRepo } = setup({ account: null });
+
+    await expect(service.getAccountDetail('acc-1', period)).rejects.toBeInstanceOf(NotFoundException);
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+  });
+
   it('does not query snapshots or posts for an account that does not exist', async () => {
     const { service, snapshotsRepo, postsRepo } = setup({ account: null });
 
@@ -306,6 +313,17 @@ describe('StatsService.compare', () => {
     expect(result).toHaveLength(2);
     expect(result[0].account?.id).toBe('acc-1');
     expect(result[0].trend).toEqual([{ date: '2026-08-13', followersCount: 100 }]);
+  });
+
+  it('treats a deleted account like a missing one', async () => {
+    const accountsRepo = { findOneBy: jest.fn().mockResolvedValue(null), find: jest.fn() } as any;
+    const snapshotsRepo = { find: jest.fn().mockResolvedValue([]) } as any;
+    const service = new StatsService(accountsRepo, snapshotsRepo, {} as any, {} as any, { findOneBy: jest.fn() } as any);
+
+    const result = await service.compare(['acc-1'], period);
+
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(result[0].account).toBeNull();
   });
 });
 

@@ -1,6 +1,7 @@
 import { CompetitorsService } from './competitors.service';
 import { CompetitorRunStatus } from '../db/entities/competitor-run.entity';
 import { AccountPlatform } from '../db/entities/account.entity';
+import { In } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 const noRejections = { find: jest.fn().mockResolvedValue([]) } as any;
@@ -29,6 +30,9 @@ describe('CompetitorsService.getFor', () => {
 
     const result = await new CompetitorsService(runs, suggestionsRepo, accountsRepo, noRejections).getFor('acc-1');
 
+    expect(accountsRepo.find).toHaveBeenCalledWith({
+      where: { platform: AccountPlatform.TELEGRAM, externalId: In(['@rival', '@other']), isActive: true },
+    });
     expect(result.enabled).toBe(true);
     expect(result.run).toEqual(
       expect.objectContaining({ status: CompetitorRunStatus.SUCCESS, niche: 'SMM' }),

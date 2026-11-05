@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Repository } from 'typeorm';
@@ -21,6 +21,10 @@ export class SyncJobService {
   ) {}
 
   async createManual(accountId: string): Promise<SyncJob> {
+    // A deleted account is never synced; reviving it is what queues its next sync.
+    if (!(await this.accountsRepo!.findOneBy({ id: accountId, isActive: true }))) {
+      throw new NotFoundException('Аккаунт не найден');
+    }
     return this.enqueue(accountId, SyncTrigger.MANUAL, 1);
   }
 

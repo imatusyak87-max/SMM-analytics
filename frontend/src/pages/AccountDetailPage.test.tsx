@@ -133,6 +133,13 @@ describe('AccountDetailPage', () => {
     await waitFor(() => expect(lastCallTo('/posts')).toMatchObject({ sort: 'reactions', page: 1, size: 10 }));
   });
 
+  it('sorts the top posts by comments', async () => {
+    mockApi();
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Комментарии' }));
+    await waitFor(() => expect(lastCallTo('/posts').sort).toBe('comments'));
+  });
+
   it('filters by post type on the server, and sends no type for «Все»', async () => {
     mockApi();
     renderPage();
@@ -363,11 +370,14 @@ describe('AccountDetailPage', () => {
 });
 
 describe('profile', () => {
-  it('shows which profile the account is in', async () => {
+  it('shows the own-profile header without a project picker or competitors', async () => {
     mockApi();
     renderPage();
 
-    expect(await screen.findByLabelText('Проект:')).toHaveValue('prof-1');
+    expect(await screen.findByRole('heading', { name: 'Chan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Свой профиль' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Проект:')).not.toBeInTheDocument();
+    expect(screen.queryByText(/конкурент/i, { selector: 'h3' })).not.toBeInTheDocument();
   });
 
   it('links back to its project', async () => {
@@ -443,7 +453,7 @@ describe('delete account', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
 
-    expect(confirm).toHaveBeenCalledWith('Удалить «Chan» и всю собранную статистику?');
+    expect(confirm).toHaveBeenCalledWith('Убрать «Chan» из проекта? Собранная статистика сохранится — если добавить аккаунт снова, она вернётся.');
     expect(await screen.findByText('Project page')).toBeInTheDocument();
     expect(del).toHaveBeenCalledWith('/accounts/acc-1');
   });
@@ -491,5 +501,20 @@ describe('delete account', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось удалить аккаунт');
+  });
+
+  it('reloads the page after the account is moved', async () => {
+    mockApi();
+    (apiClient.patch as any).mockResolvedValue({ data: { profileId: 'prof-2' } });
+    get.mockImplementation((url: string) =>
+      url === '/profiles'
+        ? Promise.resolve({ data: [{ id: 'prof-2', name: 'Мезопроф', totalFollowers: null, accounts: [] }] })
+        : url.endsWith('/detail') ? Promise.resolve({ data: detail() })
+        : url.endsWith('/posts') ? Promise.resolve({ data: { total: 0, items: [] } })
+        : Promise.resolve({ data: [] }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Перенести…' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Мезопроф ()' }));
+    await waitFor(() => expect(callsTo('/detail').length).toBeGreaterThan(1));
   });
 });

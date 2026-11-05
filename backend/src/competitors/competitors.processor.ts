@@ -49,8 +49,16 @@ export class CompetitorsProcessor extends WorkerHost {
     try {
       await this.runsRepo.update(runId, { status: CompetitorRunStatus.RUNNING, startedAt: new Date() });
 
-      const account = await this.accountsRepo.findOneBy({ id: accountId });
-      if (!account) throw new Error(`Account ${accountId} not found`);
+      const account = await this.accountsRepo.findOneBy({ id: accountId, isActive: true });
+      if (!account) {
+        // Deleted after the run was queued: settle it now rather than retry.
+        await this.runsRepo.update(runId, {
+          status: CompetitorRunStatus.FAILED,
+          errorMessage: 'Аккаунт удалён',
+          finishedAt: new Date(),
+        });
+        return;
+      }
 
       const profile = await this.profiles.build(account);
       const rejections = await this.rejectionsRepo.find({ where: { accountId } });

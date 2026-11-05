@@ -1,4 +1,4 @@
-import { InstagramOauthService } from './instagram-oauth.service';
+import { InstagramLoginError, InstagramOauthService } from './instagram-oauth.service';
 import { InstagramAccountKind } from '../../db/entities/instagram-oauth-state.entity';
 import { Account, AccountPlatform, AccountType } from '../../db/entities/account.entity';
 import { AccountCredential } from '../../db/entities/account-credential.entity';
@@ -75,6 +75,22 @@ describe('InstagramOauthService.completeLogin', () => {
     const { service, stateService } = makeDeps();
     stateService.consume.mockResolvedValue({ type: InstagramAccountKind.DISCOVERY, accountId: 'acc-1' });
     await expect(service.completeLogin('c', 's')).rejects.toThrow('Ссылка для входа устарела');
+  });
+
+  it('treats a login for a deleted account as an account that no longer exists', async () => {
+    const { service, stateService, accountsRepo } = makeDeps();
+    stateService.consume.mockResolvedValue({ type: InstagramAccountKind.OWN, accountId: 'acc-1' });
+    accountsRepo.findOneBy.mockResolvedValue(null);
+    const error = await service.completeLogin('code', 'state').catch((e) => e);
+    expect(accountsRepo.findOneBy).toHaveBeenCalledWith({ id: 'acc-1', isActive: true });
+    expect(error).toBeInstanceOf(InstagramLoginError);
+    expect(error).toMatchObject({ message: 'Аккаунт больше не существует', accountId: null });
+  });
+
+  it('reports an expired login link without an account', async () => {
+    const { service, stateService } = makeDeps();
+    stateService.consume.mockResolvedValue(null);
+    await expect(service.completeLogin('code', 'state')).rejects.toMatchObject({ accountId: null });
   });
 
   it('reports a cancelled login against the account without calling Instagram', async () => {

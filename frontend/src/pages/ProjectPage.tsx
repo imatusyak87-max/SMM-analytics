@@ -49,7 +49,7 @@ export function ProjectPage() {
   const reload = () => setReloadKey((key) => key + 1);
 
   async function deleteProject() {
-    if (!confirm(`Удалить проект «${name}» вместе со всеми аккаунтами и данными?`)) return;
+    if (!confirm(`Удалить проект «${name}»? Статистика аккаунтов сохранится и вернётся, если добавить их снова.`)) return;
     try {
       setDeleteError(null);
       await apiClient.delete(`/profiles/${id}`);
@@ -135,11 +135,11 @@ export function ProjectPage() {
       <div className={styles.grid}>
         {NETWORKS.map((network, i) => (
           <NetworkTile key={network.platform} network={network} item={firsts[i]}
-            onAdd={() => setAdding(network.platform as LinkPlatform)} onRemoved={reload} />
+            onAdd={() => setAdding(network.platform as LinkPlatform)} />
         ))}
         {extras.map((item) => {
           const network = NETWORKS.find((n) => n.platform === item.account.platform) ?? NETWORKS[0];
-          return <NetworkTile key={item.account.id} network={network} item={item} onAdd={() => {}} onRemoved={reload} />;
+          return <NetworkTile key={item.account.id} network={network} item={item} onAdd={() => {}} />;
         })}
       </div>
       {adding && (
